@@ -3,12 +3,14 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDatabase
 import com.example.data.model.CheckpointEntity
+import com.example.data.model.GeminiModelInfo
 import com.example.data.model.MessageEntity
 import com.example.data.model.StoryEntity
 import com.example.data.repository.StoryRepository
-import com.example.data.repository.TurnProgress
+import com.example.domain.model.TurnProgress
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +31,9 @@ data class StoryUiState(
   val errorMessage: String? = null,
   val customApiKey: String = "",
   val globalDefaultPrompt: String = "",
-  val effectiveApiKeyPresent: Boolean = false
+  val effectiveApiKeyPresent: Boolean = false,
+  val availableModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_FALLBACK_MODELS,
+  val isFetchingModels: Boolean = false
 )
 
 class StoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,6 +47,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val _errorMessage = MutableStateFlow<String?>(null)
   private val _customApiKey = MutableStateFlow(repository.getCustomApiKey() ?: "")
   private val _globalDefaultPrompt = MutableStateFlow(repository.getGlobalDefaultSystemPrompt())
+  private val _availableModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_FALLBACK_MODELS)
+  private val _isFetchingModels = MutableStateFlow(false)
 
   private var activeTurnJob: Job? = null
 
@@ -62,6 +68,22 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val defaultStoryId = repository.ensureInitialData()
       switchStory(defaultStoryId)
+      refreshModelsFromGoogle()
+    }
+  }
+
+  fun refreshModelsFromGoogle() {
+    viewModelScope.launch {
+      _isFetchingModels.value = true
+      try {
+        val remoteModels = repository.fetchAvailableModels()
+        if (remoteModels.isNotEmpty()) {
+          _availableModels.value = remoteModels
+        }
+      } catch (_: Exception) {
+      } finally {
+        _isFetchingModels.value = false
+      }
     }
   }
 
@@ -106,13 +128,15 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       ).collect { progress ->
         _turnStatus.value = progress
         when (progress) {
-          is TurnProgress.Completed -> {
+          is TurnProgress.Failed -> {
+            _errorMessage.value = progress.error
             _isGenerating.value = false
             _streamChunk.value = ""
           }
-          is TurnProgress.Failed -> {
+          TurnProgress.Completed -> {
             _isGenerating.value = false
-            _errorMessage.value = progress.error
+            _streamChunk.value = ""
+            _turnStatus.value = null
           }
           else -> {}
         }
@@ -120,14 +144,18 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  /**
-   * Edit user message: deletes all messages after this one, updates the text in DB,
-   * and regenerates the story from that exact point onwards.
-   */
-  fun editUserMessage(message: MessageEntity, newText: String) {
-    val cleanText = newText.trim()
-    if (cleanText.isBlank()) return
+  fun rewindTo(message: MessageEntity) {
     val storyId = _activeStoryId.value ?: return
+    viewModelScope.launch {
+      repository.rewindToMessage(storyId, message)
+    }
+  }
+
+  fun editMessageAndRewind(messageId: Long, newContent: String) {
+    val clean = newContent.trim()
+    if (clean.isBlank()) return
+    val storyId = _activeStoryId.value ?: return
+
     if (_isGenerating.value) return
 
     _isGenerating.value = true
@@ -139,21 +167,23 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     activeTurnJob = viewModelScope.launch {
       repository.editUserMessageAndRegenerate(
         storyId = storyId,
-        messageId = message.id,
-        newContent = cleanText,
+        messageId = messageId,
+        newContent = clean,
         onChunk = { chunk ->
           _streamChunk.value += chunk
         }
       ).collect { progress ->
         _turnStatus.value = progress
         when (progress) {
-          is TurnProgress.Completed -> {
+          is TurnProgress.Failed -> {
+            _errorMessage.value = progress.error
             _isGenerating.value = false
             _streamChunk.value = ""
           }
-          is TurnProgress.Failed -> {
+          TurnProgress.Completed -> {
             _isGenerating.value = false
-            _errorMessage.value = progress.error
+            _streamChunk.value = ""
+            _turnStatus.value = null
           }
           else -> {}
         }
@@ -161,22 +191,26 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  /**
-   * Creates a branch from current story or specific message
-   */
-  fun branchStory(sourceStoryId: Long, branchTitle: String, upToMessageId: Long? = null) {
+  fun branchStoryFromTurn(targetMessageId: Long, branchTitle: String) {
+    val currentStoryId = _activeStoryId.value ?: return
     viewModelScope.launch {
-      val newId = repository.branchStory(sourceStoryId, branchTitle, upToMessageId)
+      val newId = repository.branchStory(
+        sourceStoryId = currentStoryId,
+        branchTitle = branchTitle,
+        upToMessageId = targetMessageId
+      )
       switchStory(newId)
     }
   }
 
-  fun deleteStory(storyId: Long) {
+  fun deleteCurrentStory() {
+    val currentStoryId = _activeStoryId.value ?: return
     viewModelScope.launch {
-      repository.deleteStoryById(storyId)
-      val remaining = stories.value.filter { it.id != storyId }
-      if (remaining.isNotEmpty()) {
-        switchStory(remaining.first().id)
+      repository.deleteStoryById(currentStoryId)
+      val allRemaining = repository.getAllStories()
+      val firstRemaining = stories.value.firstOrNull { it.id != currentStoryId }
+      if (firstRemaining != null) {
+        switchStory(firstRemaining.id)
       } else {
         val newId = repository.ensureInitialData()
         switchStory(newId)
@@ -184,14 +218,38 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun rewindTo(message: MessageEntity) {
-    val storyId = _activeStoryId.value ?: return
+  fun deleteStoryById(id: Long) {
     viewModelScope.launch {
-      repository.rewindToMessage(storyId, message)
-      _streamChunk.value = ""
-      _isGenerating.value = false
-      _errorMessage.value = null
+      repository.deleteStoryById(id)
+      if (_activeStoryId.value == id) {
+        val firstRemaining = stories.value.firstOrNull { it.id != id }
+        if (firstRemaining != null) {
+          switchStory(firstRemaining.id)
+        } else {
+          val newId = repository.ensureInitialData()
+          switchStory(newId)
+        }
+      }
     }
+  }
+
+  fun editUserMessage(message: MessageEntity, newContent: String) {
+    editMessageAndRewind(message.id, newContent)
+  }
+
+  fun branchStory(sourceStoryId: Long, branchTitle: String) {
+    viewModelScope.launch {
+      val newId = repository.branchStory(
+        sourceStoryId = sourceStoryId,
+        branchTitle = branchTitle,
+        upToMessageId = null
+      )
+      switchStory(newId)
+    }
+  }
+
+  fun deleteStory(id: Long) {
+    deleteStoryById(id)
   }
 
   fun updateStorySettings(
@@ -199,6 +257,30 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     systemPrompt: String,
     model: String,
     temperature: Float,
+    supportsTemperature: Boolean,
+    thinkingLevel: String,
+    thinkingBudget: Int,
+    adultContent: Boolean
+  ) {
+    updateStoryConfig(
+      title = title,
+      systemPrompt = systemPrompt,
+      model = model,
+      temperature = temperature,
+      supportsTemperature = supportsTemperature,
+      thinkingLevel = thinkingLevel,
+      thinkingBudget = thinkingBudget,
+      adultContent = adultContent
+    )
+  }
+
+  fun updateStoryConfig(
+    title: String,
+    systemPrompt: String,
+    model: String,
+    temperature: Float,
+    supportsTemperature: Boolean,
+    thinkingLevel: String,
     thinkingBudget: Int,
     adultContent: Boolean
   ) {
@@ -210,6 +292,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
           systemPrompt = systemPrompt,
           selectedModel = model,
           temperature = temperature,
+          supportsTemperature = supportsTemperature,
+          thinkingLevel = thinkingLevel,
           thinkingBudget = thinkingBudget,
           adultContentEnabled = adultContent,
           updatedAt = System.currentTimeMillis()
@@ -252,10 +336,15 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   fun saveCustomApiKey(key: String) {
     _customApiKey.value = key.trim()
     repository.setCustomApiKey(key.trim())
+    refreshModelsFromGoogle()
   }
 
   suspend fun testApiKeyConnection(): Pair<Boolean, String> {
-    return repository.testApiKey()
+    val result = repository.testApiKey()
+    if (result.first) {
+      refreshModelsFromGoogle()
+    }
+    return result
   }
 
   fun createNewStory(
@@ -263,8 +352,10 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     genre: String,
     perspective: String,
     systemPrompt: String,
-    selectedModel: String = "gemini-2.5-flash",
+    selectedModel: String = "gemini-3.8-flash",
     temperature: Float = 0.85f,
+    supportsTemperature: Boolean = true,
+    thinkingLevel: String = "MEDIUM",
     thinkingBudget: Int = 2048,
     adultContent: Boolean = true,
     initialLocation: String,
@@ -283,6 +374,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         systemPrompt = systemPrompt,
         selectedModel = selectedModel,
         temperature = temperature,
+        supportsTemperature = supportsTemperature,
+        thinkingLevel = thinkingLevel,
         thinkingBudget = thinkingBudget,
         adultContent = adultContent,
         initialLocation = initialLocation,
@@ -311,7 +404,9 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _turnStatus,
     _errorMessage,
     _customApiKey,
-    _globalDefaultPrompt
+    _globalDefaultPrompt,
+    _availableModels,
+    _isFetchingModels
   ) { args: Array<Any?> ->
     @Suppress("UNCHECKED_CAST")
     val storyList = args[0] as List<StoryEntity>
@@ -325,6 +420,9 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     val err = args[7] as String?
     val customKey = args[8] as String
     val globalPrompt = args[9] as String
+    @Suppress("UNCHECKED_CAST")
+    val models = args[10] as List<GeminiModelInfo>
+    val fetchingModels = args[11] as Boolean
 
     val activeStory = storyList.firstOrNull { it.id == activeId } ?: storyList.firstOrNull()
 
@@ -339,7 +437,9 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       errorMessage = err,
       customApiKey = customKey,
       globalDefaultPrompt = globalPrompt,
-      effectiveApiKeyPresent = repository.getEffectiveApiKey().isNotBlank()
+      effectiveApiKeyPresent = repository.getEffectiveApiKey().isNotBlank(),
+      availableModels = models,
+      isFetchingModels = fetchingModels
     )
   }.stateIn(
     viewModelScope,

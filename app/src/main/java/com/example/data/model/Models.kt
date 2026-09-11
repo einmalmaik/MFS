@@ -12,12 +12,25 @@ data class StoryEntity(
   val systemPrompt: String = "", // Empty means: use global default prompt
   val genre: String = "Dark Noir & Mystery",
   val perspective: String = "Zweite Person (Du)",
-  val selectedModel: String = "gemini-2.5-flash",
+  val selectedModel: String = "gemini-3.8-flash",
   val temperature: Float = 0.85f,
-  val thinkingBudget: Int = 2048, // 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
+  val supportsTemperature: Boolean = true,
+  val thinkingLevel: String = "MEDIUM", // "MINIMAL", "LOW", "MEDIUM", "HIGH", "OFF"
+  val thinkingBudget: Int = 2048, // Legacy für 2.5: 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
   val adultContentEnabled: Boolean = true,
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class GeminiModelInfo(
+  val id: String,
+  val displayName: String,
+  val description: String,
+  val supportsTemperature: Boolean = true,
+  val defaultTemperature: Float = 0.85f,
+  val isThinkingModel: Boolean = true,
+  val usesThinkingLevel: Boolean = true, // true für Gemini 3+, false für 2.5
+  val supportedThinkingLevels: List<String> = listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
 )
 
 @Entity(tableName = "checkpoints")

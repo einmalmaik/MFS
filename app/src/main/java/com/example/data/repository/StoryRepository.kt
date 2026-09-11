@@ -1,57 +1,74 @@
 package com.example.data.repository
 
 import android.content.Context
-import android.content.SharedPreferences
-import android.util.Log
 import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDao
 import com.example.data.model.CheckpointEntity
+import com.example.data.model.GeminiModelInfo
 import com.example.data.model.MessageEntity
 import com.example.data.model.StoryEntity
+import com.example.domain.engine.StateExtractionEngine
+import com.example.domain.engine.StoryTurnEngine
+import com.example.domain.model.TurnProgress
+import com.example.domain.service.StoryBranchingService
+import com.example.domain.service.StoryPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+// Re-export TurnProgress in repository package for caller compatibility
+typealias TurnProgress = com.example.domain.model.TurnProgress
+
+/**
+ * Main Repository facade orchestrating story persistence, AI generation,
+ * state extraction, and branching logic.
+ */
 class StoryRepository(
   private val storyDao: StoryDao,
-  private val context: Context
+  context: Context
 ) {
-  private val prefs: SharedPreferences = context.getSharedPreferences("storyforge_prefs", Context.MODE_PRIVATE)
+  val preferences = StoryPreferences(context)
 
-  private val geminiClient = GeminiClient(
-    customApiKeyProvider = { getCustomApiKey() }
+  val geminiClient = GeminiClient(
+    customApiKeyProvider = { preferences.getCustomApiKey() }
   )
 
-  companion object {
-    private const val TAG = "StoryRepository"
-    private const val PREF_CUSTOM_API_KEY = "custom_gemini_api_key"
-    private const val PREF_GLOBAL_DEFAULT_PROMPT = "global_default_system_prompt"
-  }
+  private val stateExtractionEngine = StateExtractionEngine(
+    geminiClient = geminiClient,
+    storyDao = storyDao
+  )
 
-  fun getCustomApiKey(): String? {
-    return prefs.getString(PREF_CUSTOM_API_KEY, null)
-  }
+  private val turnEngine = StoryTurnEngine(
+    geminiClient = geminiClient,
+    storyDao = storyDao,
+    stateExtractionEngine = stateExtractionEngine,
+    preferences = preferences
+  )
 
-  fun setCustomApiKey(key: String?) {
-    prefs.edit().putString(PREF_CUSTOM_API_KEY, key?.trim()).apply()
-  }
+  private val branchingService = StoryBranchingService(
+    storyDao = storyDao
+  )
 
-  fun getGlobalDefaultSystemPrompt(): String {
-    return prefs.getString(PREF_GLOBAL_DEFAULT_PROMPT, GeminiClient.DEFAULT_SYSTEM_PROMPT)
-      ?: GeminiClient.DEFAULT_SYSTEM_PROMPT
-  }
+  // --- PREFERENCES & CREDENTIALS ---
 
-  fun setGlobalDefaultSystemPrompt(prompt: String) {
-    prefs.edit().putString(PREF_GLOBAL_DEFAULT_PROMPT, prompt.trim()).apply()
-  }
+  fun getCustomApiKey(): String? = preferences.getCustomApiKey()
 
-  fun getEffectiveApiKey(): String = geminiClient.getEffectiveApiKey()
+  fun setCustomApiKey(key: String?) = preferences.setCustomApiKey(key)
+
+  fun getGlobalDefaultSystemPrompt(): String = preferences.getGlobalDefaultSystemPrompt()
+
+  fun setGlobalDefaultSystemPrompt(prompt: String) = preferences.setGlobalDefaultSystemPrompt(prompt)
+
+  fun getEffectiveApiKey(): String = preferences.getEffectiveApiKey()
 
   suspend fun testApiKey(): Pair<Boolean, String> = geminiClient.testConnection(getEffectiveApiKey())
+
+  suspend fun fetchAvailableModels(): List<GeminiModelInfo> = geminiClient.fetchAvailableModels()
+
+  // --- STORY PERSISTENCE (ROOM) ---
 
   fun getAllStories(): Flow<List<StoryEntity>> = storyDao.getAllStories()
 
@@ -83,8 +100,10 @@ class StoryRepository(
       genre = "Dark Noir & Mystery",
       perspective = "Zweite Person (Du)",
       systemPrompt = "",
-      selectedModel = "gemini-2.5-flash",
+      selectedModel = "gemini-3.8-flash",
       temperature = 0.85f,
+      supportsTemperature = true,
+      thinkingLevel = "MEDIUM",
       thinkingBudget = 2048,
       adultContent = true,
       initialLocation = "Alte Lagerhalle am Nordhafen",
@@ -97,19 +116,15 @@ class StoryRepository(
     )
   }
 
-  fun executeTurn(
-    storyId: Long,
-    userAction: String,
-    onChunk: (String) -> Unit
-  ): Flow<TurnProgress> = streamNextTurn(storyId, userAction, onChunk)
-
   suspend fun createStory(
     title: String,
     genre: String,
     perspective: String = "Zweite Person (Du)",
-    systemPrompt: String = "", // Empty means: use global default prompt
-    selectedModel: String = "gemini-2.5-flash",
+    systemPrompt: String = "",
+    selectedModel: String = "gemini-3.8-flash",
     temperature: Float = 0.85f,
+    supportsTemperature: Boolean = true,
+    thinkingLevel: String = "MEDIUM",
     thinkingBudget: Int = 2048,
     adultContent: Boolean = true,
     initialLocation: String = "Startort",
@@ -127,6 +142,8 @@ class StoryRepository(
       perspective = perspective,
       selectedModel = selectedModel,
       temperature = temperature,
+      supportsTemperature = supportsTemperature,
+      thinkingLevel = thinkingLevel,
       thinkingBudget = thinkingBudget,
       adultContentEnabled = adultContent
     )
@@ -191,370 +208,38 @@ class StoryRepository(
     storyId
   }
 
-  /**
-   * Branches a story (Zweig erstellen): creates an isolated clone of the story,
-   * its messages up to target turn, and its state.
-   */
-  suspend fun branchStory(sourceStoryId: Long, branchTitle: String, upToMessageId: Long? = null): Long = withContext(Dispatchers.IO) {
-    val sourceStory = storyDao.getStoryById(sourceStoryId) ?: throw IllegalArgumentException("Quell-Story nicht gefunden")
-    val newStory = sourceStory.copy(
-      id = 0,
-      title = branchTitle.ifBlank { "${sourceStory.title} (Zweig)" },
-      createdAt = System.currentTimeMillis(),
-      updatedAt = System.currentTimeMillis()
-    )
-    val newStoryId = storyDao.insertStory(newStory)
+  // --- TURN EXECUTION & STREAMING ---
 
-    // Copy messages
-    val messages = storyDao.getMessagesSnapshot(sourceStoryId)
-    val messagesToCopy = if (upToMessageId != null) {
-      messages.filter { it.id <= upToMessageId }
-    } else {
-      messages
-    }
-
-    for (m in messagesToCopy) {
-      storyDao.insertMessage(
-        m.copy(
-          id = 0,
-          storyId = newStoryId
-        )
-      )
-    }
-
-    // Copy latest checkpoint
-    val latestCp = storyDao.getLatestCheckpoint(sourceStoryId)
-    if (latestCp != null) {
-      storyDao.insertCheckpoint(
-        latestCp.copy(
-          id = 0,
-          storyId = newStoryId
-        )
-      )
-    }
-
-    newStoryId
-  }
-
-  /**
-   * Main turn-based loop:
-   * 1. Inserts user message
-   * 2. Retrieves state anchor, milestones & history
-   * 3. Streams GM response from Gemini
-   * 4. Inserts GM message
-   * 5. Asynchronously triggers state & milestone extraction
-   */
-  fun streamNextTurn(
+  fun executeTurn(
     storyId: Long,
     userAction: String,
     onChunk: (String) -> Unit
-  ): Flow<TurnProgress> = flow {
-    emit(TurnProgress.Thinking)
+  ): Flow<TurnProgress> = turnEngine.executeTurn(storyId, userAction, onChunk)
 
-    val story = storyDao.getStoryById(storyId)
-      ?: throw IllegalStateException("Story $storyId existiert nicht.")
-
-    // 1. Insert user message into DB
-    val latestCheckpoint = storyDao.getLatestCheckpoint(storyId)
-    storyDao.insertMessage(
-      MessageEntity(
-        storyId = storyId,
-        sender = "user",
-        content = userAction,
-        inGameTimeTag = latestCheckpoint?.inGameTime
-      )
-    )
-
-    emit(TurnProgress.Streaming)
-
-    // Prepare context window
-    val allMessages = storyDao.getMessagesSnapshot(storyId)
-    // Take last 8 turns (sliding window)
-    val slidingWindow = allMessages.takeLast(8).map {
-      it.sender to it.content
-    }
-
-    val stateJson = latestCheckpoint?.rawStateJson ?: ""
-    val summary = latestCheckpoint?.previousEventsSummary ?: ""
-    val milestones = latestCheckpoint?.getMilestonesList() ?: emptyList()
-
-    // Determine effective system instruction: story-specific prompt overrides global default
-    val effectivePrompt = if (story.systemPrompt.isNotBlank()) {
-      story.systemPrompt
-    } else {
-      getGlobalDefaultSystemPrompt()
-    }
-
-    val fullResponseBuffer = StringBuilder()
-
-    try {
-      geminiClient.streamGenerateStory(
-        model = story.selectedModel,
-        systemInstruction = effectivePrompt,
-        stateJson = stateJson,
-        episodicSummary = summary,
-        milestones = milestones,
-        recentHistory = slidingWindow,
-        userAction = userAction,
-        temperature = story.temperature,
-        thinkingBudget = story.thinkingBudget,
-        allowAdultContent = story.adultContentEnabled
-      ).collect { chunk ->
-        fullResponseBuffer.append(chunk)
-        onChunk(chunk)
-      }
-    } catch (e: Exception) {
-      Log.e(TAG, "Turn generation failed", e)
-      emit(TurnProgress.Failed(e.localizedMessage ?: "Fehler bei der Textgenerierung."))
-      return@flow
-    }
-
-    val finalGmText = fullResponseBuffer.toString()
-    if (finalGmText.isBlank()) {
-      emit(TurnProgress.Failed("Die KI hat keine Antwort generiert. Bitte prüfe den API-Key oder die Verbindung."))
-      return@flow
-    }
-
-    // Insert GM message
-    val currentTurn = (latestCheckpoint?.turnNumber ?: 0) + 1
-    val modelMsgId = storyDao.insertMessage(
-      MessageEntity(
-        storyId = storyId,
-        sender = "model",
-        content = finalGmText,
-        inGameTimeTag = latestCheckpoint?.inGameTime
-      )
-    )
-
-    emit(TurnProgress.ExtractingState)
-
-    // Background State Extractor: extract discrete state & update checkpoint
-    try {
-      val updatedStateJsonObj = geminiClient.extractUpdatedState(
-        model = "gemini-2.5-flash",
-        currentStateJson = stateJson,
-        userAction = userAction,
-        modelNarrative = finalGmText,
-        previousMilestones = milestones
-      )
-
-      val newInGameTime = updatedStateJsonObj.optString("in_game_time", latestCheckpoint?.inGameTime ?: "Tag 1, 21:45 Uhr")
-      val newLocation = updatedStateJsonObj.optString("location", latestCheckpoint?.location ?: "Aktueller Ort")
-      val newWeather = updatedStateJsonObj.optString("weather", latestCheckpoint?.weather ?: "Klar")
-      val newOutfit = updatedStateJsonObj.optString("player_outfit", latestCheckpoint?.playerOutfit ?: "")
-      val newCondition = updatedStateJsonObj.optString("player_condition", latestCheckpoint?.playerCondition ?: "Unverletzt")
-
-      val newInventoryArray = updatedStateJsonObj.optJSONArray("player_inventory")
-      val invJson = newInventoryArray?.toString() ?: (latestCheckpoint?.playerInventory ?: "[]")
-
-      val npcsArray = updatedStateJsonObj.optJSONArray("npcs")
-      val npcsJson = npcsArray?.toString() ?: (latestCheckpoint?.npcsJson ?: "[]")
-
-      val milestonesArray = updatedStateJsonObj.optJSONArray("milestones")
-      val milestonesJson = milestonesArray?.toString() ?: (latestCheckpoint?.milestonesJson ?: "[]")
-
-      val newSummary = updatedStateJsonObj.optString("previous_events_summary", summary)
-
-      val newCheckpoint = CheckpointEntity(
-        storyId = storyId,
-        turnNumber = currentTurn,
-        inGameTime = newInGameTime,
-        location = newLocation,
-        weather = newWeather,
-        playerOutfit = newOutfit,
-        playerInventory = invJson,
-        playerCondition = newCondition,
-        npcsJson = npcsJson,
-        milestonesJson = milestonesJson,
-        previousEventsSummary = newSummary,
-        rawStateJson = updatedStateJsonObj.toString()
-      )
-
-      val newCpId = storyDao.insertCheckpoint(newCheckpoint)
-
-      // Link message with new checkpoint
-      storyDao.insertMessage(
-        MessageEntity(
-          id = modelMsgId,
-          storyId = storyId,
-          sender = "model",
-          content = finalGmText,
-          inGameTimeTag = newInGameTime,
-          checkpointId = newCpId
-        )
-      )
-    } catch (e: Exception) {
-      Log.w(TAG, "State extraction fallback", e)
-      if (latestCheckpoint != null) {
-        storyDao.insertCheckpoint(
-          latestCheckpoint.copy(
-            id = 0,
-            turnNumber = currentTurn,
-            timestamp = System.currentTimeMillis()
-          )
-        )
-      }
-    }
-
-    emit(TurnProgress.Completed)
-  }
-
-  /**
-   * Edit user message & truncate future:
-   * 1. Deletes all messages following the edited message (clean purge).
-   * 2. Updates the message content in DB.
-   * 3. Re-generates GM response from this point.
-   */
-  fun editUserMessageAndRegenerate(
+  suspend fun editUserMessageAndRegenerate(
     storyId: Long,
     messageId: Long,
     newContent: String,
     onChunk: (String) -> Unit
-  ): Flow<TurnProgress> = flow {
-    emit(TurnProgress.Thinking)
-
-    withContext(Dispatchers.IO) {
-      // 1. Delete all messages strictly after this one
-      storyDao.deleteMessagesAfter(storyId, messageId)
-      // 2. Update message content
-      storyDao.updateMessageContent(messageId, newContent)
-
-      // Rollback checkpoints if needed
-      val allRemaining = storyDao.getMessagesSnapshot(storyId)
-      val userTurnIdx = allRemaining.count { it.sender == "user" }
-      storyDao.deleteCheckpointsAfterTurn(storyId, userTurnIdx)
-    }
-
-    val story = storyDao.getStoryById(storyId)
-      ?: throw IllegalStateException("Story $storyId nicht gefunden.")
-
-    emit(TurnProgress.Streaming)
-
-    val allMessages = storyDao.getMessagesSnapshot(storyId)
-    val latestCheckpoint = storyDao.getLatestCheckpoint(storyId)
-    val stateJson = latestCheckpoint?.rawStateJson ?: ""
-    val summary = latestCheckpoint?.previousEventsSummary ?: ""
-    val milestones = latestCheckpoint?.getMilestonesList() ?: emptyList()
-
-    val slidingWindow = allMessages.dropLast(1).takeLast(6).map {
-      it.sender to it.content
-    }
-
-    val effectivePrompt = if (story.systemPrompt.isNotBlank()) {
-      story.systemPrompt
-    } else {
-      getGlobalDefaultSystemPrompt()
-    }
-
-    val fullResponseBuffer = StringBuilder()
-
-    try {
-      geminiClient.streamGenerateStory(
-        model = story.selectedModel,
-        systemInstruction = effectivePrompt,
-        stateJson = stateJson,
-        episodicSummary = summary,
-        milestones = milestones,
-        recentHistory = slidingWindow,
-        userAction = newContent,
-        temperature = story.temperature,
-        thinkingBudget = story.thinkingBudget,
-        allowAdultContent = story.adultContentEnabled
-      ).collect { chunk ->
-        fullResponseBuffer.append(chunk)
-        onChunk(chunk)
-      }
-    } catch (e: Exception) {
-      Log.e(TAG, "Edit turn regeneration failed", e)
-      emit(TurnProgress.Failed(e.localizedMessage ?: "Fehler beim Fortführen der Geschichte."))
-      return@flow
-    }
-
-    val finalGmText = fullResponseBuffer.toString()
-    if (finalGmText.isBlank()) {
-      emit(TurnProgress.Failed("Keine Antwort erhalten."))
-      return@flow
-    }
-
-    val currentTurn = (latestCheckpoint?.turnNumber ?: 0) + 1
-    val modelMsgId = storyDao.insertMessage(
-      MessageEntity(
-        storyId = storyId,
-        sender = "model",
-        content = finalGmText,
-        inGameTimeTag = latestCheckpoint?.inGameTime
-      )
-    )
-
-    emit(TurnProgress.ExtractingState)
-
-    try {
-      val updatedStateJsonObj = geminiClient.extractUpdatedState(
-        model = "gemini-2.5-flash",
-        currentStateJson = stateJson,
-        userAction = newContent,
-        modelNarrative = finalGmText,
-        previousMilestones = milestones
-      )
-
-      val newInGameTime = updatedStateJsonObj.optString("in_game_time", latestCheckpoint?.inGameTime ?: "Tag 1, 21:45 Uhr")
-      val newLocation = updatedStateJsonObj.optString("location", latestCheckpoint?.location ?: "Aktueller Ort")
-      val newWeather = updatedStateJsonObj.optString("weather", latestCheckpoint?.weather ?: "Klar")
-      val newOutfit = updatedStateJsonObj.optString("player_outfit", latestCheckpoint?.playerOutfit ?: "")
-      val newCondition = updatedStateJsonObj.optString("player_condition", latestCheckpoint?.playerCondition ?: "Unverletzt")
-
-      val newInventoryArray = updatedStateJsonObj.optJSONArray("player_inventory")
-      val invJson = newInventoryArray?.toString() ?: (latestCheckpoint?.playerInventory ?: "[]")
-
-      val npcsArray = updatedStateJsonObj.optJSONArray("npcs")
-      val npcsJson = npcsArray?.toString() ?: (latestCheckpoint?.npcsJson ?: "[]")
-
-      val milestonesArray = updatedStateJsonObj.optJSONArray("milestones")
-      val milestonesJson = milestonesArray?.toString() ?: (latestCheckpoint?.milestonesJson ?: "[]")
-
-      val newSummary = updatedStateJsonObj.optString("previous_events_summary", summary)
-
-      val newCheckpoint = CheckpointEntity(
-        storyId = storyId,
-        turnNumber = currentTurn,
-        inGameTime = newInGameTime,
-        location = newLocation,
-        weather = newWeather,
-        playerOutfit = newOutfit,
-        playerInventory = invJson,
-        playerCondition = newCondition,
-        npcsJson = npcsJson,
-        milestonesJson = milestonesJson,
-        previousEventsSummary = newSummary,
-        rawStateJson = updatedStateJsonObj.toString()
-      )
-
-      val newCpId = storyDao.insertCheckpoint(newCheckpoint)
-
-      storyDao.insertMessage(
-        MessageEntity(
-          id = modelMsgId,
-          storyId = storyId,
-          sender = "model",
-          content = finalGmText,
-          inGameTimeTag = newInGameTime,
-          checkpointId = newCpId
-        )
-      )
-    } catch (e: Exception) {
-      Log.w(TAG, "State extraction fallback on edit", e)
-    }
-
-    emit(TurnProgress.Completed)
+  ): Flow<TurnProgress> {
+    branchingService.truncateAndPrepareEdit(storyId, messageId, newContent)
+    return turnEngine.regenerateTurn(storyId, newContent, onChunk)
   }
 
-  suspend fun rewindToMessage(storyId: Long, message: MessageEntity) = withContext(Dispatchers.IO) {
-    storyDao.deleteMessagesAfter(storyId, message.id)
-    val latestCp = storyDao.getLatestCheckpoint(storyId)
-    if (message.checkpointId != null && latestCp != null && message.checkpointId < latestCp.id) {
-      storyDao.deleteCheckpointsAfterTurn(storyId, latestCp.turnNumber - 1)
-    }
-  }
+  // --- BRANCHING & ROLLBACK ---
+
+  suspend fun branchStory(
+    sourceStoryId: Long,
+    branchTitle: String,
+    upToMessageId: Long? = null
+  ): Long = branchingService.branchStory(sourceStoryId, branchTitle, upToMessageId)
+
+  suspend fun rewindToMessage(
+    storyId: Long,
+    message: MessageEntity
+  ) = branchingService.rewindToMessage(storyId, message)
+
+  // --- MANUAL STATE OVERRIDE ---
 
   suspend fun updateCurrentState(
     storyId: Long,
@@ -621,12 +306,4 @@ class StoryRepository(
       storyDao.insertCheckpoint(updatedCheckpoint)
     }
   }
-}
-
-sealed class TurnProgress {
-  data object Thinking : TurnProgress()
-  data object Streaming : TurnProgress()
-  data object ExtractingState : TurnProgress()
-  data object Completed : TurnProgress()
-  data class Failed(val error: String) : TurnProgress()
 }

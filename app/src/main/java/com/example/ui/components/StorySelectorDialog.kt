@@ -22,23 +22,39 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,8 +68,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.api.GeminiClient
+import com.example.data.model.GeminiModelInfo
 import com.example.data.model.StoryEntity
 import com.example.ui.theme.AmberGoldContainer
+import com.example.ui.theme.AmberGoldDark
+import com.example.ui.theme.AmberGoldLight
 import com.example.ui.theme.AmberGoldPrimary
 import com.example.ui.theme.CrimsonDanger
 import com.example.ui.theme.SlateDark600
@@ -98,52 +117,44 @@ val STORY_PRESETS = listOf(
     outfit = "Abgewetzte Tech-Jacke mit isolierten Ärmeln, Cyber-Brille, Cargo-Hose",
     inventory = listOf("Kompaktes Cyberdeck", "Verschlüsselter Datenchip", "Neuro-Injektor"),
     npcName = "Kael",
-    npcOutfit = "Schwarzer Mantel mit optischer Tarnfaser, mechanischer linker Arm",
-    npcRelation = "Geschäftspartner, pragmatisch, schuldet dir noch einen Gefallen",
-    openingText = "Flackerndes Neonlicht taucht die feuchte Gasse in grelles Violett. Der Dunst der Straßenküchen mischt sich mit dem Ozon aus freiliegenden Starkstromleitungen.\n\nKael sitzt dir an einem schmierigen Holztisch gegenüber. Das schwache Surren seiner kybernetischen Servos ist kaum lauter als das Summen der Leuchtreklame draußen. Er schiebt einen winzigen Datenchip über den Tisch.\n\n\"Das Syndikat durchsucht die oberen Ebenen bereits\", murmelt er und nippt an seinem Tee. \"Wenn du das Ding entpackst, gibt es kein Zurück mehr.\""
+    npcOutfit = "Schwarzer Synthetik-Mantel mit LED-Säumen, Fingerlose Handschuhe",
+    npcRelation = "Früherer Partner, schuldet dir noch einen Gefallen aus Neon-City",
+    openingText = "Flackerndes Neonlicht in Giftgrün und Magenta dringt durch die Dunstabzugshaube des Ramen-Ladens. Draußen dröhnt der magnetische Schwebezug über Sektor 7, dass die Gläser im Regal klirren.\n\nKael sitzt dir gegenüber an dem ölverschmierten Edelstahltisch. Er schiebt sich die Cyber-Brille auf die Stirn und schiebt dir einen zerkratzten Glasfaser-Chip zu.\n\n\"Das ist der Code für den Arasaka-Sublevel\", flüstert er rauchig. \"Wenn sie merken, dass der weg ist, brennt ganz Sektor 7.\""
   ),
   StoryPreset(
-    title = "Flüsternde Asche",
-    genre = "Dark Fantasy",
+    title = "Die verfluchte Feste von Alden",
+    genre = "Dark Fantasy & Horror",
     perspective = "Zweite Person (Du)",
-    location = "Verfallenes Kloster auf dem Nebelberg",
-    outfit = "Schwerer Reisemantel aus Leinen, Kettenhemd, abgewetzte Lederhandschuhe",
-    inventory = listOf("Silberklinge", "Trank der Klarsicht", "Siegelring des Ordens"),
-    npcName = "Vera",
-    npcOutfit = "Kapuzengewand aus grobem Wollstoff, Amulett aus Knochen",
-    npcRelation = "Gefährten wider Willen, teilt das gleiche Schicksal",
-    openingText = "Der Wind heult durch die zerbrochenen Spitzbogenfenster des verlassenen Sanktuariums. Auf dem Altar glimmt die letzte Glut eines Feuers, das vor Stunden erloschen ist.\n\nVera kniet am Rand des Steinkreises und zieht mit einem Stück Kreide die verblassten Runen nach. Ihre Finger zittern leicht vor Kälte.\n\n\"Das Ritual hält nicht bis zum Morgengrauen\", sagt sie, ohne den Kopf zu heben. \"Wir müssen entscheiden, wer von uns den Schwellenwächter ablenkt.\""
+    location = "Verfallener Thronsaal der Bergfeste",
+    outfit = "Brünierte Kettenrüstung, zerfetzter Wollumhang, schwere Lederhandschuhe",
+    inventory = listOf("Breitschwert mit Silberrunen", "Fackel", "Weihwasser-Fläschchen"),
+    npcName = "Priesterin Vespera",
+    npcOutfit = "Aschgraue Robe mit gesticktem Sonnensymbol, silbernes Amulett",
+    npcRelation = "Begleitet dich zur Reinigung der Feste, verbirgt jedoch ein eigenes Geheimnis",
+    openingText = "Der Wind heult durch die zerschlagenen Buntglasfenster des Thronsaals. Auf dem eiskalten Steinboden zeichnen Schatten groteske Fratzen, während deine Fackel zischend das Dunkel zurückdrängt.\n\nVespera kniet vor den zerbrochenen Stufen des Throns und murmelt ein Schutzgebet auf Alt-Imperial. Als sie den Kopf hebt, spiegelt sich im Fackelschein nacktes Entsetzen in ihren Augen.\n\n\"Hörst du das?\", haucht sie. \"Es kratzt... von innen an den Mauern.\""
   ),
   StoryPreset(
-    title = "Mitternacht im Grand Hotel",
-    genre = "Romantisches Drama & Erotik (Adult)",
+    title = "Station Erebos: Stiller Orbit",
+    genre = "Sci-Fi / Space Survival",
     perspective = "Zweite Person (Du)",
-    location = "Penthouse-Suite mit Blick auf die beleuchtete Skyline",
-    outfit = "Maßgeschneidertes dunkles Sakko, offenes weißes Hemd",
-    inventory = listOf("Schlüsselkarte zu Zimmer 402", "Altes Foto", "Zigarettenetui"),
-    npcName = "Sophie",
-    npcOutfit = "Elegantes seidenes Abendkleid in Bordeauxrot, zarter Goldschmuck",
-    npcRelation = "Verflossene Geliebte, unausgesprochene Spannungen und Vertrautheit",
-    openingText = "Die Geräusche der abendlichen Gala im Ballsaal sind hier oben im 30. Stock nur noch ein fernes, dumpfes Echo. Durch die raumhohen Panoramafenster glitzert das endlose Lichtermeer der Metropole.\n\nSophie steht am Fenster, ein halbvolles Champagnerglas in der Hand. Die kühle Nachtluft weht durch die leicht geöffnete Balkontür und bewegt sanft eine Strähne ihres Haares.\n\nAls sie deine Schritte auf dem Parkett hört, dreht sie sich langsam um. In ihren Augen liegt dieser Blick, den du seit drei Jahren nicht mehr gesehen hast.\n\n\"Ich wusste, dass du heute Abend auftauchen würdest\", sagt sie ruhig. Ihre Stimme hat dieses vertraute, dunkle Timbre."
-  ),
-  StoryPreset(
-    title = "Völlig freies Abenteuer",
-    genre = "Eigene Welt / Sandbox",
-    perspective = "Zweite Person (Du)",
-    location = "Dein gewählter Startort",
-    outfit = "Passende Kleidung für dein Setting",
-    inventory = listOf("Grundausrüstung"),
-    npcName = "",
-    npcOutfit = "",
-    npcRelation = "",
-    openingText = "Die Geschichte beginnt genau so, wie du sie dir vorstellst."
+    location = "Druckschleuse B der verlassenen Orbitalstation",
+    outfit = "Schwerer EVA-Raumanzug mit HUD-Helm, magnetische Arbeitsstiefel",
+    inventory = listOf("Plasmaschneider", "Diagnose-Padd", "Notfallsauerstoff-Patrone"),
+    npcName = "Dr. Marcus Chen",
+    npcOutfit = "Verknitterter Stationskittel über dem Schutzanzug, Notfall-Headset",
+    npcRelation = "Leitender Ingenieur, sichtlich traumatisiert vom Systemkollaps",
+    openingText = "Mit einem metallischen Zischen schließt die Druckschleuse hinter euch. Die Statusanzeige schlägt von Not-Rot auf flackerndes Notstrom-Bernstein um. Schwerelosigkeit zieht an deinen Eingeweiden.\n\nDr. Chen stützt sich mit zitternden Händen an der Wandkonsole ab. Seine Atemmaske beschlägt bei jedem hektischen Atemzug.\n\n\"Der Hauptreaktor ist noch stabil\", keucht er über das Funkgerät. \"Aber die interne Biosphäre... etwas ist dort drin gewachsen, nachdem der Funkkontakt abbrach.\""
   )
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StorySelectorDialog(
   currentStoryId: Long?,
   stories: List<StoryEntity>,
+  availableModels: List<GeminiModelInfo>,
+  isFetchingModels: Boolean,
+  onRefreshModels: () -> Unit,
   onSelectStory: (Long) -> Unit,
   onDeleteStory: (Long) -> Unit,
   onBranchStory: (sourceStoryId: Long, branchTitle: String) -> Unit,
@@ -154,6 +165,8 @@ fun StorySelectorDialog(
     systemPrompt: String,
     model: String,
     temperature: Float,
+    supportsTemperature: Boolean,
+    thinkingLevel: String,
     thinkingBudget: Int,
     adultContent: Boolean,
     location: String,
@@ -183,6 +196,31 @@ fun StorySelectorDialog(
   var customNpcRelation by remember { mutableStateOf("") }
   var customOpening by remember { mutableStateOf("") }
 
+  // Model and thinking configuration
+  val defaultModelId = availableModels.firstOrNull { it.id == "gemini-3.8-flash" }?.id
+    ?: availableModels.firstOrNull()?.id
+    ?: "gemini-3.8-flash"
+
+  var selectedModelId by remember { mutableStateOf(defaultModelId) }
+  val currentModelInfo = availableModels.firstOrNull { it.id == selectedModelId }
+    ?: GeminiModelInfo(
+      id = selectedModelId,
+      displayName = selectedModelId,
+      description = "",
+      supportsTemperature = true,
+      defaultTemperature = 0.85f,
+      isThinkingModel = true,
+      usesThinkingLevel = true
+    )
+
+  var thinkingLevel by remember { mutableStateOf("MEDIUM") }
+  var thinkingBudget by remember { mutableIntStateOf(2048) }
+  var temperature by remember { mutableFloatStateOf(0.85f) }
+  var adultContent by remember { mutableStateOf(true) }
+
+  var modelDropdownExpanded by remember { mutableStateOf(false) }
+  var thinkingDropdownExpanded by remember { mutableStateOf(false) }
+
   fun loadPreset(preset: StoryPreset) {
     customTitle = preset.title
     customGenre = preset.genre
@@ -203,7 +241,7 @@ fun StorySelectorDialog(
       title = { Text("Geschichte löschen?", color = TextParchment) },
       text = {
         Text(
-          "Möchtest du '${target.title}' wirklich unwiderruflich aus der Datenbank löschen? Alle Nachrichten, Checkpoints und Inventareinträge gehen verloren.",
+          "Möchtest du '${target.title}' wirklich unwiderruflich aus der lokalen Datenbank entfernen? Alle Nachrichten, Checkpoints und NPCs dieser Geschichte gehen verloren.",
           color = TextParchmentMuted
         )
       },
@@ -236,15 +274,16 @@ fun StorySelectorDialog(
       text = {
         Column {
           Text(
-            "Erstelle eine isolierte Kopie von '${target.title}', um ab jetzt andere Entscheidungen zu treffen:",
+            "Erstelle eine unabhängige Kopie von '${target.title}', um ab jetzt alternative Entscheidungen zu erkunden:",
             color = TextParchmentMuted,
             style = MaterialTheme.typography.bodySmall
           )
-          Spacer(modifier = Modifier.height(8.dp))
+          Spacer(modifier = Modifier.height(10.dp))
           OutlinedTextField(
             value = branchTitleInput,
             onValueChange = { branchTitleInput = it },
-            placeholder = { Text("Titel des neuen Zweigs...") },
+            placeholder = { Text("${target.title} (Alternativer Pfad)", color = TextParchmentFaint) },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
               focusedContainerColor = SlateDark900,
@@ -318,7 +357,8 @@ fun StorySelectorDialog(
               text = if (isCreatingNew) "Neues Abenteuer erschaffen" else "Deine Geschichten",
               style = MaterialTheme.typography.titleMedium,
               color = TextParchment,
-              fontFamily = FontFamily.Serif
+              fontFamily = FontFamily.Serif,
+              fontWeight = FontWeight.Bold
             )
           }
 
@@ -372,41 +412,27 @@ fun StorySelectorDialog(
                   )
                   Spacer(modifier = Modifier.height(2.dp))
                   Text(
-                    text = "${story.genre} • ${story.selectedModel}",
+                    text = "${story.genre} • ${story.selectedModel} (${story.thinkingLevel})",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextParchmentMuted
                   )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  // Branch button
+                Row {
                   IconButton(
                     onClick = {
                       branchTitleInput = "${story.title} (Zweig)"
                       storyToBranch = story
-                    },
-                    modifier = Modifier.size(32.dp)
+                    }
                   ) {
-                    Icon(
-                      imageVector = Icons.Default.AltRoute,
-                      contentDescription = "Zweig erstellen",
-                      tint = AmberGoldPrimary,
-                      modifier = Modifier.size(16.dp)
-                    )
+                    Icon(imageVector = Icons.Default.AltRoute, contentDescription = "Zweig erstellen", tint = AmberGoldLight)
                   }
 
-                  // Delete button (allowed if > 1 story)
                   if (stories.size > 1) {
                     IconButton(
-                      onClick = { storyToDelete = story },
-                      modifier = Modifier.size(32.dp)
+                      onClick = { storyToDelete = story }
                     ) {
-                      Icon(
-                        imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Löschen",
-                        tint = CrimsonDanger,
-                        modifier = Modifier.size(16.dp)
-                      )
+                      Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = "Löschen", tint = CrimsonDanger)
                     }
                   }
                 }
@@ -418,7 +444,7 @@ fun StorySelectorDialog(
 
           Button(
             onClick = {
-              loadPreset(STORY_PRESETS[0])
+              loadPreset(STORY_PRESETS.first())
               isCreatingNew = true
             },
             modifier = Modifier
@@ -430,61 +456,284 @@ fun StorySelectorDialog(
             ),
             shape = RoundedCornerShape(10.dp)
           ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = null)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Neue Geschichte anlegen", fontWeight = FontWeight.Bold)
+            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Völlig neue Geschichte beginnen", fontWeight = FontWeight.Bold)
           }
         } else {
-          // New Story Creator with Presets
+          // --- CREATE NEW STORY VIEW ---
           Text(
-            text = "WÄHLE EIN VORLAGE-GENRE ODER FREIES ABENTEUER",
+            text = "SCHNELLE VORLAGEN (PRESETS)",
+            style = MaterialTheme.typography.labelSmall,
+            color = AmberGoldPrimary,
+            fontWeight = FontWeight.Bold
+          )
+          Spacer(modifier = Modifier.height(6.dp))
+
+          Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            STORY_PRESETS.forEachIndexed { index, preset ->
+              val isSelected = selectedPresetIndex == index
+              Surface(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable {
+                    selectedPresetIndex = index
+                    loadPreset(preset)
+                  },
+                shape = RoundedCornerShape(8.dp),
+                color = if (isSelected) AmberGoldContainer else SlateDark800,
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  if (isSelected) AmberGoldPrimary else SlateDark700
+                )
+              ) {
+                Row(
+                  modifier = Modifier.padding(10.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = if (isSelected) AmberGoldPrimary else TextParchmentMuted,
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Column {
+                    Text(
+                      text = preset.title,
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = if (isSelected) AmberGoldPrimary else TextParchment,
+                      fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                      text = preset.genre,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = TextParchmentMuted
+                    )
+                  }
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(16.dp))
+          HorizontalDivider(color = SlateDark700)
+          Spacer(modifier = Modifier.height(16.dp))
+
+          // Model selection for new story
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "GEMINI-MODELL FÜR DIESE GESCHICHTE",
+              style = MaterialTheme.typography.labelSmall,
+              color = AmberGoldPrimary,
+              fontWeight = FontWeight.Bold
+            )
+
+            TextButton(
+              onClick = onRefreshModels,
+              enabled = !isFetchingModels
+            ) {
+              if (isFetchingModels) {
+                CircularProgressIndicator(color = AmberGoldPrimary, modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+              } else {
+                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = AmberGoldLight, modifier = Modifier.size(14.dp))
+              }
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Aktualisieren", style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+            }
+          }
+
+          ExposedDropdownMenuBox(
+            expanded = modelDropdownExpanded,
+            onExpandedChange = { modelDropdownExpanded = it },
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            OutlinedTextField(
+              value = currentModelInfo.displayName,
+              onValueChange = {},
+              readOnly = true,
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded) },
+              modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                .fillMaxWidth(),
+              colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = SlateDark800,
+                unfocusedContainerColor = SlateDark800,
+                focusedTextColor = TextParchment,
+                unfocusedTextColor = TextParchment,
+                focusedBorderColor = AmberGoldPrimary,
+                unfocusedBorderColor = SlateDark600
+              ),
+              shape = RoundedCornerShape(8.dp)
+            )
+
+            ExposedDropdownMenu(
+              expanded = modelDropdownExpanded,
+              onDismissRequest = { modelDropdownExpanded = false },
+              modifier = Modifier.background(SlateDark800)
+            ) {
+              availableModels.forEach { modelInfo ->
+                DropdownMenuItem(
+                  text = {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                      Text(modelInfo.displayName, style = MaterialTheme.typography.bodyMedium, color = TextParchment, fontWeight = FontWeight.Bold)
+                      Text(modelInfo.id, style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+                      Text(
+                        text = if (modelInfo.usesThinkingLevel) "Denkstufen (Minimal - Hoch)" else "Token-Budget",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextParchmentFaint
+                      )
+                    }
+                  },
+                  onClick = {
+                    selectedModelId = modelInfo.id
+                    temperature = modelInfo.defaultTemperature
+                    modelDropdownExpanded = false
+                  }
+                )
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Thinking level or thinking budget
+          if (currentModelInfo.usesThinkingLevel) {
+            Text(text = "DENKSTUFE (REASONING EFFORT)", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val levels = listOf(
+              "MINIMAL" to "Minimal (Höchste Geschwindigkeit)",
+              "LOW" to "Niedrig (Schnell)",
+              "MEDIUM" to "Mittel (Standard - Ausgewogen)",
+              "HIGH" to "Hoch (Tiefgründige Reflexion)"
+            )
+
+            ExposedDropdownMenuBox(
+              expanded = thinkingDropdownExpanded,
+              onExpandedChange = { thinkingDropdownExpanded = it },
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              val currentLabel = levels.firstOrNull { it.first.equals(thinkingLevel, ignoreCase = true) }?.second ?: thinkingLevel
+              OutlinedTextField(
+                value = currentLabel,
+                onValueChange = {},
+                readOnly = true,
+                leadingIcon = { Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
+                modifier = Modifier
+                  .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                  .fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                  focusedContainerColor = SlateDark800,
+                  unfocusedContainerColor = SlateDark800,
+                  focusedTextColor = TextParchment,
+                  unfocusedTextColor = TextParchment,
+                  focusedBorderColor = AmberGoldPrimary,
+                  unfocusedBorderColor = SlateDark600
+                ),
+                shape = RoundedCornerShape(8.dp)
+              )
+
+              ExposedDropdownMenu(
+                expanded = thinkingDropdownExpanded,
+                onDismissRequest = { thinkingDropdownExpanded = false },
+                modifier = Modifier.background(SlateDark800)
+              ) {
+                levels.forEach { (lvl, label) ->
+                  DropdownMenuItem(
+                    text = { Text(label, color = TextParchment) },
+                    onClick = {
+                      thinkingLevel = lvl
+                      thinkingDropdownExpanded = false
+                    }
+                  )
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Temperature slider or notice
+          if (currentModelInfo.supportsTemperature) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(text = "TEMPERATUR (KREATIVITÄT)", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+              Text(String.format("%.2f", temperature), style = MaterialTheme.typography.labelMedium, color = TextParchment, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+              value = temperature,
+              onValueChange = { temperature = it },
+              valueRange = 0.2f..1.5f,
+              steps = 26,
+              colors = SliderDefaults.colors(
+                thumbColor = AmberGoldPrimary,
+                activeTrackColor = AmberGoldPrimary,
+                inactiveTrackColor = SlateDark700
+              )
+            )
+          } else {
+            Card(
+              colors = CardDefaults.cardColors(containerColor = SlateDark800),
+              shape = RoundedCornerShape(8.dp),
+              border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark700)
+            ) {
+              Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = AmberGoldLight, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Temperatur wird von $selectedModelId fest verwaltet.", style = MaterialTheme.typography.bodySmall, color = TextParchmentMuted)
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+
+          // Adult content filter switch
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .background(SlateDark800, RoundedCornerShape(8.dp))
+              .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(imageVector = Icons.Default.Security, contentDescription = null, tint = AmberGoldPrimary, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(8.dp))
+              Text("Adult Content Filter (BLOCK_NONE)", style = MaterialTheme.typography.bodyMedium, color = TextParchment)
+            }
+            Switch(
+              checked = adultContent,
+              onCheckedChange = { adultContent = it },
+              colors = SwitchDefaults.colors(
+                checkedThumbColor = AmberGoldPrimary,
+                checkedTrackColor = AmberGoldDark,
+                uncheckedThumbColor = TextParchmentMuted,
+                uncheckedTrackColor = SlateDark700
+              )
+            )
+          }
+
+          Spacer(modifier = Modifier.height(16.dp))
+          HorizontalDivider(color = SlateDark700)
+          Spacer(modifier = Modifier.height(16.dp))
+
+          Text(
+            text = "DETAILS & CHARAKTER-SETTING",
             style = MaterialTheme.typography.labelSmall,
             color = AmberGoldPrimary,
             fontWeight = FontWeight.Bold
           )
           Spacer(modifier = Modifier.height(8.dp))
 
-          STORY_PRESETS.forEachIndexed { index, preset ->
-            val isSelected = selectedPresetIndex == index
-            Surface(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-                .clickable {
-                  selectedPresetIndex = index
-                  loadPreset(preset)
-                },
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) AmberGoldContainer else SlateDark800,
-              border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                if (isSelected) AmberGoldPrimary else SlateDark600
-              )
-            ) {
-              Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Icon(
-                  imageVector = Icons.Default.AutoAwesome,
-                  contentDescription = null,
-                  tint = if (isSelected) AmberGoldPrimary else TextParchmentMuted,
-                  modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                  Text(text = preset.title, style = MaterialTheme.typography.bodyMedium, color = TextParchment, fontWeight = FontWeight.SemiBold)
-                  Text(text = preset.genre, style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(14.dp))
-          HorizontalDivider(color = SlateDark700)
-          Spacer(modifier = Modifier.height(14.dp))
-
-          // Detail Inputs
           Text(text = "TITEL DER GESCHICHTE", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
@@ -665,10 +914,12 @@ fun StorySelectorDialog(
                 customGenre.ifBlank { "Freies Abenteuer" },
                 "Zweite Person (Du)",
                 "", // Use global default prompt
-                "gemini-2.5-flash",
-                0.85f,
-                2048,
-                true,
+                selectedModelId,
+                temperature,
+                currentModelInfo.supportsTemperature,
+                thinkingLevel,
+                thinkingBudget,
+                adultContent,
                 customLocation.ifBlank { "Startort" },
                 customOutfit.ifBlank { "Alltagskleidung" },
                 invList,

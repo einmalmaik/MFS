@@ -10,7 +10,7 @@ import com.example.data.model.StoryEntity
 
 @Database(
   entities = [StoryEntity::class, CheckpointEntity::class, MessageEntity::class],
-  version = 2,
+  version = 3,
   exportSchema = false
 )
 abstract class StoryDatabase : RoomDatabase() {

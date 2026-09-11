@@ -2,6 +2,7 @@ package com.example.data.api
 
 import android.util.Log
 import com.example.BuildConfig
+import com.example.data.model.GeminiModelInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -15,6 +16,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.TimeUnit
 
 class GeminiClient(
@@ -30,11 +33,11 @@ class GeminiClient(
     private const val TAG = "GeminiClient"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    val AVAILABLE_MODELS = listOf(
-      "gemini-2.5-flash" to "Gemini 2.5 Flash (Schnell & präzise)",
-      "gemini-3.5-flash" to "Gemini 3.5 Flash (Next-Gen Allrounder)",
-      "gemini-3.1-pro-preview" to "Gemini 3.1 Pro (Literarische Tiefe & High-Thinking)",
-      "gemini-3.1-flash-lite-preview" to "Gemini 3.1 Flash-Lite (High-Speed Turbo)"
+    val THINKING_LEVEL_PRESETS = listOf(
+      "MINIMAL" to "Minimal (Höchste Geschwindigkeit, minimale Denkzeit)",
+      "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
+      "MEDIUM" to "Mittel (Ausgewogene Tiefe & psychologische Konsistenz)",
+      "HIGH" to "Hoch (Tiefgründige Konsistenz & maximale Reflexion)"
     )
 
     val THINKING_BUDGET_PRESETS = listOf(
@@ -43,6 +46,59 @@ class GeminiClient(
       2048 to "Standard (2048 Token - Ausgewogene Tiefe)",
       4096 to "Tiefgründig (4096 Token - Komplexe Psychologie)",
       8192 to "Maximum / Episch (8192 Token - Höchste logische Tiefe)"
+    )
+
+    val DEFAULT_FALLBACK_MODELS = listOf(
+      GeminiModelInfo(
+        id = "gemini-3.8-flash",
+        displayName = "Gemini 3.8 Flash (Aktuellstes Flaggschiff)",
+        description = "Googles neuestes Modell mit anpassbaren Denkstufen (Minimal, Low, Medium, High).",
+        supportsTemperature = true,
+        defaultTemperature = 0.85f,
+        isThinkingModel = true,
+        usesThinkingLevel = true,
+        supportedThinkingLevels = listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
+      ),
+      GeminiModelInfo(
+        id = "gemini-3.1-pro-preview",
+        displayName = "Gemini 3.1 Pro (Höchste literarische Tiefe)",
+        description = "Für tiefgründige Erzählungen, unvorhersehbare Twists und komplexe Psychologie.",
+        supportsTemperature = true,
+        defaultTemperature = 0.85f,
+        isThinkingModel = true,
+        usesThinkingLevel = true,
+        supportedThinkingLevels = listOf("LOW", "MEDIUM", "HIGH")
+      ),
+      GeminiModelInfo(
+        id = "gemini-3.5-flash",
+        displayName = "Gemini 3.5 Flash (Allrounder)",
+        description = "Ausgewogenes Verhältnis zwischen Reaktionszeit und logischer Tiefe.",
+        supportsTemperature = true,
+        defaultTemperature = 0.85f,
+        isThinkingModel = true,
+        usesThinkingLevel = true,
+        supportedThinkingLevels = listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
+      ),
+      GeminiModelInfo(
+        id = "gemini-3.1-flash-lite-preview",
+        displayName = "Gemini 3.1 Flash-Lite (Turbo)",
+        description = "Optimiert für blitzschnelle Reaktionen und direkte Dialoge.",
+        supportsTemperature = true,
+        defaultTemperature = 0.85f,
+        isThinkingModel = true,
+        usesThinkingLevel = true,
+        supportedThinkingLevels = listOf("MINIMAL", "LOW", "MEDIUM")
+      ),
+      GeminiModelInfo(
+        id = "gemini-2.5-flash",
+        displayName = "Gemini 2.5 Flash (Token-Budget Thinking)",
+        description = "Nutzt das klassische tokenbasierte Thinking-Budget.",
+        supportsTemperature = true,
+        defaultTemperature = 0.85f,
+        isThinkingModel = true,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      )
     )
 
     val DEFAULT_SYSTEM_PROMPT = """
@@ -83,6 +139,102 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
   }
 
   /**
+   * Fetches the current live list of models dynamically from Google Gemini API.
+   * Filters out legacy prohibited models, parses temperature and thinking levels.
+   */
+  suspend fun fetchAvailableModels(): List<GeminiModelInfo> = withContext(Dispatchers.IO) {
+    val apiKey = getEffectiveApiKey()
+    if (apiKey.isBlank()) {
+      return@withContext DEFAULT_FALLBACK_MODELS
+    }
+
+    try {
+      val url = URL("https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey")
+      val conn = (url.openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 8000
+        readTimeout = 8000
+      }
+
+      if (conn.responseCode == 200) {
+        val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+        val root = JSONObject(responseText)
+        val modelsArray = root.optJSONArray("models") ?: JSONArray()
+        val parsedList = mutableListOf<GeminiModelInfo>()
+
+        for (i in 0 until modelsArray.length()) {
+          val modelObj = modelsArray.getJSONObject(i)
+          val rawName = modelObj.optString("name", "")
+          val id = rawName.removePrefix("models/")
+          val methods = modelObj.optJSONArray("supportedGenerationMethods") ?: JSONArray()
+          var supportsGenerateContent = false
+          for (j in 0 until methods.length()) {
+            if (methods.getString(j) == "generateContent") {
+              supportsGenerateContent = true
+              break
+            }
+          }
+          if (!supportsGenerateContent) continue
+
+          // Filter out disallowed legacy or non-text models
+          if (id.contains("embedding") || id.contains("tts") || id.contains("veo") || id.contains("aqa")) continue
+          if (id.startsWith("gemini-1.5") || id.startsWith("gemini-1.0") || id.startsWith("gemini-2.0")) continue
+
+          val displayName = modelObj.optString("displayName", id)
+          val description = modelObj.optString("description", "")
+
+          // Check temperature support
+          val hasExplicitTemp = modelObj.has("temperature")
+          val defaultTemp = modelObj.optDouble("temperature", 0.85).toFloat()
+          // Certain reasoning models enforce fixed temperature
+          val supportsTemp = hasExplicitTemp || (!id.contains("thinking-only") && !id.contains("o1"))
+
+          // Determine thinking level support
+          // Gemini 3.x+ models use thinkingLevel ("MINIMAL", "LOW", "MEDIUM", "HIGH")
+          val isGemini3Plus = id.contains("gemini-3") || id.contains("-3.")
+          val isGemini25 = id.contains("gemini-2.5")
+          val isThinking = isGemini3Plus || isGemini25 || id.contains("thinking")
+
+          val thinkingLevels = if (isGemini3Plus) {
+            if (id.contains("pro")) {
+              listOf("LOW", "MEDIUM", "HIGH")
+            } else {
+              listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
+            }
+          } else emptyList()
+
+          parsedList.add(
+            GeminiModelInfo(
+              id = id,
+              displayName = displayName,
+              description = description,
+              supportsTemperature = supportsTemp,
+              defaultTemperature = defaultTemp,
+              isThinkingModel = isThinking,
+              usesThinkingLevel = isGemini3Plus,
+              supportedThinkingLevels = thinkingLevels
+            )
+          )
+        }
+
+        if (parsedList.isNotEmpty()) {
+          // Sort: Prioritize newest flagship models at the top (3.8 -> 3.1 pro -> 3.5 -> 2.5)
+          parsedList.sortWith(compareByDescending<GeminiModelInfo> { it.id.contains("3.8") }
+            .thenByDescending { it.id.contains("3.1-pro") }
+            .thenByDescending { it.id.contains("3.5") }
+            .thenByDescending { it.id.contains("3.1") }
+            .thenByDescending { it.id.contains("2.5") })
+          return@withContext parsedList
+        }
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to dynamically query models from Google: ${e.message}")
+    }
+
+    DEFAULT_FALLBACK_MODELS
+  }
+
+  /**
    * Builds the safety settings JSON array with BLOCK_NONE across all 5 harm categories
    */
   private fun buildFullBlockNoneSafetyArray(): JSONArray {
@@ -104,26 +256,28 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
   }
 
   /**
-   * Streams content chunk by chunk for ultra low-latency response rendering.
+   * Streams the next turn from Gemini via Server-Sent Events (SSE).
    */
-  fun streamGenerateStory(
+  fun streamGenerateContent(
     model: String,
     systemInstruction: String,
     stateJson: String,
-    episodicSummary: String,
     milestones: List<String> = emptyList(),
-    recentHistory: List<Pair<String, String>>, // role ("user" | "model"), text
+    episodicSummary: String = "",
+    recentHistory: List<Pair<String, String>>,
     userAction: String,
     temperature: Float = 0.85f,
+    supportsTemperature: Boolean = true,
+    thinkingLevel: String = "MEDIUM",
     thinkingBudget: Int = 2048,
     allowAdultContent: Boolean = true
   ): Flow<String> = flow {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank()) {
-      throw IllegalStateException("API-Schlüssel fehlt. Bitte trage deinen Gemini API-Key in den Einstellungen ein.")
+      throw IllegalStateException("Kein Gemini API-Schlüssel hinterlegt. Bitte öffne die Einstellungen und trage deinen Key ein.")
     }
 
-    val url = "$BASE_URL/$model:streamGenerateContent?key=$apiKey&alt=sse"
+    val url = "$BASE_URL/$model:streamGenerateContent?alt=sse&key=$apiKey"
 
     val payload = JSONObject()
 
@@ -179,14 +333,27 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
 
     // Generation config
     val genConfig = JSONObject()
-    genConfig.put("temperature", temperature.coerceIn(0.0f, 2.0f))
+    if (supportsTemperature) {
+      genConfig.put("temperature", temperature.coerceIn(0.0f, 2.0f))
+    }
     genConfig.put("topP", 0.95)
 
-    // Add thinkingConfig if model supports it and budget > 0
-    if (thinkingBudget > 0 && (model.contains("2.5") || model.contains("3."))) {
-      val thinkingObj = JSONObject()
-      thinkingObj.put("thinkingBudget", thinkingBudget)
-      genConfig.put("thinkingConfig", thinkingObj)
+    // Dynamic Thinking Config:
+    // Gemini 3.x+ models use thinkingLevel ("MINIMAL", "LOW", "MEDIUM", "HIGH")
+    // Gemini 2.5 models use thinkingBudget (Tokens)
+    val isGemini3Plus = model.contains("gemini-3") || model.contains("-3.")
+    if (isGemini3Plus) {
+      if (thinkingLevel != "OFF") {
+        val thinkingObj = JSONObject()
+        thinkingObj.put("thinkingLevel", thinkingLevel)
+        genConfig.put("thinkingConfig", thinkingObj)
+      }
+    } else if (model.contains("2.5") || model.contains("thinking")) {
+      if (thinkingBudget > 0) {
+        val thinkingObj = JSONObject()
+        thinkingObj.put("thinkingBudget", thinkingBudget)
+        genConfig.put("thinkingConfig", thinkingObj)
+      }
     }
 
     payload.put("generationConfig", genConfig)
@@ -232,62 +399,103 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     }
   }.flowOn(Dispatchers.IO)
 
+  fun streamGenerateStory(
+    model: String,
+    systemInstruction: String,
+    stateJson: String,
+    milestones: List<String> = emptyList(),
+    episodicSummary: String = "",
+    recentHistory: List<Pair<String, String>>,
+    userAction: String,
+    temperature: Float = 0.85f,
+    supportsTemperature: Boolean = true,
+    thinkingLevel: String = "MEDIUM",
+    thinkingBudget: Int = 2048,
+    allowAdultContent: Boolean = true
+  ): Flow<String> = streamGenerateContent(
+    model = model,
+    systemInstruction = systemInstruction,
+    stateJson = stateJson,
+    milestones = milestones,
+    episodicSummary = episodicSummary,
+    recentHistory = recentHistory,
+    userAction = userAction,
+    temperature = temperature,
+    supportsTemperature = supportsTemperature,
+    thinkingLevel = thinkingLevel,
+    thinkingBudget = thinkingBudget,
+    allowAdultContent = allowAdultContent
+  )
+
   /**
-   * Background extractor: updates discrete world state, time, inventory, outfits,
-   * NPCs, and landmark memories via structured JSON output.
+   * Fast background call: Extracts updated state after a story turn.
    */
   suspend fun extractUpdatedState(
     model: String,
     currentStateJson: String,
+    existingMilestones: List<String> = emptyList(),
     userAction: String,
-    modelNarrative: String,
-    previousMilestones: List<String> = emptyList()
+    storyResponse: String = "",
+    previousMilestones: List<String> = existingMilestones,
+    modelNarrative: String = storyResponse
   ): JSONObject = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank()) {
       return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
     }
 
-    val url = "$BASE_URL/gemini-2.5-flash:generateContent?key=$apiKey"
+    val finalNarrative = storyResponse.ifBlank { modelNarrative }
+    val finalMilestones = if (existingMilestones.isNotEmpty()) existingMilestones else previousMilestones
+
+    val url = "$BASE_URL/$model:generateContent?key=$apiKey"
+
+    val milestonesBlock = if (finalMilestones.isNotEmpty()) {
+      "Bisherige bedeutsame Meilensteine:\n" + finalMilestones.joinToString("\n") { "- $it" }
+    } else {
+      "Bisher keine Meilensteine verzeichnet."
+    }
 
     val extractionPrompt = """
-Du bist der präzise State-Tracking-Engine eines Text-RPGs.
-Deine Aufgabe ist es, den neuen Weltzustand und wichtige Langzeiterinnerungen als exaktes JSON-Objekt zu aktualisieren.
+Du bist die State-Tracking-Engine des Spiels. Analysiere den bisherigen Zustand und was in dieser Runde geschehen ist.
+Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema erfüllt:
 
-Bisheriger Zustand:
-$currentStateJson
-
-Bisherige Meilensteine:
-${previousMilestones.joinToString("\n- ")}
-
-Spieler-Aktion im aktuellen Zug:
-$userAction
-
-Antwort des Game Masters im aktuellen Zug:
-$modelNarrative
-
-Gib AUSSCHLIESSLICH ein valides JSON-Objekt mit folgender Struktur zurück:
 {
-  "in_game_time": "Aktualisierte In-Game Zeit (z. B. 'Tag 1, 22:15 Uhr' oder 'Tag 2, 08:30 Uhr')",
-  "location": "Aktueller Aufenthaltsort",
-  "weather": "Aktuelles Wetter / Atmosphäre",
-  "player_outfit": "Genaue Kleidung des Spielers (inklusive abgelegter oder gewechselter Teile)",
-  "player_inventory": ["Gegenstand 1", "Gegenstand 2"],
-  "player_condition": "Gesundheitszustand, Verletzungen, Müdigkeit",
-  "npcs": [
+  "in_game_time": "z. B. Tag 1, 22:15 Uhr",
+  "location": "Aktueller Ort des Spielers",
+  "weather": "Wetterlage",
+  "player": {
+    "outfit": "Aktuelle Kleidung des Spielers",
+    "condition": "Körperlicher/mentaler Zustand",
+    "inventory": ["Item 1", "Item 2"]
+  },
+  "npcs_present": [
     {
-      "name": "Name des NPCs",
-      "outfit": "Aktuelle Kleidung des NPCs",
-      "relationship_to_player": "Beziehung zum Spieler (z. B. 'Misstrauisch', 'Zieht sich zurück', 'Verliebt', 'Loyal')",
+      "name": "NPC Name",
+      "outfit": "Kleidung dieses NPCs",
+      "relationship_to_player": "Aktuelle Haltung zum Spieler",
       "current_mood": "Stimmung",
       "status": "Anwesend oder Abwesend"
     }
   ],
   "milestones": [
-    "Prägende Schlüsselmomente, Schwüre, Enthüllungen oder Verluste, die auch an Tag 30 noch relevant sind"
+    "Dauerhafte, prägende Ereignisse, Schwüre, Enthüllungen oder Verluste"
   ],
-  "previous_events_summary": "Kurze, prägnante Zusammenfassung (max. 3-4 Sätze) aller bisherigen Ereignisse als Kontext-Brücke"
+  "previous_events_summary": "1-3 prägnante Sätze über die wichtigsten Ereignisse bisher."
 }
+
+[BISHERIGER ZUSTAND]:
+$currentStateJson
+
+[BISHERIGE MEILENSTEINE]:
+$milestonesBlock
+
+[SPIELER-AKTION DIESER RUNDE]:
+$userAction
+
+[ANTWORT DES GAME MASTERS DIESER RUNDE]:
+$storyResponse
+
+Wichtig: Falls ein Outfit gewechselt, beschädigt oder abgelegt wurde, aktualisiere es. Falls ein Meilenstein (z. B. ein Liebesgeständnis, Verrat, Pakt, Mord) passiert ist, füge ihn der 'milestones'-Liste hinzu.
 """.trimIndent()
 
     val payload = JSONObject()
@@ -301,9 +509,20 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt mit folgender Struktur zurück:
     val genConfig = JSONObject()
     genConfig.put("responseMimeType", "application/json")
     genConfig.put("temperature", 0.2)
-    payload.put("generationConfig", genConfig)
 
-    // BLOCK_NONE safety settings for state extraction
+    // For state extraction, use minimal thinking effort to respond instantly
+    val isGemini3Plus = model.contains("gemini-3") || model.contains("-3.")
+    if (isGemini3Plus) {
+      val thinkingObj = JSONObject()
+      thinkingObj.put("thinkingLevel", "MINIMAL")
+      genConfig.put("thinkingConfig", thinkingObj)
+    } else if (model.contains("2.5")) {
+      val thinkingObj = JSONObject()
+      thinkingObj.put("thinkingBudget", 0)
+      genConfig.put("thinkingConfig", thinkingObj)
+    }
+
+    payload.put("generationConfig", genConfig)
     payload.put("safetySettings", buildFullBlockNoneSafetyArray())
 
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
@@ -352,7 +571,8 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt mit folgender Struktur zurück:
       return@withContext false to "API-Schlüssel darf nicht leer sein."
     }
 
-    val url = "$BASE_URL/gemini-2.5-flash:generateContent?key=${apiKey.trim()}"
+    // Try testing with latest model or flash
+    val url = "$BASE_URL/gemini-3.8-flash:generateContent?key=${apiKey.trim()}"
     val payload = JSONObject()
     val contents = JSONArray()
     val msg = JSONObject()
@@ -361,13 +581,17 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt mit folgender Struktur zurück:
     contents.put(msg)
     payload.put("contents", contents)
 
+    val genConfig = JSONObject()
+    genConfig.put("thinkingConfig", JSONObject().put("thinkingLevel", "MINIMAL"))
+    payload.put("generationConfig", genConfig)
+
     val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = Request.Builder().url(url).post(body).build()
 
     try {
       val response = client.newCall(request).execute()
       if (response.isSuccessful) {
-        true to "Verbindung erfolgreich! Gemini 2.5 Flash hat geantwortet."
+        true to "Verbindung erfolgreich! Google Gemini 3.8 Flash hat geantwortet."
       } else {
         val err = response.body?.string() ?: ""
         false to parseErrorMessage(response.code, err)
@@ -396,10 +620,10 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt mit folgender Struktur zurück:
     return when (code) {
       400 -> "Ungültige Anfrage (400). Überprüfe das gewählte Modell oder die Parameter. ($body)"
       403 -> "Ungültiger API-Schlüssel oder keine Berechtigung (403). Bitte überprüfe deinen Schlüssel in Google AI Studio."
-      404 -> "Modell nicht gefunden (404). Wähle ein unterstütztes Modell wie gemini-2.5-flash."
+      404 -> "Modell nicht gefunden (404). Wähle ein unterstütztes Modell wie gemini-3.8-flash."
       429 -> "Ratenlimit erreicht (429). Bitte warte einen Moment, bevor du weiterspielst."
-      500, 503 -> "Gemini Server vorübergehend überlastet ($code). Bitte versuche es gleich erneut."
-      else -> "Fehler ($code): $body"
+      500, 503 -> "Google Gemini Server temporär überlastet (500/503). Bitte versuche es in wenigen Sekunden erneut."
+      else -> "Fehler beim Aufruf der Gemini API (Code $code): $body"
     }
   }
 }

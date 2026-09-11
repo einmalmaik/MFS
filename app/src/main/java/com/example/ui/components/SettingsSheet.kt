@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Psychology
@@ -75,6 +76,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.api.GeminiClient
+import com.example.data.model.GeminiModelInfo
 import com.example.data.model.StoryEntity
 import com.example.ui.theme.AmberGoldContainer
 import com.example.ui.theme.AmberGoldDark
@@ -97,7 +99,19 @@ fun SettingsSheet(
   story: StoryEntity,
   globalDefaultPrompt: String,
   customApiKey: String,
-  onSaveStorySettings: (title: String, systemPrompt: String, model: String, temperature: Float, thinkingBudget: Int, adultContent: Boolean) -> Unit,
+  availableModels: List<GeminiModelInfo>,
+  isFetchingModels: Boolean,
+  onRefreshModels: () -> Unit,
+  onSaveStorySettings: (
+    title: String,
+    systemPrompt: String,
+    model: String,
+    temperature: Float,
+    supportsTemperature: Boolean,
+    thinkingLevel: String,
+    thinkingBudget: Int,
+    adultContent: Boolean
+  ) -> Unit,
   onSaveGlobalDefaultPrompt: (String) -> Unit,
   onSaveApiKey: (String) -> Unit,
   onTestApiKey: suspend () -> Pair<Boolean, String>,
@@ -113,8 +127,23 @@ fun SettingsSheet(
   var promptTabSelected by remember { mutableIntStateOf(if (story.systemPrompt.isNotBlank()) 0 else 1) }
 
   var selectedModel by remember(story) { mutableStateOf(story.selectedModel) }
-  var temperature by remember(story) { mutableFloatStateOf(story.temperature) }
+  val currentModelInfo = availableModels.firstOrNull { it.id == selectedModel }
+    ?: GeminiModelInfo(
+      id = selectedModel,
+      displayName = selectedModel,
+      description = "",
+      supportsTemperature = story.supportsTemperature,
+      defaultTemperature = story.temperature,
+      isThinkingModel = true,
+      usesThinkingLevel = selectedModel.contains("3.") || selectedModel.contains("gemini-3")
+    )
+
+  var thinkingLevel by remember(story) { mutableStateOf(story.thinkingLevel) }
   var thinkingBudget by remember(story) { mutableIntStateOf(story.thinkingBudget) }
+  var temperature by remember(story) { mutableFloatStateOf(story.temperature) }
+  var supportsTemperature by remember(story, currentModelInfo) {
+    mutableStateOf(currentModelInfo.supportsTemperature)
+  }
   var adultContent by remember(story) { mutableStateOf(story.adultContentEnabled) }
 
   var apiKeyInput by remember(customApiKey) { mutableStateOf(customApiKey) }
@@ -125,17 +154,30 @@ fun SettingsSheet(
   var modelDropdownExpanded by remember { mutableStateOf(false) }
   var thinkingDropdownExpanded by remember { mutableStateOf(false) }
 
-  val availableModels = GeminiClient.AVAILABLE_MODELS
-  val thinkingPresets = GeminiClient.THINKING_BUDGET_PRESETS
+  val scrollState = rememberScrollState()
 
   Column(
     modifier = modifier
       .fillMaxWidth()
       .background(SlateDark900)
-      .padding(horizontal = 20.dp, vertical = 16.dp)
-      .verticalScroll(rememberScrollState())
+      .padding(horizontal = 20.dp)
+      .verticalScroll(scrollState)
+      .testTag("settings_sheet")
   ) {
-    // Top Bar
+    Spacer(modifier = Modifier.height(12.dp))
+
+    // Handle indicator
+    Box(
+      modifier = Modifier
+        .align(Alignment.CenterHorizontally)
+        .width(40.dp)
+        .height(4.dp)
+        .background(SlateDark600, RoundedCornerShape(2.dp))
+    )
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Header
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -150,10 +192,11 @@ fun SettingsSheet(
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-          text = "Einstellungen",
-          style = MaterialTheme.typography.titleLarge,
-          color = TextParchment,
-          fontFamily = FontFamily.Serif
+          text = "Spieleinstellungen & KI-Regeln",
+          style = MaterialTheme.typography.titleMedium,
+          fontFamily = FontFamily.Serif,
+          fontWeight = FontWeight.Bold,
+          color = TextParchment
         )
       }
 
@@ -161,90 +204,120 @@ fun SettingsSheet(
         onClick = onClose,
         modifier = Modifier.testTag("close_settings_button")
       ) {
-        Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = TextParchmentMuted)
+        Icon(
+          imageVector = Icons.Default.Close,
+          contentDescription = "Schließen",
+          tint = TextParchmentMuted
+        )
       }
     }
 
     Text(
-      text = "Konfiguriere KI-Modelle, Denkintensität, System-Prompts und Google AI Studio Key.",
+      text = "Passe das Google Gemini Modell, die Denkstufen und die Regieanweisungen für dieses Abenteuer an.",
       style = MaterialTheme.typography.bodySmall,
       color = TextParchmentMuted
     )
 
-    Spacer(modifier = Modifier.height(16.dp))
-    HorizontalDivider(color = SlateDark700)
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(20.dp))
 
-    // 1. Google Gemini Account & API Key Section
+    // Story Title
     Text(
-      text = "GEMINI-KONTO & API-SCHLÜSSEL",
+      text = "TITEL DER GESCHICHTE",
       style = MaterialTheme.typography.labelSmall,
       color = AmberGoldPrimary,
       fontWeight = FontWeight.Bold
     )
     Spacer(modifier = Modifier.height(6.dp))
+    OutlinedTextField(
+      value = title,
+      onValueChange = { title = it },
+      modifier = Modifier
+        .fillMaxWidth()
+        .testTag("story_title_input"),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = SlateDark800,
+        unfocusedContainerColor = SlateDark800,
+        focusedBorderColor = AmberGoldPrimary,
+        unfocusedBorderColor = SlateDark600,
+        focusedTextColor = TextParchment,
+        unfocusedTextColor = TextParchment
+      ),
+      shape = RoundedCornerShape(10.dp)
+    )
 
+    Spacer(modifier = Modifier.height(20.dp))
+
+    // 1. Google Gemini API-Schlüssel
     Card(
       colors = CardDefaults.cardColors(containerColor = SlateDark800),
       shape = RoundedCornerShape(12.dp),
       border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600)
     ) {
-      Column(modifier = Modifier.padding(14.dp)) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.Key,
+              contentDescription = null,
+              tint = AmberGoldPrimary,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Google Gemini API-Key",
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.Bold,
+              color = TextParchment
+            )
+          }
+
+          TextButton(
+            onClick = {
+              val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/app/apikey"))
+              context.startActivity(intent)
+            }
+          ) {
+            Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(14.dp), tint = AmberGoldLight)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Key holen", style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+          }
+        }
+
         Text(
-          text = "Eigenes Gemini-Konto nutzen",
-          style = MaterialTheme.typography.titleSmall,
-          color = TextParchment,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          text = "Dein Google AI Studio Key bindet direkt dein Google Gemini Konto an. Volle Kostenkontrolle & Datenhoheit.",
+          text = "Direkter Zugriff auf die offiziellen Google Gemini Modelle (inkl. 3.8 Flash, 3.1 Pro). Dein Key verbleibt sicher lokal auf diesem Gerät.",
           style = MaterialTheme.typography.bodySmall,
           color = TextParchmentMuted
         )
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Button(
-          onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/app/apikey"))
-            context.startActivity(intent)
-          },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = SlateDark700,
-            contentColor = AmberGoldPrimary
-          ),
-          shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.fillMaxWidth()
-        ) {
-          Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("AI Studio öffnen / Key erstellen", fontWeight = FontWeight.SemiBold)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         OutlinedTextField(
           value = apiKeyInput,
           onValueChange = { apiKeyInput = it },
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("api_key_input"),
-          placeholder = { Text("Gemini API Key einfügen...", color = TextParchmentFaint) },
+          placeholder = { Text("AIzaSy...", color = TextParchmentFaint) },
           visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
           trailingIcon = {
             IconButton(onClick = { showApiKey = !showApiKey }) {
               Icon(
                 imageVector = if (showApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                contentDescription = "Key einblenden/ausblenden",
+                contentDescription = null,
                 tint = TextParchmentMuted
               )
             }
           },
+          singleLine = true,
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("api_key_input"),
           colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = SlateDark900,
             unfocusedContainerColor = SlateDark900,
             focusedBorderColor = AmberGoldPrimary,
-            unfocusedBorderColor = SlateDark600,
+            unfocusedBorderColor = SlateDark700,
             focusedTextColor = TextParchment,
             unfocusedTextColor = TextParchment
           ),
@@ -325,12 +398,37 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(20.dp))
 
-    // 2. Aktuelle Gemini-Modelle
+    // 2. Aktuelle Gemini-Modelle (Dynamisch von Google abrufen)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = "AKTUELLES GOOGLE GEMINI MODELL",
+        style = MaterialTheme.typography.labelSmall,
+        color = AmberGoldPrimary,
+        fontWeight = FontWeight.Bold
+      )
+
+      TextButton(
+        onClick = onRefreshModels,
+        enabled = !isFetchingModels,
+        modifier = Modifier.testTag("refresh_models_button")
+      ) {
+        if (isFetchingModels) {
+          CircularProgressIndicator(color = AmberGoldPrimary, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+        } else {
+          Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = AmberGoldLight, modifier = Modifier.size(16.dp))
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Text("Von Google abrufen", style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+      }
+    }
     Text(
-      text = "AKTUELLES GEMINI-MODELL",
-      style = MaterialTheme.typography.labelSmall,
-      color = AmberGoldPrimary,
-      fontWeight = FontWeight.Bold
+      text = "Aktuelle Modelle werden live aus der Google Gemini API geladen. Neue Modelle wie Gemini 3.8 Flash stehen sofort bereit.",
+      style = MaterialTheme.typography.bodySmall,
+      color = TextParchmentFaint
     )
     Spacer(modifier = Modifier.height(6.dp))
 
@@ -339,11 +437,8 @@ fun SettingsSheet(
       onExpandedChange = { modelDropdownExpanded = it },
       modifier = Modifier.fillMaxWidth()
     ) {
-      val currentModelLabel = availableModels.firstOrNull { it.first == selectedModel }?.second
-        ?: selectedModel
-
       OutlinedTextField(
-        value = currentModelLabel,
+        value = currentModelInfo.displayName,
         onValueChange = {},
         readOnly = true,
         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded) },
@@ -367,19 +462,65 @@ fun SettingsSheet(
         onDismissRequest = { modelDropdownExpanded = false },
         modifier = Modifier.background(SlateDark800)
       ) {
-        availableModels.forEach { (modelId, label) ->
+        availableModels.forEach { modelInfo ->
           DropdownMenuItem(
             text = {
-              Column {
-                Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextParchment)
-                Text(text = modelId, style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
+              Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Text(
+                  text = modelInfo.displayName,
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = TextParchment
+                )
+                Text(
+                  text = modelInfo.id,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = AmberGoldLight
+                )
+                if (modelInfo.description.isNotBlank()) {
+                  Text(
+                    text = modelInfo.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextParchmentFaint,
+                    maxLines = 2
+                  )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Surface(
+                    color = SlateDark700,
+                    shape = RoundedCornerShape(4.dp)
+                  ) {
+                    Text(
+                      text = if (modelInfo.usesThinkingLevel) "Denkstufen (Minimal - Hoch)" else "Token-Budget",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = TextParchment,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                  Surface(
+                    color = if (modelInfo.supportsTemperature) SlateDark700 else AmberGoldContainer.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(4.dp)
+                  ) {
+                    Text(
+                      text = if (modelInfo.supportsTemperature) "Temperatur aktiv" else "Temperatur fest",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = if (modelInfo.supportsTemperature) TextParchment else AmberGoldLight,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                }
               }
             },
             onClick = {
-              selectedModel = modelId
+              selectedModel = modelInfo.id
+              supportsTemperature = modelInfo.supportsTemperature
+              if (modelInfo.supportsTemperature) {
+                temperature = modelInfo.defaultTemperature
+              }
               modelDropdownExpanded = false
             },
-            modifier = Modifier.testTag("model_option_$modelId")
+            modifier = Modifier.testTag("model_option_${modelInfo.id}")
           )
         }
       }
@@ -387,110 +528,223 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(20.dp))
 
-    // 3. Denkintensität (Thinking Budget)
-    Text(
-      text = "DENKINTENSITÄT (THINKING BUDGET)",
-      style = MaterialTheme.typography.labelSmall,
-      color = AmberGoldPrimary,
-      fontWeight = FontWeight.Bold
-    )
-    Text(
-      text = "Gibt der KI Zeit für innere logische Konsistenz, NPC-Psychologie & Handlungsprüfung vor der Antwort.",
-      style = MaterialTheme.typography.bodySmall,
-      color = TextParchmentFaint
-    )
-    Spacer(modifier = Modifier.height(6.dp))
-
-    ExposedDropdownMenuBox(
-      expanded = thinkingDropdownExpanded,
-      onExpandedChange = { thinkingDropdownExpanded = it },
-      modifier = Modifier.fillMaxWidth()
-    ) {
-      val currentThinkingLabel = thinkingPresets.firstOrNull { it.first == thinkingBudget }?.second
-        ?: "$thinkingBudget Token"
-
-      OutlinedTextField(
-        value = currentThinkingLabel,
-        onValueChange = {},
-        readOnly = true,
-        leadingIcon = {
-          Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary)
-        },
-        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
-        modifier = Modifier
-          .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-          .fillMaxWidth()
-          .testTag("thinking_budget_selector"),
-        colors = OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = SlateDark800,
-          unfocusedContainerColor = SlateDark800,
-          focusedBorderColor = AmberGoldPrimary,
-          unfocusedBorderColor = SlateDark600,
-          focusedTextColor = TextParchment,
-          unfocusedTextColor = TextParchment
-        ),
-        shape = RoundedCornerShape(10.dp)
-      )
-
-      ExposedDropdownMenu(
-        expanded = thinkingDropdownExpanded,
-        onDismissRequest = { thinkingDropdownExpanded = false },
-        modifier = Modifier.background(SlateDark800)
-      ) {
-        thinkingPresets.forEach { (budget, label) ->
-          DropdownMenuItem(
-            text = {
-              Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextParchment)
-            },
-            onClick = {
-              thinkingBudget = budget
-              thinkingDropdownExpanded = false
-            },
-            modifier = Modifier.testTag("thinking_option_$budget")
-          )
-        }
-      }
-    }
-
-    Spacer(modifier = Modifier.height(20.dp))
-
-    // 4. Kreativität (Temperature)
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
-    ) {
+    // 3. Denkstufe (Thinking Level) oder Token-Budget je nach Modelltyp
+    if (currentModelInfo.usesThinkingLevel) {
+      // Gemini 3.x+ Modelle: Denkstufen (Minimal, Niedrig, Mittel, Hoch)
       Text(
-        text = "KREATIVITÄT (TEMPERATURE)",
+        text = "DENKSTUFE (REASONING EFFORT)",
         style = MaterialTheme.typography.labelSmall,
         color = AmberGoldPrimary,
         fontWeight = FontWeight.Bold
       )
       Text(
-        text = String.format("%.2f", temperature),
-        style = MaterialTheme.typography.labelMedium,
-        color = TextParchment,
+        text = "Moderne Modelle (wie Gemini 3.8 Flash) nutzen abgestufte Denkstufen statt starrer Token-Budgets für NPC-Logik & Konsistenzprüfung.",
+        style = MaterialTheme.typography.bodySmall,
+        color = TextParchmentFaint
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+
+      val levels = listOf(
+        "MINIMAL" to "Minimal (Blitzschnell, minimale Denkzeit)",
+        "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
+        "MEDIUM" to "Mittel (Standard - Ausgewogene Psychologie)",
+        "HIGH" to "Hoch (Tiefgründige Reflexion & maximale Konsistenz)"
+      )
+
+      ExposedDropdownMenuBox(
+        expanded = thinkingDropdownExpanded,
+        onExpandedChange = { thinkingDropdownExpanded = it },
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        val currentLabel = levels.firstOrNull { it.first.equals(thinkingLevel, ignoreCase = true) }?.second
+          ?: thinkingLevel
+
+        OutlinedTextField(
+          value = currentLabel,
+          onValueChange = {},
+          readOnly = true,
+          leadingIcon = {
+            Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary)
+          },
+          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
+          modifier = Modifier
+            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+            .fillMaxWidth()
+            .testTag("thinking_level_selector"),
+          colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = SlateDark800,
+            unfocusedContainerColor = SlateDark800,
+            focusedBorderColor = AmberGoldPrimary,
+            unfocusedBorderColor = SlateDark600,
+            focusedTextColor = TextParchment,
+            unfocusedTextColor = TextParchment
+          ),
+          shape = RoundedCornerShape(10.dp)
+        )
+
+        ExposedDropdownMenu(
+          expanded = thinkingDropdownExpanded,
+          onDismissRequest = { thinkingDropdownExpanded = false },
+          modifier = Modifier.background(SlateDark800)
+        ) {
+          levels.forEach { (levelKey, label) ->
+            DropdownMenuItem(
+              text = {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextParchment)
+              },
+              onClick = {
+                thinkingLevel = levelKey
+                thinkingDropdownExpanded = false
+              },
+              modifier = Modifier.testTag("thinking_level_option_$levelKey")
+            )
+          }
+        }
+      }
+    } else {
+      // Legacy Token-Budget für ältere Modelle (z. B. Gemini 2.5 Flash)
+      Text(
+        text = "DENKINTENSITÄT (THINKING BUDGET IN TOKEN)",
+        style = MaterialTheme.typography.labelSmall,
+        color = AmberGoldPrimary,
         fontWeight = FontWeight.Bold
       )
+      Text(
+        text = "Tokenbasiertes Denkzeit-Budget für ältere Modellserien.",
+        style = MaterialTheme.typography.bodySmall,
+        color = TextParchmentFaint
+      )
+      Spacer(modifier = Modifier.height(6.dp))
+
+      val thinkingPresets = GeminiClient.THINKING_BUDGET_PRESETS
+
+      ExposedDropdownMenuBox(
+        expanded = thinkingDropdownExpanded,
+        onExpandedChange = { thinkingDropdownExpanded = it },
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        val currentThinkingLabel = thinkingPresets.firstOrNull { it.first == thinkingBudget }?.second
+          ?: "$thinkingBudget Token"
+
+        OutlinedTextField(
+          value = currentThinkingLabel,
+          onValueChange = {},
+          readOnly = true,
+          leadingIcon = {
+            Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary)
+          },
+          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
+          modifier = Modifier
+            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+            .fillMaxWidth()
+            .testTag("thinking_budget_selector"),
+          colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = SlateDark800,
+            unfocusedContainerColor = SlateDark800,
+            focusedBorderColor = AmberGoldPrimary,
+            unfocusedBorderColor = SlateDark600,
+            focusedTextColor = TextParchment,
+            unfocusedTextColor = TextParchment
+          ),
+          shape = RoundedCornerShape(10.dp)
+        )
+
+        ExposedDropdownMenu(
+          expanded = thinkingDropdownExpanded,
+          onDismissRequest = { thinkingDropdownExpanded = false },
+          modifier = Modifier.background(SlateDark800)
+        ) {
+          thinkingPresets.forEach { (budget, label) ->
+            DropdownMenuItem(
+              text = {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextParchment)
+              },
+              onClick = {
+                thinkingBudget = budget
+                thinkingDropdownExpanded = false
+              },
+              modifier = Modifier.testTag("thinking_option_$budget")
+            )
+          }
+        }
+      }
     }
-    Slider(
-      value = temperature,
-      onValueChange = { temperature = it },
-      valueRange = 0.2f..1.5f,
-      steps = 26,
-      colors = SliderDefaults.colors(
-        thumbColor = AmberGoldPrimary,
-        activeTrackColor = AmberGoldPrimary,
-        inactiveTrackColor = SlateDark700
-      ),
-      modifier = Modifier.testTag("temperature_slider")
-    )
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-      Text("Präziser (0.2)", style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
-      Text("Kreativ & Variantenreich (1.5)", style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    // 4. Kreativität (Temperature) oder Hinweis bei nicht-unterstützten Modellen
+    if (supportsTemperature) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "KREATIVITÄT (TEMPERATURE)",
+          style = MaterialTheme.typography.labelSmall,
+          color = AmberGoldPrimary,
+          fontWeight = FontWeight.Bold
+        )
+        Text(
+          text = String.format("%.2f", temperature),
+          style = MaterialTheme.typography.labelMedium,
+          color = TextParchment,
+          fontWeight = FontWeight.Bold
+        )
+      }
+      Slider(
+        value = temperature,
+        onValueChange = { temperature = it },
+        valueRange = 0.2f..1.5f,
+        steps = 26,
+        colors = SliderDefaults.colors(
+          thumbColor = AmberGoldPrimary,
+          activeTrackColor = AmberGoldPrimary,
+          inactiveTrackColor = SlateDark700
+        ),
+        modifier = Modifier.testTag("temperature_slider")
+      )
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+      ) {
+        Text("Präziser (0.2)", style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
+        Text("Kreativ & Variantenreich (1.5)", style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
+      }
+    } else {
+      Card(
+        colors = CardDefaults.cardColors(containerColor = SlateDark800),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark700)
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = AmberGoldLight,
+            modifier = Modifier.size(20.dp)
+          )
+          Spacer(modifier = Modifier.width(10.dp))
+          Column {
+            Text(
+              text = "Temperatur: Fest vorgegeben",
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.Bold,
+              color = TextParchment
+            )
+            Text(
+              text = "Das Modell $selectedModel arbeitet mit fest verankerten Sampling-Parametern. Manuelle Temperatur-Steuerung wird nicht unterstützt.",
+              style = MaterialTheme.typography.bodySmall,
+              color = TextParchmentMuted
+            )
+          }
+        }
+      }
     }
 
     Spacer(modifier = Modifier.height(20.dp))
@@ -518,16 +772,21 @@ fun SettingsSheet(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-              text = "Mature / Adult-Content",
-              style = MaterialTheme.typography.titleMedium,
+              text = "Mature / Adult Content Filter",
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.Bold,
               color = TextParchment
             )
           }
           Spacer(modifier = Modifier.height(4.dp))
           Text(
-            text = "Setzt ALLE 5 Gemini-Sicherheitsfilter auf BLOCK_NONE (keine Filterung für Erotik, viszerale Kämpfe oder düstere Themen).",
+            text = if (adultContent) {
+              "BLOCK_NONE aktiv (Sexuelle Inhalte, Gewalt, dunkle Szenen werden nicht ausgeblendet)."
+            } else {
+              "Standard-Sicherheitsfilter von Google aktiv."
+            },
             style = MaterialTheme.typography.bodySmall,
-            color = TextParchmentMuted
+            color = if (adultContent) AmberGoldLight else TextParchmentMuted
           )
         }
 
@@ -535,8 +794,8 @@ fun SettingsSheet(
           checked = adultContent,
           onCheckedChange = { adultContent = it },
           colors = SwitchDefaults.colors(
-            checkedThumbColor = SlateDark900,
-            checkedTrackColor = AmberGoldPrimary,
+            checkedThumbColor = AmberGoldPrimary,
+            checkedTrackColor = AmberGoldDark,
             uncheckedThumbColor = TextParchmentMuted,
             uncheckedTrackColor = SlateDark700
           ),
@@ -545,19 +804,19 @@ fun SettingsSheet(
       }
     }
 
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
-    // 6. System-Prompt: Per-Story vs. Global Default
+    // 6. System-Prompt Regieanweisungen
     Text(
-      text = "SYSTEM-PROMPT (GAME MASTER REGELN)",
+      text = "REGIEANWEISUNG / SYSTEM-PROMPT",
       style = MaterialTheme.typography.labelSmall,
       color = AmberGoldPrimary,
       fontWeight = FontWeight.Bold
     )
     Text(
-      text = "Jede Geschichte kann einen eigenen Prompt besitzen. Wenn das Feld leer ist, gilt der globale Standard-Prompt.",
+      text = "Definiere das Fundament der Spielwelt, Sprachregeln, Verbot von Kosenamen und das autonome Handeln der Charaktere.",
       style = MaterialTheme.typography.bodySmall,
-      color = TextParchmentFaint
+      color = TextParchmentMuted
     )
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -577,11 +836,12 @@ fun SettingsSheet(
         onClick = { promptTabSelected = 0 },
         text = {
           Text(
-            text = "Dieser Chat (Individuell)",
+            text = "Diese Geschichte",
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (promptTabSelected == 0) FontWeight.Bold else FontWeight.Normal
+            color = if (promptTabSelected == 0) AmberGoldPrimary else TextParchmentMuted
           )
-        }
+        },
+        modifier = Modifier.testTag("tab_story_prompt")
       )
       Tab(
         selected = promptTabSelected == 1,
@@ -590,36 +850,26 @@ fun SettingsSheet(
           Text(
             text = "Globaler Standard",
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (promptTabSelected == 1) FontWeight.Bold else FontWeight.Normal
+            color = if (promptTabSelected == 1) AmberGoldPrimary else TextParchmentMuted
           )
-        }
+        },
+        modifier = Modifier.testTag("tab_global_prompt")
       )
     }
 
     Spacer(modifier = Modifier.height(10.dp))
 
     if (promptTabSelected == 0) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text(
-          text = if (storySystemPrompt.isBlank()) "Aktuell: Standard-Prompt wird genutzt" else "Individueller Story-Prompt aktiv",
-          style = MaterialTheme.typography.labelSmall,
-          color = if (storySystemPrompt.isBlank()) TextParchmentMuted else AmberGoldPrimary
-        )
-        if (storySystemPrompt.isNotBlank()) {
-          TextButton(onClick = { storySystemPrompt = "" }) {
-            Text("Auf Standard zurücksetzen", fontSize = 11.sp, color = AmberGoldPrimary)
-          }
-        }
-      }
-
+      Text(
+        text = "Individueller Prompt für diese Geschichte (überschreibt den globalen Standard):",
+        style = MaterialTheme.typography.bodySmall,
+        color = TextParchmentFaint
+      )
+      Spacer(modifier = Modifier.height(6.dp))
       OutlinedTextField(
         value = storySystemPrompt,
         onValueChange = { storySystemPrompt = it },
-        placeholder = { Text("Hier individuellen Prompt für diesen Chat eintragen (oder leer lassen für Standard)...", color = TextParchmentFaint) },
+        placeholder = { Text("Leer lassen, um den globalen Standard-Prompt zu verwenden...", color = TextParchmentFaint) },
         modifier = Modifier
           .fillMaxWidth()
           .height(200.dp)
@@ -636,23 +886,12 @@ fun SettingsSheet(
         textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
       )
     } else {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text(
-          text = "Standard-Prompt für alle Chats ohne eigenen Prompt",
-          style = MaterialTheme.typography.labelSmall,
-          color = TextParchmentMuted
-        )
-        TextButton(onClick = { globalPrompt = GeminiClient.DEFAULT_SYSTEM_PROMPT }) {
-          Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp))
-          Spacer(modifier = Modifier.width(3.dp))
-          Text("Werkseinstellung", fontSize = 11.sp, color = AmberGoldPrimary)
-        }
-      }
-
+      Text(
+        text = "Globaler Standard-Prompt (gilt für alle neuen Geschichten):",
+        style = MaterialTheme.typography.bodySmall,
+        color = TextParchmentFaint
+      )
+      Spacer(modifier = Modifier.height(6.dp))
       OutlinedTextField(
         value = globalPrompt,
         onValueChange = { globalPrompt = it },
@@ -678,7 +917,16 @@ fun SettingsSheet(
     // Save All Button
     Button(
       onClick = {
-        onSaveStorySettings(title, storySystemPrompt, selectedModel, temperature, thinkingBudget, adultContent)
+        onSaveStorySettings(
+          title,
+          storySystemPrompt,
+          selectedModel,
+          temperature,
+          supportsTemperature,
+          thinkingLevel,
+          thinkingBudget,
+          adultContent
+        )
         onSaveGlobalDefaultPrompt(globalPrompt)
         onSaveApiKey(apiKeyInput)
         onClose()
