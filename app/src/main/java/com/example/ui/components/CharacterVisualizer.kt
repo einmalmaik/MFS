@@ -360,7 +360,7 @@ fun CharacterVisualizer(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // 2. Anatomische Körperregionen-Matrix (Touch-freundliche Kacheln statt verzerrtem Canvas)
+      // 2. Anatomische Körperregionen (Interaktiver Mannequin)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -388,93 +388,26 @@ fun CharacterVisualizer(
       }
 
       Spacer(modifier = Modifier.height(6.dp))
-
-      // Kacheln aller Regionen in 3 Spalten
-      val regions = listOf(
-        Pair(BodyPart.HEAD, "Kopf & Gesicht"),
-        Pair(BodyPart.NECK, "Hals & Kehle"),
-        Pair(BodyPart.CHEST, "Brust & Rippen"),
-        Pair(BodyPart.ABDOMEN, "Bauch & Unterleib"),
-        Pair(BodyPart.LEFT_ARM, "Linker Arm"),
-        Pair(BodyPart.RIGHT_ARM, "Rechter Arm"),
-        Pair(BodyPart.LEFT_LEG, "Linkes Bein"),
-        Pair(BodyPart.RIGHT_LEG, "Rechtes Bein"),
-        Pair(BodyPart.FEET, "Füße & Knöchel")
-      )
-
-      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        regions.chunked(3).forEach { rowParts ->
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            rowParts.forEach { (part, label) ->
-              val isSelected = selectedBodyPart == part
-              val partInjuries = characterInjuries.filter { it.bodyPart == part }
-              val hasInjuries = partInjuries.isNotEmpty()
-
-              Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = when {
-                  isSelected -> DnaColors.PrimaryContainer
-                  hasInjuries -> DnaColors.StatusDestructive.copy(alpha = 0.12f)
-                  else -> DnaColors.SurfaceContainerHigh
-                },
-                border = BorderStroke(
-                  1.dp,
-                  when {
-                    isSelected -> DnaColors.Primary
-                    hasInjuries -> DnaColors.StatusDestructive.copy(alpha = 0.6f)
-                    else -> DnaColors.Border
-                  }
-                ),
-                modifier = Modifier
-                  .weight(1f)
-                  .clip(RoundedCornerShape(8.dp))
-                  .clickable {
-                    selectedBodyPart = if (isSelected) null else part
-                  }
-              ) {
-                Column(
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                  horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                  Text(
-                    text = label,
-                    fontFamily = DnaTypography.InterFamily,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    fontSize = 11.sp,
-                    color = when {
-                      isSelected -> DnaColors.Primary
-                      hasInjuries -> DnaColors.StatusDestructive
-                      else -> DnaColors.OnSurface
-                    },
-                    maxLines = 1
-                  )
-
-                  Spacer(modifier = Modifier.height(2.dp))
-
-                  if (hasInjuries) {
-                    Text(
-                      text = "${partInjuries.size} Wunde(n)",
-                      fontFamily = DnaTypography.InterFamily,
-                      fontSize = 9.sp,
-                      fontWeight = FontWeight.SemiBold,
-                      color = DnaColors.StatusDestructive
-                    )
-                  } else {
-                    Text(
-                      text = "Unversehrt",
-                      fontFamily = DnaTypography.InterFamily,
-                      fontSize = 9.sp,
-                      color = DnaColors.OnSurfaceVariant
-                    )
-                  }
-                }
-              }
-            }
-          }
-        }
+      
+      // Hier wurde vorher die Kachel-Matrix gezeichnet. 
+      // Jetzt binden wir den CharacterMannequin (3D/Canvas Renderer) ein, wie vom User gewünscht.
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(300.dp)
+          .clip(RoundedCornerShape(8.dp))
+          .background(DnaColors.SurfaceContainerHighest),
+        contentAlignment = Alignment.Center
+      ) {
+        CharacterMannequin(
+          gender = currentGender,
+          injuries = characterInjuries,
+          selectedBodyPart = selectedBodyPart,
+          onBodyPartSelected = { part -> 
+            selectedBodyPart = if (selectedBodyPart == part) null else part
+          },
+          modifier = Modifier.fillMaxHeight().width(250.dp) // Begrenzte Breite um Streckung/Ovale zu vermeiden
+        )
       }
 
       Spacer(modifier = Modifier.height(14.dp))

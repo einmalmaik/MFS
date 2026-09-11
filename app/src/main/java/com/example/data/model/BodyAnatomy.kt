@@ -19,6 +19,7 @@ enum class BodyPart(
   NECK("NECK", "Hals & Kehle", 0.50f, 0.19f),
   CHEST("CHEST", "Brust & Rippen", 0.50f, 0.28f),
   ABDOMEN("ABDOMEN", "Bauch & Unterleib", 0.50f, 0.40f),
+  GENITALS("GENITALS", "Intimbereich", 0.50f, 0.50f),
   LEFT_ARM("LEFT_ARM", "Linker Arm", 0.27f, 0.33f),
   RIGHT_ARM("RIGHT_ARM", "Rechter Arm", 0.73f, 0.33f),
   LEFT_HAND("LEFT_HAND", "Linke Hand", 0.20f, 0.48f),
@@ -40,6 +41,7 @@ enum class BodyPart(
         clean.contains("HALS") || clean.contains("NACKEN") || clean.contains("KEHLE") -> NECK
         clean.contains("BRUST") || clean.contains("RIPPE") || clean.contains("HERZ") -> CHEST
         clean.contains("BAUCH") || clean.contains("MAGEN") || clean.contains("HÜFTE") || clean.contains("LEIB") -> ABDOMEN
+        clean.contains("INTIM") || clean.contains("GENITAL") || clean.contains("PENIS") || clean.contains("SCHRITT") || clean.contains("HODEN") -> GENITALS
         clean.contains("HAND") && (clean.contains("LINKS") || clean.contains("LINK")) -> LEFT_HAND
         clean.contains("HAND") -> RIGHT_HAND
         clean.contains("ARM") && (clean.contains("LINKS") || clean.contains("LINK")) -> LEFT_ARM

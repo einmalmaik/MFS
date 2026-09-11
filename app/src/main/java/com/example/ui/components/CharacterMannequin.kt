@@ -232,6 +232,21 @@ private fun DrawScope.drawMaleSilhouette(
     style = Stroke(width = if (isTorsoSelected) 2.5.dp.toPx() else 1.5.dp.toPx())
   )
 
+  // Genitalbereich (männlich)
+  val genitalsPath = Path().apply {
+    moveTo(cx - w * 0.05f, h * 0.56f)
+    cubicTo(cx - w * 0.03f, h * 0.60f, cx + w * 0.03f, h * 0.60f, cx + w * 0.05f, h * 0.56f)
+    cubicTo(cx + w * 0.02f, h * 0.64f, cx - w * 0.02f, h * 0.64f, cx - w * 0.05f, h * 0.56f)
+    close()
+  }
+  drawPath(genitalsPath, color = bodyFill)
+  val isGenitalsSelected = selectedBodyPart == BodyPart.GENITALS
+  drawPath(
+    genitalsPath,
+    color = if (isGenitalsSelected) highlightBorder else bodyBorder,
+    style = Stroke(width = if (isGenitalsSelected) 2.5.dp.toPx() else 1.5.dp.toPx())
+  )
+
   // Anatomische Brust-Teilungslinie (Pectoralis)
   drawLine(
     color = DnaColors.Border,
@@ -376,6 +391,21 @@ private fun DrawScope.drawFemaleSilhouette(
     torsoPath,
     color = if (isTorsoSelected) highlightBorder else bodyBorder,
     style = Stroke(width = if (isTorsoSelected) 2.5.dp.toPx() else 1.5.dp.toPx())
+  )
+
+  // Genitalbereich (weiblich)
+  val genitalsPath = Path().apply {
+    moveTo(cx - w * 0.04f, h * 0.565f)
+    cubicTo(cx - w * 0.02f, h * 0.585f, cx + w * 0.02f, h * 0.585f, cx + w * 0.04f, h * 0.565f)
+    cubicTo(cx + w * 0.02f, h * 0.605f, cx - w * 0.02f, h * 0.605f, cx - w * 0.04f, h * 0.565f)
+    close()
+  }
+  drawPath(genitalsPath, color = bodyFill)
+  val isGenitalsSelected = selectedBodyPart == BodyPart.GENITALS
+  drawPath(
+    genitalsPath,
+    color = if (isGenitalsSelected) highlightBorder else bodyBorder,
+    style = Stroke(width = if (isGenitalsSelected) 2.5.dp.toPx() else 1.5.dp.toPx())
   )
 
   // Zarte feminine Dekolleté-Linie
