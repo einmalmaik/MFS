@@ -125,6 +125,17 @@ class StateExtractionEngine(
       val newSummary = updatedStateJsonObj.optString("previous_events_summary", summary)
         .ifBlank { summary }
 
+      // Preserve existing injuries if the extraction did not return an updated array
+      if (!updatedStateJsonObj.has("injuries") && latestCheckpoint != null && latestCheckpoint.rawStateJson.isNotBlank()) {
+        try {
+          val prevRoot = JSONObject(latestCheckpoint.rawStateJson)
+          val prevInjuries = prevRoot.optJSONArray("injuries")
+          if (prevInjuries != null) {
+            updatedStateJsonObj.put("injuries", prevInjuries)
+          }
+        } catch (_: Exception) { }
+      }
+
       val newCheckpoint = CheckpointEntity(
         storyId = story.id,
         turnNumber = turnNumber,

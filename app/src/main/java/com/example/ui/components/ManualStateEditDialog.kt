@@ -26,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -170,17 +172,18 @@ fun ManualStateEditDialog(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End
+          horizontalArrangement = Arrangement.End,
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Button(
+          DnaButton(
+            text = "Abbrechen",
             onClick = onDismiss,
-            colors = ButtonDefaults.buttonColors(containerColor = SlateDark700, contentColor = TextParchment),
-            shape = RoundedCornerShape(8.dp)
-          ) {
-            Text("Abbrechen")
-          }
+            variant = DnaButtonVariant.GHOST,
+            testTag = "cancel_manual_edit_button"
+          )
           Spacer(modifier = Modifier.width(10.dp))
-          Button(
+          DnaButton(
+            text = "Speichern & Aktualisieren",
             onClick = {
               val invList = inventoryText.split(",")
                 .map { it.trim() }
@@ -197,12 +200,9 @@ fun ManualStateEditDialog(
               )
               onDismiss()
             },
-            colors = ButtonDefaults.buttonColors(containerColor = AmberGoldPrimary, contentColor = SlateDark900),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.testTag("save_manual_edit_button")
-          ) {
-            Text("Speichern & Aktualisieren", fontWeight = FontWeight.Bold)
-          }
+            variant = DnaButtonVariant.PRIMARY,
+            testTag = "save_manual_edit_button"
+          )
         }
       }
     }

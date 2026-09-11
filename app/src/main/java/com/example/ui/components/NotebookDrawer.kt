@@ -47,6 +47,8 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -82,6 +84,7 @@ fun NotebookDrawer(
   adultContentEnabled: Boolean = true,
   onClose: () -> Unit,
   onOpenManualEdit: () -> Unit,
+  onUpdateInjuries: ((characterName: String, updatedInjuries: List<com.example.data.model.CharacterInjury>) -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   var selectedTab by remember { mutableIntStateOf(0) } // 0 = Tagebuch, 1 = Charakter (Visualizer), 2 = Welt & Inventar
@@ -350,7 +353,8 @@ fun NotebookDrawer(
           // --- TAB 1: 3D/GAME CHARACTER VISUALIZER ---
           CharacterVisualizer(
             checkpoint = checkpoint,
-            adultContentEnabled = adultContentEnabled
+            adultContentEnabled = adultContentEnabled,
+            onUpdateInjuries = onUpdateInjuries
           )
 
           Spacer(modifier = Modifier.height(16.dp))
@@ -556,21 +560,14 @@ fun NotebookDrawer(
       Spacer(modifier = Modifier.height(20.dp))
 
       // Manual edit button
-      Button(
+      DnaButton(
+        text = "Notizbuch manuell korrigieren",
         onClick = onOpenManualEdit,
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("manual_edit_button"),
-        colors = ButtonDefaults.buttonColors(
-          containerColor = AmberGoldPrimary,
-          contentColor = SlateDark900
-        ),
-        shape = RoundedCornerShape(10.dp)
-      ) {
-        Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Notizbuch manuell korrigieren", fontWeight = FontWeight.Bold)
-      }
+        icon = Icons.Default.Edit,
+        variant = DnaButtonVariant.PRIMARY,
+        fullWidth = true,
+        testTag = "manual_edit_button"
+      )
 
       Spacer(modifier = Modifier.height(16.dp))
     }

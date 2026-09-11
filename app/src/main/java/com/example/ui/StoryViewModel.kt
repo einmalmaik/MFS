@@ -351,6 +351,56 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  /**
+   * Aktualisiert koerperliche Verletzungen fuer einen bestimmten Charakter
+   * und synchronisiert sie direkt im Checkpoint und der State-JSON.
+   */
+  fun updateCharacterInjuries(characterName: String, updatedInjuries: List<com.example.data.model.CharacterInjury>) {
+    val currentCp = _latestCheckpoint.value ?: return
+    viewModelScope.launch {
+      val rawObj = try {
+        if (currentCp.rawStateJson.isNotBlank()) org.json.JSONObject(currentCp.rawStateJson) else org.json.JSONObject()
+      } catch (_: Exception) {
+        org.json.JSONObject()
+      }
+
+      val allInjuriesList = mutableListOf<com.example.data.model.CharacterInjury>()
+      val existingInjuries = try {
+        val arr = rawObj.optJSONArray("injuries") ?: org.json.JSONArray()
+        val list = mutableListOf<com.example.data.model.CharacterInjury>()
+        for (i in 0 until arr.length()) {
+          arr.optJSONObject(i)?.let { obj -> list.add(com.example.data.model.CharacterInjury.fromJson(obj)) }
+        }
+        list
+      } catch (_: Exception) {
+        emptyList()
+      }
+
+      val isPlayer = characterName.equals("Du", ignoreCase = true) || characterName.equals("Spieler", ignoreCase = true)
+      allInjuriesList.addAll(existingInjuries.filterNot {
+        if (isPlayer) it.characterName.equals("Du", ignoreCase = true) || it.characterName.equals("Spieler", ignoreCase = true)
+        else it.characterName.equals(characterName, ignoreCase = true)
+      })
+      allInjuriesList.addAll(updatedInjuries)
+
+      val injuriesArray = org.json.JSONArray()
+      allInjuriesList.forEach { injuriesArray.put(it.toJson()) }
+      rawObj.put("injuries", injuriesArray)
+
+      val newCondition = if (isPlayer) {
+        if (updatedInjuries.isEmpty()) "Unverletzt"
+        else updatedInjuries.joinToString("; ") { "${it.bodyPart.displayName}: ${it.description} (${it.severity.displayName})" }
+      } else currentCp.playerCondition
+
+      val updatedCp = currentCp.copy(
+        playerCondition = newCondition,
+        rawStateJson = rawObj.toString()
+      )
+      repository.updateCheckpointDirectly(updatedCp)
+      _latestCheckpoint.value = updatedCp
+    }
+  }
+
   fun saveCustomApiKey(key: String) {
     _customApiKey.value = key.trim()
     repository.setCustomApiKey(key.trim())

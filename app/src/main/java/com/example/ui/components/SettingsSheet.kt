@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -330,23 +332,17 @@ fun SettingsSheet(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-          Button(
-            onClick = {
-              onSaveApiKey(apiKeyInput)
-            },
-            colors = ButtonDefaults.buttonColors(
-              containerColor = SlateDark700,
-              contentColor = TextParchment
-            ),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.weight(1f)
-          ) {
-            Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Speichern")
-          }
+          DnaButton(
+            text = "Speichern",
+            onClick = { onSaveApiKey(apiKeyInput) },
+            icon = Icons.Default.Key,
+            variant = DnaButtonVariant.SECONDARY,
+            modifier = Modifier.weight(1f),
+            testTag = "save_api_key_btn"
+          )
 
-          Button(
+          DnaButton(
+            text = "Testen",
             onClick = {
               scope.launch {
                 isTestingKey = true
@@ -358,21 +354,12 @@ fun SettingsSheet(
               }
             },
             enabled = !isTestingKey,
-            colors = ButtonDefaults.buttonColors(
-              containerColor = AmberGoldContainer,
-              contentColor = AmberGoldPrimary
-            ),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.weight(1f)
-          ) {
-            if (isTestingKey) {
-              CircularProgressIndicator(color = AmberGoldPrimary, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            } else {
-              Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Testen")
-            }
-          }
+            loading = isTestingKey,
+            icon = Icons.Default.Check,
+            variant = DnaButtonVariant.PRIMARY,
+            modifier = Modifier.weight(1f),
+            testTag = "test_api_key_btn"
+          )
         }
 
         val result = testResult
@@ -432,99 +419,30 @@ fun SettingsSheet(
     )
     Spacer(modifier = Modifier.height(6.dp))
 
-    ExposedDropdownMenuBox(
-      expanded = modelDropdownExpanded,
-      onExpandedChange = { modelDropdownExpanded = it },
-      modifier = Modifier.fillMaxWidth()
-    ) {
-      OutlinedTextField(
-        value = currentModelInfo.displayName,
-        onValueChange = {},
-        readOnly = true,
-        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded) },
-        modifier = Modifier
-          .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-          .fillMaxWidth()
-          .testTag("model_selector"),
-        colors = OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = SlateDark800,
-          unfocusedContainerColor = SlateDark800,
-          focusedBorderColor = AmberGoldPrimary,
-          unfocusedBorderColor = SlateDark600,
-          focusedTextColor = TextParchment,
-          unfocusedTextColor = TextParchment
-        ),
-        shape = RoundedCornerShape(10.dp)
-      )
-
-      ExposedDropdownMenu(
-        expanded = modelDropdownExpanded,
-        onDismissRequest = { modelDropdownExpanded = false },
-        modifier = Modifier.background(SlateDark800)
-      ) {
-        availableModels.forEach { modelInfo ->
-          DropdownMenuItem(
-            text = {
-              Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                Text(
-                  text = modelInfo.displayName,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = FontWeight.Bold,
-                  color = TextParchment
-                )
-                Text(
-                  text = modelInfo.id,
-                  style = MaterialTheme.typography.labelSmall,
-                  color = AmberGoldLight
-                )
-                if (modelInfo.description.isNotBlank()) {
-                  Text(
-                    text = modelInfo.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextParchmentFaint,
-                    maxLines = 2
-                  )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  Surface(
-                    color = SlateDark700,
-                    shape = RoundedCornerShape(4.dp)
-                  ) {
-                    Text(
-                      text = if (modelInfo.usesThinkingLevel) "Denkstufen (Minimal - Hoch)" else "Token-Budget",
-                      style = MaterialTheme.typography.labelSmall,
-                      color = TextParchment,
-                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                  }
-                  Surface(
-                    color = if (modelInfo.supportsTemperature) SlateDark700 else AmberGoldContainer.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(4.dp)
-                  ) {
-                    Text(
-                      text = if (modelInfo.supportsTemperature) "Temperatur aktiv" else "Temperatur fest",
-                      style = MaterialTheme.typography.labelSmall,
-                      color = if (modelInfo.supportsTemperature) TextParchment else AmberGoldLight,
-                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                  }
-                }
-              }
-            },
-            onClick = {
-              selectedModel = modelInfo.id
-              supportsTemperature = modelInfo.supportsTemperature
-              if (modelInfo.supportsTemperature) {
-                temperature = modelInfo.defaultTemperature
-              }
-              modelDropdownExpanded = false
-            },
-            modifier = Modifier.testTag("model_option_${modelInfo.id}")
-          )
-        }
+    val modelOptions = remember(availableModels) {
+      availableModels.map { modelInfo ->
+        com.example.ui.dna.DnaDropdownOption(
+          value = modelInfo.id,
+          label = modelInfo.displayName,
+          hint = "${modelInfo.id} • ${if (modelInfo.usesThinkingLevel) "Denkstufen" else "Token-Budget"}"
+        )
       }
     }
+
+    com.example.ui.dna.DnaDropdown(
+      options = modelOptions,
+      selectedValue = selectedModel,
+      onOptionSelected = { modelId ->
+        selectedModel = modelId
+        availableModels.find { it.id == modelId }?.let { info ->
+          supportsTemperature = info.supportsTemperature
+          if (info.supportsTemperature) {
+            temperature = info.defaultTemperature
+          }
+        }
+      },
+      modifier = Modifier.fillMaxWidth().testTag("model_selector")
+    )
 
     Spacer(modifier = Modifier.height(20.dp))
 
@@ -544,63 +462,22 @@ fun SettingsSheet(
       )
       Spacer(modifier = Modifier.height(8.dp))
 
-      val levels = listOf(
-        "MINIMAL" to "Minimal (Blitzschnell, minimale Denkzeit)",
-        "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
-        "MEDIUM" to "Mittel (Standard - Ausgewogene Psychologie)",
-        "HIGH" to "Hoch (Tiefgründige Reflexion & maximale Konsistenz)"
-      )
-
-      ExposedDropdownMenuBox(
-        expanded = thinkingDropdownExpanded,
-        onExpandedChange = { thinkingDropdownExpanded = it },
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        val currentLabel = levels.firstOrNull { it.first.equals(thinkingLevel, ignoreCase = true) }?.second
-          ?: thinkingLevel
-
-        OutlinedTextField(
-          value = currentLabel,
-          onValueChange = {},
-          readOnly = true,
-          leadingIcon = {
-            Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary)
-          },
-          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
-          modifier = Modifier
-            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-            .fillMaxWidth()
-            .testTag("thinking_level_selector"),
-          colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = SlateDark800,
-            unfocusedContainerColor = SlateDark800,
-            focusedBorderColor = AmberGoldPrimary,
-            unfocusedBorderColor = SlateDark600,
-            focusedTextColor = TextParchment,
-            unfocusedTextColor = TextParchment
-          ),
-          shape = RoundedCornerShape(10.dp)
+      val thinkingOptions = remember {
+        listOf(
+          com.example.ui.dna.DnaDropdownOption("MINIMAL", "Minimal", "Blitzschnell, minimale Denkzeit"),
+          com.example.ui.dna.DnaDropdownOption("LOW", "Niedrig", "Schnelle Reflexion, geringe Latenz"),
+          com.example.ui.dna.DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie"),
+          com.example.ui.dna.DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & maximale Konsistenz")
         )
-
-        ExposedDropdownMenu(
-          expanded = thinkingDropdownExpanded,
-          onDismissRequest = { thinkingDropdownExpanded = false },
-          modifier = Modifier.background(SlateDark800)
-        ) {
-          levels.forEach { (levelKey, label) ->
-            DropdownMenuItem(
-              text = {
-                Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextParchment)
-              },
-              onClick = {
-                thinkingLevel = levelKey
-                thinkingDropdownExpanded = false
-              },
-              modifier = Modifier.testTag("thinking_level_option_$levelKey")
-            )
-          }
-        }
       }
+
+      com.example.ui.dna.DnaDropdown(
+        options = thinkingOptions,
+        selectedValue = thinkingLevel,
+        onOptionSelected = { thinkingLevel = it },
+        icon = Icons.Default.Psychology,
+        modifier = Modifier.fillMaxWidth().testTag("thinking_level_selector")
+      )
     } else {
       // Legacy Token-Budget für ältere Modelle (z. B. Gemini 2.5 Flash)
       Text(
@@ -616,58 +493,25 @@ fun SettingsSheet(
       )
       Spacer(modifier = Modifier.height(6.dp))
 
-      val thinkingPresets = GeminiClient.THINKING_BUDGET_PRESETS
-
-      ExposedDropdownMenuBox(
-        expanded = thinkingDropdownExpanded,
-        onExpandedChange = { thinkingDropdownExpanded = it },
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        val currentThinkingLabel = thinkingPresets.firstOrNull { it.first == thinkingBudget }?.second
-          ?: "$thinkingBudget Token"
-
-        OutlinedTextField(
-          value = currentThinkingLabel,
-          onValueChange = {},
-          readOnly = true,
-          leadingIcon = {
-            Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary)
-          },
-          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
-          modifier = Modifier
-            .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-            .fillMaxWidth()
-            .testTag("thinking_budget_selector"),
-          colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = SlateDark800,
-            unfocusedContainerColor = SlateDark800,
-            focusedBorderColor = AmberGoldPrimary,
-            unfocusedBorderColor = SlateDark600,
-            focusedTextColor = TextParchment,
-            unfocusedTextColor = TextParchment
-          ),
-          shape = RoundedCornerShape(10.dp)
-        )
-
-        ExposedDropdownMenu(
-          expanded = thinkingDropdownExpanded,
-          onDismissRequest = { thinkingDropdownExpanded = false },
-          modifier = Modifier.background(SlateDark800)
-        ) {
-          thinkingPresets.forEach { (budget, label) ->
-            DropdownMenuItem(
-              text = {
-                Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextParchment)
-              },
-              onClick = {
-                thinkingBudget = budget
-                thinkingDropdownExpanded = false
-              },
-              modifier = Modifier.testTag("thinking_option_$budget")
-            )
-          }
+      val thinkingPresets = remember {
+        GeminiClient.THINKING_BUDGET_PRESETS.map { (budget, label) ->
+          com.example.ui.dna.DnaDropdownOption(
+            value = budget.toString(),
+            label = label,
+            hint = "$budget Token"
+          )
         }
       }
+
+      com.example.ui.dna.DnaDropdown(
+        options = thinkingPresets,
+        selectedValue = thinkingBudget.toString(),
+        onOptionSelected = { budgetStr ->
+          thinkingBudget = budgetStr.toIntOrNull() ?: 2048
+        },
+        icon = Icons.Default.Psychology,
+        modifier = Modifier.fillMaxWidth().testTag("thinking_budget_selector")
+      )
     }
 
     Spacer(modifier = Modifier.height(20.dp))
@@ -915,7 +759,8 @@ fun SettingsSheet(
     Spacer(modifier = Modifier.height(28.dp))
 
     // Save All Button
-    Button(
+    DnaButton(
+      text = "Einstellungen anwenden & speichern",
       onClick = {
         onSaveStorySettings(
           title,
@@ -931,22 +776,10 @@ fun SettingsSheet(
         onSaveApiKey(apiKeyInput)
         onClose()
       },
-      colors = ButtonDefaults.buttonColors(
-        containerColor = AmberGoldPrimary,
-        contentColor = SlateDark900
-      ),
-      shape = RoundedCornerShape(12.dp),
-      modifier = Modifier
-        .fillMaxWidth()
-        .height(50.dp)
-        .testTag("save_settings_button")
-    ) {
-      Text(
-        text = "Einstellungen anwenden & speichern",
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold
-      )
-    }
+      variant = DnaButtonVariant.PRIMARY,
+      fullWidth = true,
+      testTag = "save_settings_button"
+    )
 
     Spacer(modifier = Modifier.height(24.dp))
   }

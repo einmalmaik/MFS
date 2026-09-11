@@ -106,6 +106,44 @@ data class CheckpointEntity(
     val match = regex.find(inGameTime)
     return match?.groupValues?.get(1)?.toIntOrNull() ?: 1
   }
+
+  /**
+   * Liefert alle koerperlichen Verletzungen fuer den angegebenen Charakter
+   * (oder den Spieler, falls "Du" oder leer).
+   */
+  fun getCharacterInjuries(characterName: String): List<CharacterInjury> {
+    val list = mutableListOf<CharacterInjury>()
+    val isPlayer = characterName.equals("Du", ignoreCase = true) || characterName.equals("Spieler", ignoreCase = true)
+
+    try {
+      if (rawStateJson.isNotBlank()) {
+        val root = JSONObject(rawStateJson)
+        val injuriesArray = root.optJSONArray("injuries")
+        if (injuriesArray != null) {
+          for (i in 0 until injuriesArray.length()) {
+            val obj = injuriesArray.optJSONObject(i) ?: continue
+            val injury = CharacterInjury.fromJson(obj)
+            val match = if (isPlayer) {
+              injury.characterName.equals("Du", ignoreCase = true) || injury.characterName.equals("Spieler", ignoreCase = true)
+            } else {
+              injury.characterName.equals(characterName, ignoreCase = true)
+            }
+            if (match) {
+              list.add(injury)
+            }
+          }
+        }
+      }
+    } catch (_: Exception) { }
+
+    // Fallback: Wenn in rawStateJson noch keine structured injuries hinterlegt waren,
+    // aber in playerCondition eine Verletzung erwaehnt ist, erzeuge entsprechende anatomische Wunde
+    if (list.isEmpty() && isPlayer && playerCondition.isNotBlank() && !playerCondition.equals("Unverletzt", ignoreCase = true)) {
+      list.add(CharacterInjury.fromNaturalText(playerCondition, "Du"))
+    }
+
+    return list
+  }
 }
 
 data class NpcInfo(

@@ -55,7 +55,6 @@ fun StoryTopBar(
   onOpenDrawer: () -> Unit,
   onOpenStorySelector: () -> Unit,
   onOpenNotebook: () -> Unit,
-  onOpenSettings: () -> Unit,
   modifier: Modifier = Modifier
 ) {
   TopAppBar(
@@ -145,18 +144,6 @@ fun StoryTopBar(
           imageVector = Icons.AutoMirrored.Filled.MenuBook,
           contentDescription = "Das Notizbuch öffnen",
           tint = IceCyanPrimary
-        )
-      }
-
-      // Settings Button
-      IconButton(
-        onClick = onOpenSettings,
-        modifier = Modifier.testTag("open_settings_button")
-      ) {
-        Icon(
-          imageVector = Icons.Default.Tune,
-          contentDescription = "Einstellungen",
-          tint = TextMuted
         )
       }
     }

@@ -295,6 +295,27 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     val stateAnchorText = buildString {
       appendLine("[AKTUELLER WELTZUSTAND / CHECKPOINT]:")
       appendLine(stateJson.ifBlank { "{\"in_game_time\": \"Tag 1, 09:00 Uhr\", \"location\": \"Startort\"}" })
+
+      try {
+        if (stateJson.isNotBlank()) {
+          val root = JSONObject(stateJson)
+          val injuriesArr = root.optJSONArray("injuries")
+          if (injuriesArr != null && injuriesArr.length() > 0) {
+            appendLine("\n[KÖRPERLICHE VERLETZUNGEN & ANATOMISCHER ZUSTAND]:")
+            for (i in 0 until injuriesArr.length()) {
+              val obj = injuriesArr.optJSONObject(i) ?: continue
+              val charName = obj.optString("character", "Spieler")
+              val part = obj.optString("body_part", "-")
+              val desc = obj.optString("description", "")
+              val severity = obj.optString("severity", "MEDIUM")
+              val treated = if (obj.optBoolean("is_treated", false)) " (erstversorgt/verbunden)" else " (offen/schmerzend)"
+              appendLine("- $charName: $part -> $desc [$severity]$treated")
+            }
+            appendLine("Regel: Beachte diese physischen Verletzungen, Schmerzen und Einschränkungen bei allen Aktionen und Dialogen!")
+          }
+        }
+      } catch (_: Exception) { }
+
       if (milestones.isNotEmpty()) {
         appendLine("\n[BEDEUTSAME MEILENSTEINE & LANGZEITERINNERUNGEN]:")
         milestones.forEach { m -> appendLine("- $m") }
@@ -473,6 +494,15 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema 
       "relationship_to_player": "Aktuelle Beziehung/Haltung zum Spieler",
       "current_mood": "Stimmung",
       "status": "Anwesend oder Abwesend"
+    }
+  ],
+  "injuries": [
+    {
+      "character": "Du oder NPC-Name",
+      "body_part": "HEAD, NECK, CHEST, ABDOMEN, LEFT_ARM, RIGHT_ARM, LEFT_HAND, RIGHT_HAND, LEFT_LEG, RIGHT_LEG oder FEET",
+      "description": "Exakte Wundbeschreibung z. B. Schnittwunde, Brandblase, Prellung",
+      "severity": "LIGHT, MEDIUM, SEVERE oder CRITICAL",
+      "is_treated": false
     }
   ],
   "milestones": [

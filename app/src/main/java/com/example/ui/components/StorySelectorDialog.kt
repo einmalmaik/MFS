@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -237,32 +239,17 @@ fun StorySelectorDialog(
   // Delete confirmation dialog
   if (storyToDelete != null) {
     val target = storyToDelete!!
-    AlertDialog(
-      onDismissRequest = { storyToDelete = null },
-      title = { Text("Geschichte löschen?", color = TextParchment) },
-      text = {
-        Text(
-          "Möchtest du '${target.title}' wirklich unwiderruflich aus der lokalen Datenbank entfernen? Alle Nachrichten, Checkpoints und NPCs dieser Geschichte gehen verloren.",
-          color = TextParchmentMuted
-        )
+    com.example.ui.dna.DnaActionConfirmDialog(
+      title = "Geschichte löschen?",
+      description = "Möchtest du '${target.title}' wirklich unwiderruflich aus der lokalen Datenbank entfernen? Alle Nachrichten, Checkpoints und NPCs dieser Geschichte gehen verloren.",
+      confirmButtonText = "Endgültig löschen",
+      cancelButtonText = "Abbrechen",
+      isDestructive = true,
+      onConfirm = {
+        onDeleteStory(target.id)
+        storyToDelete = null
       },
-      confirmButton = {
-        Button(
-          onClick = {
-            onDeleteStory(target.id)
-            storyToDelete = null
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = CrimsonDanger)
-        ) {
-          Text("Endgültig löschen")
-        }
-      },
-      dismissButton = {
-        TextButton(onClick = { storyToDelete = null }) {
-          Text("Abbrechen", color = TextParchment)
-        }
-      },
-      containerColor = SlateDark800
+      onDismiss = { storyToDelete = null }
     )
   }
 
@@ -298,21 +285,24 @@ fun StorySelectorDialog(
         }
       },
       confirmButton = {
-        Button(
+        DnaButton(
+          text = "Zweig starten",
           onClick = {
             onBranchStory(target.id, branchTitleInput)
             storyToBranch = null
             onDismiss()
           },
-          colors = ButtonDefaults.buttonColors(containerColor = AmberGoldPrimary, contentColor = SlateDark900)
-        ) {
-          Text("Zweig starten", fontWeight = FontWeight.Bold)
-        }
+          variant = DnaButtonVariant.PRIMARY,
+          testTag = "confirm_branch_story_button"
+        )
       },
       dismissButton = {
-        TextButton(onClick = { storyToBranch = null }) {
-          Text("Abbrechen", color = TextParchment)
-        }
+        DnaButton(
+          text = "Abbrechen",
+          onClick = { storyToBranch = null },
+          variant = DnaButtonVariant.GHOST,
+          testTag = "cancel_branch_story_button"
+        )
       },
       containerColor = SlateDark800
     )
@@ -443,24 +433,17 @@ fun StorySelectorDialog(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          Button(
+          DnaButton(
+            text = "Völlig neue Geschichte beginnen",
             onClick = {
               loadPreset(STORY_PRESETS.first())
               isCreatingNew = true
             },
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("create_new_story_button"),
-            colors = ButtonDefaults.buttonColors(
-              containerColor = AmberGoldPrimary,
-              contentColor = SlateDark900
-            ),
-            shape = RoundedCornerShape(10.dp)
-          ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Völlig neue Geschichte beginnen", fontWeight = FontWeight.Bold)
-          }
+            icon = Icons.Default.Add,
+            variant = DnaButtonVariant.PRIMARY,
+            fullWidth = true,
+            testTag = "create_new_story_button"
+          )
         } else {
           // --- CREATE NEW STORY VIEW ---
           Text(
@@ -548,114 +531,49 @@ fun StorySelectorDialog(
             }
           }
 
-          ExposedDropdownMenuBox(
-            expanded = modelDropdownExpanded,
-            onExpandedChange = { modelDropdownExpanded = it },
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            OutlinedTextField(
-              value = currentModelInfo.displayName,
-              onValueChange = {},
-              readOnly = true,
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded) },
-              modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-                .fillMaxWidth(),
-              colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SlateDark800,
-                unfocusedContainerColor = SlateDark800,
-                focusedTextColor = TextParchment,
-                unfocusedTextColor = TextParchment,
-                focusedBorderColor = AmberGoldPrimary,
-                unfocusedBorderColor = SlateDark600
-              ),
-              shape = RoundedCornerShape(8.dp)
-            )
-
-            ExposedDropdownMenu(
-              expanded = modelDropdownExpanded,
-              onDismissRequest = { modelDropdownExpanded = false },
-              modifier = Modifier.background(SlateDark800)
-            ) {
-              availableModels.forEach { modelInfo ->
-                DropdownMenuItem(
-                  text = {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                      Text(modelInfo.displayName, style = MaterialTheme.typography.bodyMedium, color = TextParchment, fontWeight = FontWeight.Bold)
-                      Text(modelInfo.id, style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
-                      Text(
-                        text = if (modelInfo.usesThinkingLevel) "Denkstufen (Minimal - Hoch)" else "Token-Budget",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextParchmentFaint
-                      )
-                    }
-                  },
-                  onClick = {
-                    selectedModelId = modelInfo.id
-                    temperature = modelInfo.defaultTemperature
-                    modelDropdownExpanded = false
-                  }
-                )
-              }
+          val modelOptions = remember(availableModels) {
+            availableModels.map { modelInfo ->
+              com.example.ui.dna.DnaDropdownOption(
+                value = modelInfo.id,
+                label = modelInfo.displayName,
+                hint = "${modelInfo.id} • ${if (modelInfo.usesThinkingLevel) "Denkstufen" else "Token-Budget"}"
+              )
             }
           }
+
+          com.example.ui.dna.DnaDropdown(
+            options = modelOptions,
+            selectedValue = selectedModelId,
+            onOptionSelected = { newId ->
+              selectedModelId = newId
+              availableModels.find { it.id == newId }?.let {
+                temperature = it.defaultTemperature
+              }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("story_model_dropdown")
+          )
 
           Spacer(modifier = Modifier.height(12.dp))
 
           // Thinking level or thinking budget
           if (currentModelInfo.usesThinkingLevel) {
-            Text(text = "DENKSTUFE (REASONING EFFORT)", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-
-            val levels = listOf(
-              "MINIMAL" to "Minimal (Höchste Geschwindigkeit)",
-              "LOW" to "Niedrig (Schnell)",
-              "MEDIUM" to "Mittel (Standard - Ausgewogen)",
-              "HIGH" to "Hoch (Tiefgründige Reflexion)"
-            )
-
-            ExposedDropdownMenuBox(
-              expanded = thinkingDropdownExpanded,
-              onExpandedChange = { thinkingDropdownExpanded = it },
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              val currentLabel = levels.firstOrNull { it.first.equals(thinkingLevel, ignoreCase = true) }?.second ?: thinkingLevel
-              OutlinedTextField(
-                value = currentLabel,
-                onValueChange = {},
-                readOnly = true,
-                leadingIcon = { Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = AmberGoldPrimary) },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thinkingDropdownExpanded) },
-                modifier = Modifier
-                  .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-                  .fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                  focusedContainerColor = SlateDark800,
-                  unfocusedContainerColor = SlateDark800,
-                  focusedTextColor = TextParchment,
-                  unfocusedTextColor = TextParchment,
-                  focusedBorderColor = AmberGoldPrimary,
-                  unfocusedBorderColor = SlateDark600
-                ),
-                shape = RoundedCornerShape(8.dp)
+            val thinkingOptions = remember {
+              listOf(
+                com.example.ui.dna.DnaDropdownOption("MINIMAL", "Minimal", "Höchste Geschwindigkeit"),
+                com.example.ui.dna.DnaDropdownOption("LOW", "Niedrig", "Schnell"),
+                com.example.ui.dna.DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie"),
+                com.example.ui.dna.DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & Konsistenz")
               )
-
-              ExposedDropdownMenu(
-                expanded = thinkingDropdownExpanded,
-                onDismissRequest = { thinkingDropdownExpanded = false },
-                modifier = Modifier.background(SlateDark800)
-              ) {
-                levels.forEach { (lvl, label) ->
-                  DropdownMenuItem(
-                    text = { Text(label, color = TextParchment) },
-                    onClick = {
-                      thinkingLevel = lvl
-                      thinkingDropdownExpanded = false
-                    }
-                  )
-                }
-              }
             }
+
+            com.example.ui.dna.DnaDropdown(
+              label = "DENKSTUFE (REASONING EFFORT)",
+              options = thinkingOptions,
+              selectedValue = thinkingLevel,
+              onOptionSelected = { thinkingLevel = it },
+              icon = Icons.Default.Psychology,
+              modifier = Modifier.fillMaxWidth().testTag("story_thinking_dropdown")
+            )
           }
 
           Spacer(modifier = Modifier.height(12.dp))
@@ -904,7 +822,8 @@ fun StorySelectorDialog(
 
           Spacer(modifier = Modifier.height(20.dp))
 
-          Button(
+          DnaButton(
+            text = "Geschichte jetzt starten",
             onClick = {
               val invList = customInventory.split(",")
                 .map { it.trim() }
@@ -931,17 +850,10 @@ fun StorySelectorDialog(
               )
               onDismiss()
             },
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("confirm_create_story_button"),
-            colors = ButtonDefaults.buttonColors(
-              containerColor = AmberGoldPrimary,
-              contentColor = SlateDark900
-            ),
-            shape = RoundedCornerShape(10.dp)
-          ) {
-            Text("Geschichte jetzt starten", fontWeight = FontWeight.Bold)
-          }
+            variant = DnaButtonVariant.PRIMARY,
+            fullWidth = true,
+            testTag = "confirm_create_story_button"
+          )
         }
       }
     }

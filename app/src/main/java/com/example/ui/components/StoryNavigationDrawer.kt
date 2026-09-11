@@ -51,6 +51,10 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.example.ui.dna.DnaActionConfirmDialog
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
+import com.example.ui.dna.DnaColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -166,24 +170,17 @@ fun StoryNavigationDrawer(
       Spacer(modifier = Modifier.height(14.dp))
 
       // Button "Neue Geschichte beginnen"
-      Button(
+      DnaButton(
+        text = "Neue Geschichte beginnen",
         onClick = {
           onCloseDrawer()
           onOpenCreateStory()
         },
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("drawer_new_story_button"),
-        colors = ButtonDefaults.buttonColors(
-          containerColor = AmberGoldPrimary,
-          contentColor = SlateDark900
-        ),
-        shape = RoundedCornerShape(10.dp)
-      ) {
-        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text("Neue Geschichte beginnen", fontWeight = FontWeight.Bold)
-      }
+        icon = Icons.Default.Add,
+        variant = DnaButtonVariant.PRIMARY,
+        fullWidth = true,
+        testTag = "drawer_new_story_button"
+      )
 
       Spacer(modifier = Modifier.height(12.dp))
 
@@ -321,67 +318,36 @@ fun StoryNavigationDrawer(
 
   // Confirm Delete Dialog
   storyToDelete?.let { story ->
-    AlertDialog(
-      onDismissRequest = { storyToDelete = null },
-      title = { Text("Geschichte löschen?", color = TextParchment) },
-      text = {
-        Text(
-          text = "Möchtest du '${story.title}' wirklich unwiderruflich löschen? Alle Nachrichten, Meilensteine und der Speicherstand gehen verloren.",
-          color = TextParchmentMuted
-        )
+    DnaActionConfirmDialog(
+      title = "Geschichte löschen?",
+      description = "Möchtest du '${story.title}' wirklich unwiderruflich löschen? Alle Nachrichten, Meilensteine und der Speicherstand gehen verloren.",
+      confirmButtonText = "Endgültig löschen",
+      cancelButtonText = "Abbrechen",
+      isDestructive = true,
+      onConfirm = {
+        onDeleteStory(story.id)
+        storyToDelete = null
       },
-      confirmButton = {
-        Button(
-          onClick = {
-            onDeleteStory(story.id)
-            storyToDelete = null
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = CrimsonDanger)
-        ) {
-          Text("Endgültig löschen")
-        }
-      },
-      dismissButton = {
-        TextButton(onClick = { storyToDelete = null }) {
-          Text("Abbrechen", color = TextParchment)
-        }
-      },
-      containerColor = SlateDark800
+      onDismiss = { storyToDelete = null },
+      testTag = "delete_story_confirm_dialog"
     )
   }
 
   // Branch Timeline Dialog
   storyToBranch?.let { sourceStory ->
-    AlertDialog(
-      onDismissRequest = { storyToBranch = null },
-      title = { Text("Zeitlinie verzweigen", color = TextParchment) },
-      text = {
-        Text(
-          text = "Erstelle eine neue alternative Geschichte basierend auf dem aktuellen Stand von '${sourceStory.title}'. Du kannst dort andere Entscheidungen testen.",
-          color = TextParchmentMuted
-        )
+    DnaActionConfirmDialog(
+      title = "Zeitlinie verzweigen",
+      description = "Erstelle eine neue alternative Geschichte basierend auf dem aktuellen Stand von '${sourceStory.title}'. Du kannst dort andere Entscheidungen testen.",
+      confirmButtonText = "Zweig erstellen",
+      cancelButtonText = "Abbrechen",
+      isDestructive = false,
+      onConfirm = {
+        onBranchStory(sourceStory.id, "${sourceStory.title} (Zweig)")
+        storyToBranch = null
+        onCloseDrawer()
       },
-      confirmButton = {
-        Button(
-          onClick = {
-            onBranchStory(sourceStory.id, "${sourceStory.title} (Zweig)")
-            storyToBranch = null
-            onCloseDrawer()
-          },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = AmberGoldPrimary,
-            contentColor = SlateDark900
-          )
-        ) {
-          Text("Zweig erstellen", fontWeight = FontWeight.Bold)
-        }
-      },
-      dismissButton = {
-        TextButton(onClick = { storyToBranch = null }) {
-          Text("Abbrechen", color = TextParchment)
-        }
-      },
-      containerColor = SlateDark800
+      onDismiss = { storyToBranch = null },
+      testTag = "branch_story_confirm_dialog"
     )
   }
 }

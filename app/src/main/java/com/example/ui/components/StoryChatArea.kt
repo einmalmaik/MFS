@@ -30,6 +30,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,17 +102,12 @@ fun StoryChatArea(
                 color = TextParchment
               )
             }
-            Button(
+            DnaButton(
+              text = "Eingeben",
               onClick = onOpenSettings,
-              colors = ButtonDefaults.buttonColors(
-                containerColor = AmberGoldPrimary,
-                contentColor = SlateDark900
-              ),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-              Text("Eingeben", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
+              variant = DnaButtonVariant.PRIMARY,
+              testTag = "enter_api_key_button"
+            )
           }
         }
       }

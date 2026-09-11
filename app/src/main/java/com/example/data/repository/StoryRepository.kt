@@ -311,4 +311,8 @@ class StoryRepository(
       storyDao.insertCheckpoint(updatedCheckpoint)
     }
   }
+
+  suspend fun updateCheckpointDirectly(checkpoint: CheckpointEntity) {
+    storyDao.updateCheckpoint(checkpoint)
+  }
 }

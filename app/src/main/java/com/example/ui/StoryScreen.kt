@@ -117,8 +117,7 @@ fun StoryScreen(
           onOpenStorySelector = {
             scope.launch { drawerState.open() }
           },
-          onOpenNotebook = { showNotebookSheet = true },
-          onOpenSettings = { showSettingsSheet = true }
+          onOpenNotebook = { showNotebookSheet = true }
         )
       },
       bottomBar = {
@@ -176,7 +175,10 @@ fun StoryScreen(
             showNotebookSheet = false
           }
         },
-        onOpenManualEdit = { showManualEditDialog = true }
+        onOpenManualEdit = { showManualEditDialog = true },
+        onUpdateInjuries = { charName, updatedInjuries ->
+          viewModel.updateCharacterInjuries(charName, updatedInjuries)
+        }
       )
     }
   }

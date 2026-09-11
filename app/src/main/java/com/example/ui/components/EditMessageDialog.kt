@@ -13,6 +13,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,25 +69,25 @@ fun EditMessageDialog(
       }
     },
     confirmButton = {
-      Button(
+      DnaButton(
+        text = "Neu berechnen & absenden",
         onClick = {
           val edited = editInput.trim()
           if (edited.isNotBlank()) {
             onConfirmEdit(edited)
           }
         },
-        colors = ButtonDefaults.buttonColors(
-          containerColor = AmberGoldPrimary,
-          contentColor = SlateDark900
-        )
-      ) {
-        Text("Neu berechnen & absenden", fontWeight = FontWeight.Bold)
-      }
+        variant = DnaButtonVariant.PRIMARY,
+        testTag = "confirm_edit_message_button"
+      )
     },
     dismissButton = {
-      TextButton(onClick = onDismiss) {
-        Text("Abbrechen", color = TextParchment)
-      }
+      DnaButton(
+        text = "Abbrechen",
+        onClick = onDismiss,
+        variant = DnaButtonVariant.GHOST,
+        testTag = "cancel_edit_message_button"
+      )
     },
     containerColor = SlateDark800
   )
