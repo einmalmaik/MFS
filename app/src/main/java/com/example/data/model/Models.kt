@@ -1,0 +1,108 @@
+package com.example.data.model
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import org.json.JSONArray
+import org.json.JSONObject
+
+@Entity(tableName = "stories")
+data class StoryEntity(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val title: String,
+  val systemPrompt: String = "", // Empty means: use global default prompt
+  val genre: String = "Dark Noir & Mystery",
+  val perspective: String = "Zweite Person (Du)",
+  val selectedModel: String = "gemini-2.5-flash",
+  val temperature: Float = 0.85f,
+  val thinkingBudget: Int = 2048, // 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
+  val adultContentEnabled: Boolean = true,
+  val createdAt: Long = System.currentTimeMillis(),
+  val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "checkpoints")
+data class CheckpointEntity(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val storyId: Long,
+  val turnNumber: Int,
+  val inGameTime: String,
+  val location: String,
+  val weather: String = "Klar",
+  val playerOutfit: String,
+  val playerInventory: String = "[]",
+  val playerCondition: String = "Unverletzt",
+  val npcsJson: String = "[]",
+  val milestonesJson: String = "[]", // Langzeitgedächtnis für prägende Momente über Tage hinweg
+  val previousEventsSummary: String = "",
+  val rawStateJson: String = "",
+  val timestamp: Long = System.currentTimeMillis()
+) {
+  fun getNpcList(): List<NpcInfo> {
+    val list = mutableListOf<NpcInfo>()
+    try {
+      val array = JSONArray(npcsJson)
+      for (i in 0 until array.length()) {
+        val obj = array.getJSONObject(i)
+        list.add(
+          NpcInfo(
+            name = obj.optString("name", "Unbekannt"),
+            outfit = obj.optString("outfit", "-"),
+            relationshipToPlayer = obj.optString("relationship_to_player", "Neutral"),
+            currentMood = obj.optString("current_mood", "Ruhig"),
+            status = obj.optString("status", "Anwesend")
+          )
+        )
+      }
+    } catch (_: Exception) { }
+    return list
+  }
+
+  fun getInventoryList(): List<String> {
+    val list = mutableListOf<String>()
+    try {
+      val array = JSONArray(playerInventory)
+      for (i in 0 until array.length()) {
+        list.add(array.getString(i))
+      }
+    } catch (_: Exception) {
+      if (playerInventory.isNotBlank() && playerInventory != "[]") {
+        list.addAll(playerInventory.split(",").map { it.trim() })
+      }
+    }
+    return list
+  }
+
+  fun getMilestonesList(): List<String> {
+    val list = mutableListOf<String>()
+    try {
+      val array = JSONArray(milestonesJson)
+      for (i in 0 until array.length()) {
+        list.add(array.getString(i))
+      }
+    } catch (_: Exception) {
+      if (milestonesJson.isNotBlank() && milestonesJson != "[]") {
+        list.addAll(milestonesJson.split("\n").map { it.trim() }.filter { it.isNotBlank() })
+      }
+    }
+    return list
+  }
+}
+
+data class NpcInfo(
+  val name: String,
+  val outfit: String,
+  val relationshipToPlayer: String,
+  val currentMood: String,
+  val status: String = "Anwesend"
+)
+
+@Entity(tableName = "messages")
+data class MessageEntity(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val storyId: Long,
+  val sender: String, // "user", "model", "system"
+  val content: String,
+  val inGameTimeTag: String? = null,
+  val checkpointId: Long? = null,
+  val timestamp: Long = System.currentTimeMillis()
+)

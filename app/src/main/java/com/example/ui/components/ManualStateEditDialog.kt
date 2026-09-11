@@ -1,0 +1,247 @@
+package com.example.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.data.model.CheckpointEntity
+import com.example.ui.theme.AmberGoldPrimary
+import com.example.ui.theme.SlateDark600
+import com.example.ui.theme.SlateDark700
+import com.example.ui.theme.SlateDark800
+import com.example.ui.theme.SlateDark900
+import com.example.ui.theme.TextParchment
+import com.example.ui.theme.TextParchmentFaint
+import com.example.ui.theme.TextParchmentMuted
+
+@Composable
+fun ManualStateEditDialog(
+  checkpoint: CheckpointEntity?,
+  onDismiss: () -> Unit,
+  onSave: (
+    inGameTime: String,
+    location: String,
+    weather: String,
+    playerOutfit: String,
+    playerCondition: String,
+    inventory: List<String>,
+    npcsJson: String,
+    summary: String
+  ) -> Unit
+) {
+  var inGameTime by remember { mutableStateOf(checkpoint?.inGameTime ?: "Tag 1, 21:30 Uhr") }
+  var location by remember { mutableStateOf(checkpoint?.location ?: "") }
+  var weather by remember { mutableStateOf(checkpoint?.weather ?: "") }
+  var playerOutfit by remember { mutableStateOf(checkpoint?.playerOutfit ?: "") }
+  var playerCondition by remember { mutableStateOf(checkpoint?.playerCondition ?: "") }
+  var inventoryText by remember {
+    mutableStateOf(checkpoint?.getInventoryList()?.joinToString(", ") ?: "")
+  }
+  var npcsJson by remember { mutableStateOf(checkpoint?.npcsJson ?: "[]") }
+  var summary by remember { mutableStateOf(checkpoint?.previousEventsSummary ?: "") }
+
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(usePlatformDefaultWidth = false)
+  ) {
+    Card(
+      modifier = Modifier
+        .fillMaxWidth(0.95f)
+        .padding(16.dp),
+      shape = RoundedCornerShape(16.dp),
+      colors = CardDefaults.cardColors(containerColor = SlateDark900),
+      border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600)
+    ) {
+      Column(
+        modifier = Modifier
+          .padding(20.dp)
+          .verticalScroll(rememberScrollState())
+      ) {
+        // Header
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.EditNote,
+              contentDescription = null,
+              tint = AmberGoldPrimary
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Zustand manuell anpassen",
+              style = MaterialTheme.typography.titleMedium,
+              color = TextParchment,
+              fontFamily = FontFamily.Serif
+            )
+          }
+
+          IconButton(onClick = onDismiss, modifier = Modifier.testTag("dismiss_manual_edit")) {
+            Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = TextParchmentMuted)
+          }
+        }
+
+        Text(
+          text = "Korrigiere Details wie Kleidung, Inventar oder Zeit direkt. Gemini übernimmt diese Werte sofort als Fakten-Anker.",
+          style = MaterialTheme.typography.bodySmall,
+          color = TextParchmentMuted
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        HorizontalDivider(color = SlateDark700)
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // In-game time & Location
+        EditField(label = "In-Game Zeit (z. B. Tag 2, 08:30 Uhr)", value = inGameTime, onValueChange = { inGameTime = it }, testTag = "edit_time_input")
+        Spacer(modifier = Modifier.height(10.dp))
+        EditField(label = "Aufenthaltsort", value = location, onValueChange = { location = it }, testTag = "edit_location_input")
+        Spacer(modifier = Modifier.height(10.dp))
+        EditField(label = "Wetter & Atmosphäre", value = weather, onValueChange = { weather = it }, testTag = "edit_weather_input")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Outfit (highlighted)
+        EditField(
+          label = "Charakter-Outfit (z. B. Lederjacke abgelegt, T-Shirt)",
+          value = playerOutfit,
+          onValueChange = { playerOutfit = it },
+          multiline = true,
+          testTag = "edit_outfit_input"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        EditField(label = "Körperlicher Zustand / Wunden", value = playerCondition, onValueChange = { playerCondition = it }, testTag = "edit_condition_input")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        EditField(
+          label = "Inventar (Komma-getrennt)",
+          value = inventoryText,
+          onValueChange = { inventoryText = it },
+          testTag = "edit_inventory_input"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        EditField(
+          label = "Was bisher geschah (Zusammenfassung)",
+          value = summary,
+          onValueChange = { summary = it },
+          multiline = true,
+          testTag = "edit_summary_input"
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.End
+        ) {
+          Button(
+            onClick = onDismiss,
+            colors = ButtonDefaults.buttonColors(containerColor = SlateDark700, contentColor = TextParchment),
+            shape = RoundedCornerShape(8.dp)
+          ) {
+            Text("Abbrechen")
+          }
+          Spacer(modifier = Modifier.width(10.dp))
+          Button(
+            onClick = {
+              val invList = inventoryText.split(",")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+              onSave(
+                inGameTime,
+                location,
+                weather,
+                playerOutfit,
+                playerCondition,
+                invList,
+                npcsJson,
+                summary
+              )
+              onDismiss()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = AmberGoldPrimary, contentColor = SlateDark900),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.testTag("save_manual_edit_button")
+          ) {
+            Text("Speichern & Aktualisieren", fontWeight = FontWeight.Bold)
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun EditField(
+  label: String,
+  value: String,
+  onValueChange: (String) -> Unit,
+  multiline: Boolean = false,
+  testTag: String
+) {
+  Column {
+    Text(
+      text = label.uppercase(),
+      style = MaterialTheme.typography.labelSmall,
+      color = AmberGoldPrimary,
+      fontWeight = FontWeight.Bold,
+      fontSize = 11.sp
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    OutlinedTextField(
+      value = value,
+      onValueChange = onValueChange,
+      modifier = Modifier
+        .fillMaxWidth()
+        .testTag(testTag),
+      singleLine = !multiline,
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = SlateDark800,
+        unfocusedContainerColor = SlateDark800,
+        focusedBorderColor = AmberGoldPrimary,
+        unfocusedBorderColor = SlateDark600,
+        focusedTextColor = TextParchment,
+        unfocusedTextColor = TextParchment
+      ),
+      shape = RoundedCornerShape(8.dp)
+    )
+  }
+}
