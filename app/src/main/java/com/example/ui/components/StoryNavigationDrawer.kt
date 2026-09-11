@@ -413,6 +413,23 @@ private fun DrawerStoryCard(
         fontSize = 11.sp
       )
 
+      Spacer(modifier = Modifier.height(2.dp))
+      val hours = story.playTimeSeconds / 3600
+      val minutes = (story.playTimeSeconds % 3600) / 60
+      val timeString = if (hours > 0) {
+        "${hours}h ${minutes}m"
+      } else if (minutes > 0) {
+        "${minutes}m"
+      } else {
+        "< 1m"
+      }
+      Text(
+        text = "Spielzeit: $timeString",
+        style = MaterialTheme.typography.labelSmall,
+        color = TextParchmentMuted,
+        fontSize = 10.sp
+      )
+
       Spacer(modifier = Modifier.height(8.dp))
 
       // Action row: Archive, Branch, Delete

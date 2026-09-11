@@ -108,6 +108,7 @@ fun SettingsSheet(
     title: String,
     systemPrompt: String,
     model: String,
+    embeddingModel: String,
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -129,6 +130,7 @@ fun SettingsSheet(
   var promptTabSelected by remember { mutableIntStateOf(if (story.systemPrompt.isNotBlank()) 0 else 1) }
 
   var selectedModel by remember(story) { mutableStateOf(story.selectedModel) }
+  var selectedEmbeddingModel by remember(story) { mutableStateOf(story.selectedEmbeddingModel) }
   val currentModelInfo = availableModels.firstOrNull { it.id == selectedModel }
     ?: GeminiModelInfo(
       id = selectedModel,
@@ -442,6 +444,32 @@ fun SettingsSheet(
         }
       },
       modifier = Modifier.fillMaxWidth().testTag("model_selector")
+    )
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    Text(
+      text = "EMBEDDING MODELL (VEKTOREN)",
+      style = MaterialTheme.typography.labelSmall,
+      color = AmberGoldPrimary,
+      fontWeight = FontWeight.Bold
+    )
+    Text(
+      text = "Das Modell für das semantische Langzeitgedächtnis. Achtung: Ein Wechsel bricht die Kompatibilität zu bestehenden Erinnerungen in dieser Story.",
+      style = MaterialTheme.typography.bodySmall,
+      color = TextParchmentFaint
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    
+    val embeddingModelOptions = listOf(
+      com.example.ui.dna.DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
+      com.example.ui.dna.DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
+    )
+    com.example.ui.dna.DnaDropdown(
+      options = embeddingModelOptions,
+      selectedValue = selectedEmbeddingModel,
+      onOptionSelected = { selectedEmbeddingModel = it },
+      modifier = Modifier.fillMaxWidth().testTag("embedding_model_selector")
     )
 
     Spacer(modifier = Modifier.height(20.dp))
@@ -766,6 +794,7 @@ fun SettingsSheet(
           title,
           storySystemPrompt,
           selectedModel,
+          selectedEmbeddingModel,
           temperature,
           supportsTemperature,
           thinkingLevel,

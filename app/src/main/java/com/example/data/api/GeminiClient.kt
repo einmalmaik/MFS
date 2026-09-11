@@ -263,6 +263,7 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     systemInstruction: String,
     stateJson: String,
     milestones: List<String> = emptyList(),
+    semanticMemories: List<String> = emptyList(),
     episodicSummary: String = "",
     recentHistory: List<Pair<String, String>>,
     userAction: String,
@@ -323,6 +324,11 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
       if (episodicSummary.isNotBlank()) {
         appendLine("\n[WAS BISHER GESCHAH (EPISODISCHE ZUSAMMENFASSUNG)]:")
         appendLine(episodicSummary)
+      }
+
+      if (semanticMemories.isNotEmpty()) {
+        appendLine("\n[SEMANTISCHE ERINNERUNGEN (TIEFES GEDÄCHTNIS)]:")
+        semanticMemories.forEach { m -> appendLine("- $m") }
       }
     }
 
@@ -425,6 +431,7 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     systemInstruction: String,
     stateJson: String,
     milestones: List<String> = emptyList(),
+    semanticMemories: List<String> = emptyList(),
     episodicSummary: String = "",
     recentHistory: List<Pair<String, String>>,
     userAction: String,
@@ -438,6 +445,7 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     systemInstruction = systemInstruction,
     stateJson = stateJson,
     milestones = milestones,
+    semanticMemories = semanticMemories,
     episodicSummary = episodicSummary,
     recentHistory = recentHistory,
     userAction = userAction,
@@ -453,6 +461,8 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
    */
   suspend fun extractUpdatedState(
     model: String,
+    thinkingLevel: String = "MEDIUM",
+    thinkingBudget: Int = 2048,
     currentStateJson: String,
     existingMilestones: List<String> = emptyList(),
     userAction: String,
@@ -545,16 +555,19 @@ $storyResponse
     genConfig.put("responseMimeType", "application/json")
     genConfig.put("temperature", 0.2)
 
-    // For state extraction, use minimal thinking effort to respond instantly
     val isGemini3Plus = model.contains("gemini-3") || model.contains("-3.")
-    if (isGemini3Plus) {
-      val thinkingObj = JSONObject()
-      thinkingObj.put("thinkingLevel", "MINIMAL")
-      genConfig.put("thinkingConfig", thinkingObj)
-    } else if (model.contains("2.5")) {
-      val thinkingObj = JSONObject()
-      thinkingObj.put("thinkingBudget", 0)
-      genConfig.put("thinkingConfig", thinkingObj)
+    val isThinkingModel = isGemini3Plus || model.contains("2.5") || model.contains("thinking")
+    
+    if (isThinkingModel) {
+      if (thinkingLevel != "OFF" && thinkingBudget > 0) {
+        val thinkingObj = JSONObject()
+        if (isGemini3Plus) {
+          thinkingObj.put("thinkingLevel", thinkingLevel)
+        } else {
+          thinkingObj.put("thinkingBudget", thinkingBudget)
+        }
+        genConfig.put("thinkingConfig", thinkingObj)
+      }
     }
 
     payload.put("generationConfig", genConfig)
@@ -634,6 +647,37 @@ $storyResponse
     } catch (e: Exception) {
       false to "Verbindungsfehler: ${e.localizedMessage ?: e.message}"
     }
+  }
+
+  suspend fun generateEmbedding(text: String, model: String = "text-embedding-004"): String? = withContext(Dispatchers.IO) {
+    val apiKey = getEffectiveApiKey()
+    if (apiKey.isBlank() || text.isBlank()) return@withContext null
+    
+    val url = "$BASE_URL/$model:embedContent?key=$apiKey"
+    val payload = JSONObject()
+    payload.put("model", "models/$model")
+    val content = JSONObject()
+    val parts = JSONArray()
+    parts.put(JSONObject().put("text", text))
+    content.put("parts", parts)
+    payload.put("content", content)
+    
+    val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+    val request = Request.Builder().url(url).post(body).build()
+    
+    try {
+      val response = client.newCall(request).execute()
+      if (response.isSuccessful) {
+        val jsonStr = response.body?.string() ?: return@withContext null
+        val root = JSONObject(jsonStr)
+        val embeddingObj = root.optJSONObject("embedding")
+        val valuesArr = embeddingObj?.optJSONArray("values")
+        return@withContext valuesArr?.toString()
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Embedding failed", e)
+    }
+    return@withContext null
   }
 
   private fun extractTextFromCandidates(json: JSONObject): String {

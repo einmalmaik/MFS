@@ -127,6 +127,7 @@ class StoryRepository(
     perspective: String = "Zweite Person (Du)",
     systemPrompt: String = "",
     selectedModel: String = "gemini-3.8-flash",
+    selectedEmbeddingModel: String = "text-embedding-004",
     temperature: Float = 0.85f,
     supportsTemperature: Boolean = true,
     thinkingLevel: String = "MEDIUM",
@@ -146,6 +147,7 @@ class StoryRepository(
       genre = genre,
       perspective = perspective,
       selectedModel = selectedModel,
+      selectedEmbeddingModel = selectedEmbeddingModel,
       temperature = temperature,
       supportsTemperature = supportsTemperature,
       thinkingLevel = thinkingLevel,
@@ -314,5 +316,10 @@ class StoryRepository(
 
   suspend fun updateCheckpointDirectly(checkpoint: CheckpointEntity) {
     storyDao.updateCheckpoint(checkpoint)
+  }
+
+  suspend fun updatePlayTime(storyId: Long, incrementSeconds: Long) = withContext(Dispatchers.IO) {
+    val story = storyDao.getStoryById(storyId) ?: return@withContext
+    storyDao.updateStory(story.copy(playTimeSeconds = story.playTimeSeconds + incrementSeconds))
   }
 }

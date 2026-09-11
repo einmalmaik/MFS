@@ -274,6 +274,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     title: String,
     systemPrompt: String,
     model: String,
+    embeddingModel: String = "text-embedding-004",
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -284,6 +285,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       title = title,
       systemPrompt = systemPrompt,
       model = model,
+      embeddingModel = embeddingModel,
       temperature = temperature,
       supportsTemperature = supportsTemperature,
       thinkingLevel = thinkingLevel,
@@ -296,6 +298,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     title: String,
     systemPrompt: String,
     model: String,
+    embeddingModel: String = "text-embedding-004",
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -309,6 +312,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
           title = title,
           systemPrompt = systemPrompt,
           selectedModel = model,
+          selectedEmbeddingModel = embeddingModel,
           temperature = temperature,
           supportsTemperature = supportsTemperature,
           thinkingLevel = thinkingLevel,
@@ -421,6 +425,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     perspective: String,
     systemPrompt: String,
     selectedModel: String = "gemini-3.8-flash",
+    selectedEmbeddingModel: String = "text-embedding-004",
     temperature: Float = 0.85f,
     supportsTemperature: Boolean = true,
     thinkingLevel: String = "MEDIUM",
@@ -441,6 +446,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         perspective = perspective,
         systemPrompt = systemPrompt,
         selectedModel = selectedModel,
+        selectedEmbeddingModel = selectedEmbeddingModel,
         temperature = temperature,
         supportsTemperature = supportsTemperature,
         thinkingLevel = thinkingLevel,
@@ -455,6 +461,12 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         initialPromptOpening = openingText
       )
       switchStory(newId)
+    }
+  }
+
+  fun updatePlayTime(storyId: Long, incrementSeconds: Long) {
+    viewModelScope.launch {
+      repository.updatePlayTime(storyId, incrementSeconds)
     }
   }
 

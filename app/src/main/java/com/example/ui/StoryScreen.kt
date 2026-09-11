@@ -57,6 +57,16 @@ fun StoryScreen(
   val notebookSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+  // Playtime Tracking
+  LaunchedEffect(uiState.currentStory?.id) {
+    uiState.currentStory?.id?.let { storyId ->
+      while (true) {
+        kotlinx.coroutines.delay(60000L) // Track every minute
+        viewModel.updatePlayTime(storyId, 60L)
+      }
+    }
+  }
+
   // Automatically scroll to the latest message or generation stream
   LaunchedEffect(uiState.messages.size, uiState.streamChunk) {
     if (uiState.messages.isNotEmpty()) {
@@ -198,8 +208,8 @@ fun StoryScreen(
         availableModels = uiState.availableModels,
         isFetchingModels = uiState.isFetchingModels,
         onRefreshModels = { viewModel.refreshModelsFromGoogle() },
-        onSaveStorySettings = { title, prompt, model, temp, supportsTemp, thinkingLvl, thinkingBudget, adult ->
-          viewModel.updateStorySettings(title, prompt, model, temp, supportsTemp, thinkingLvl, thinkingBudget, adult)
+        onSaveStorySettings = { title, prompt, model, embeddingModel, temp, supportsTemp, thinkingLvl, thinkingBudget, adult ->
+          viewModel.updateStorySettings(title, prompt, model, embeddingModel, temp, supportsTemp, thinkingLvl, thinkingBudget, adult)
         },
         onSaveGlobalDefaultPrompt = { globalPrompt ->
           viewModel.saveGlobalDefaultPrompt(globalPrompt)
@@ -257,13 +267,14 @@ fun StoryScreen(
       },
       onDeleteStory = { id -> viewModel.deleteStory(id) },
       onBranchStory = { sourceId, branchTitle -> viewModel.branchStory(sourceId, branchTitle) },
-      onCreateNewStory = { title, genre, perspective, prompt, model, temp, supportsTemp, thinkingLvl, thinkingBudget, adult, loc, outfit, inv, npcName, npcOutfit, npcRel, opening ->
+      onCreateNewStory = { title, genre, perspective, prompt, model, embeddingModel, temp, supportsTemp, thinkingLvl, thinkingBudget, adult, loc, outfit, inv, npcName, npcOutfit, npcRel, opening ->
         viewModel.createNewStory(
           title = title,
           genre = genre,
           perspective = perspective,
           systemPrompt = prompt,
           selectedModel = model,
+          selectedEmbeddingModel = embeddingModel,
           temperature = temp,
           supportsTemperature = supportsTemp,
           thinkingLevel = thinkingLvl,

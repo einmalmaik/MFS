@@ -13,12 +13,14 @@ data class StoryEntity(
   val genre: String = "Dark Noir & Mystery",
   val perspective: String = "Zweite Person (Du)",
   val selectedModel: String = "gemini-3.8-flash",
+  val selectedEmbeddingModel: String = "text-embedding-004",
   val temperature: Float = 0.85f,
   val supportsTemperature: Boolean = true,
   val thinkingLevel: String = "MEDIUM", // "MINIMAL", "LOW", "MEDIUM", "HIGH", "OFF"
   val thinkingBudget: Int = 2048, // Legacy für 2.5: 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
   val adultContentEnabled: Boolean = true,
   val isArchived: Boolean = false,
+  val playTimeSeconds: Long = 0L, // Total tracked play time in seconds
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis()
 )
@@ -162,5 +164,6 @@ data class MessageEntity(
   val content: String,
   val inGameTimeTag: String? = null,
   val checkpointId: Long? = null,
-  val timestamp: Long = System.currentTimeMillis()
+  val timestamp: Long = System.currentTimeMillis(),
+  val embeddingJson: String? = null
 )

@@ -40,6 +40,9 @@ interface StoryDao {
   @Query("SELECT * FROM messages WHERE storyId = :storyId ORDER BY id ASC")
   suspend fun getMessagesSnapshot(storyId: Long): List<MessageEntity>
 
+  @Query("SELECT * FROM messages WHERE storyId = :storyId AND embeddingJson IS NOT NULL ORDER BY id ASC")
+  suspend fun getMessagesWithEmbeddings(storyId: Long): List<MessageEntity>
+
   @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
   suspend fun getMessageById(messageId: Long): MessageEntity?
 

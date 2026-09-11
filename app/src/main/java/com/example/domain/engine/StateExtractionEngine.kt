@@ -19,6 +19,68 @@ class StateExtractionEngine(
 ) {
   companion object {
     private const val TAG = "StateExtractionEngine"
+
+    /**
+     * Deterministically calculates time progression when time skips are detected,
+     * guaranteeing that statements like "Es vergehen zwei Tage" advance Day 1 -> Day 3 even if
+     * the model hallucinated the same day.
+     */
+    fun computeDeterministicTimeProgression(
+      previousTime: String,
+      extractedTime: String,
+      userAction: String,
+      modelResponse: String
+    ): String {
+      val previousDay = parseDayNumber(previousTime)
+      val extractedDay = parseDayNumber(extractedTime)
+
+      // Check if user action requested a specific day jump
+      val actionLower = userAction.lowercase()
+      val daysToAdvance = when {
+        actionLower.contains("zwei tage") || actionLower.contains("2 tage") -> 2
+        actionLower.contains("drei tage") || actionLower.contains("3 tage") -> 3
+        actionLower.contains("vier tage") || actionLower.contains("4 tage") -> 4
+        actionLower.contains("fünf tage") || actionLower.contains("5 tage") -> 5
+        actionLower.contains("eine woche") || actionLower.contains("1 woche") -> 7
+        actionLower.contains("übernachten") || actionLower.contains("nächsten morgen") ||
+          actionLower.contains("nächster morgen") || actionLower.contains("schlafe bis morgen") -> 1
+        else -> {
+          val regex = Regex("""(\d+)\s+tage(?:\s+später|\s+vergehen|\s+rasten|\s+warten)?""", RegexOption.IGNORE_CASE)
+          val match = regex.find(userAction)
+          match?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        }
+      }
+
+      if (daysToAdvance > 0) {
+        val targetDay = previousDay + daysToAdvance
+        if (extractedDay < targetDay) {
+          // Model didn't advance enough, correct to target day
+          val timePart = parseTimeOfDay(extractedTime).ifBlank {
+            if (actionLower.contains("morgen")) "08:00 Uhr" else "20:00 Uhr"
+          }
+          return "Tag $targetDay, $timePart"
+        }
+      }
+
+      return extractedTime
+    }
+
+    private fun parseDayNumber(timeStr: String): Int {
+      val regex = Regex("""Tag\s*(\d+)""", RegexOption.IGNORE_CASE)
+      val match = regex.find(timeStr)
+      return match?.groupValues?.get(1)?.toIntOrNull() ?: 1
+    }
+
+    private fun parseTimeOfDay(timeStr: String): String {
+      val regex = Regex("""(\d{1,2}:\d{2}(?:\s*Uhr)?)""", RegexOption.IGNORE_CASE)
+      val match = regex.find(timeStr)
+      val found = match?.groupValues?.get(1) ?: ""
+      return if (found.isNotBlank() && !found.endsWith("Uhr", ignoreCase = true)) {
+        "$found Uhr"
+      } else {
+        found
+      }
+    }
   }
 
   /**
@@ -39,6 +101,8 @@ class StateExtractionEngine(
     return try {
       val updatedStateJsonObj = geminiClient.extractUpdatedState(
         model = story.selectedModel,
+        thinkingLevel = story.thinkingLevel,
+        thinkingBudget = story.thinkingBudget,
         currentStateJson = currentStateJson,
         userAction = userAction,
         storyResponse = modelResponse,
@@ -173,7 +237,7 @@ class StateExtractionEngine(
    * guaranteeing that statements like "Es vergehen zwei Tage" advance Day 1 -> Day 3 even if
    * the model hallucinated the same day.
    */
-  private fun computeDeterministicTimeProgression(
+  fun computeDeterministicTimeProgression(
     previousTime: String,
     extractedTime: String,
     userAction: String,

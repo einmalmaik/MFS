@@ -166,6 +166,7 @@ fun StorySelectorDialog(
     perspective: String,
     systemPrompt: String,
     model: String,
+    embeddingModel: String,
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -205,6 +206,7 @@ fun StorySelectorDialog(
     ?: "gemini-3.8-flash"
 
   var selectedModelId by remember { mutableStateOf(defaultModelId) }
+  var selectedEmbeddingModel by remember { mutableStateOf("text-embedding-004") }
   val currentModelInfo = availableModels.firstOrNull { it.id == selectedModelId }
     ?: GeminiModelInfo(
       id = selectedModelId,
@@ -407,6 +409,21 @@ fun StorySelectorDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = TextParchmentMuted
                   )
+                  Spacer(modifier = Modifier.height(4.dp))
+                  val hours = story.playTimeSeconds / 3600
+                  val minutes = (story.playTimeSeconds % 3600) / 60
+                  val timeString = if (hours > 0) {
+                    "${hours}h ${minutes}m"
+                  } else if (minutes > 0) {
+                    "${minutes}m"
+                  } else {
+                    "< 1m"
+                  }
+                  Text(
+                    text = "Spielzeit: $timeString",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextParchmentMuted
+                  )
                 }
 
                 Row {
@@ -551,6 +568,20 @@ fun StorySelectorDialog(
               }
             },
             modifier = Modifier.fillMaxWidth().testTag("story_model_dropdown")
+          )
+
+          Spacer(modifier = Modifier.height(16.dp))
+
+          val embeddingModelOptions = listOf(
+            com.example.ui.dna.DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
+            com.example.ui.dna.DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
+          )
+          com.example.ui.dna.DnaDropdown(
+            label = "EMBEDDING MODELL",
+            options = embeddingModelOptions,
+            selectedValue = selectedEmbeddingModel,
+            onOptionSelected = { selectedEmbeddingModel = it },
+            modifier = Modifier.fillMaxWidth().testTag("story_embedding_model_dropdown")
           )
 
           Spacer(modifier = Modifier.height(12.dp))
@@ -835,6 +866,7 @@ fun StorySelectorDialog(
                 "Zweite Person (Du)",
                 "", // Use global default prompt
                 selectedModelId,
+                selectedEmbeddingModel,
                 temperature,
                 currentModelInfo.supportsTemperature,
                 thinkingLevel,

@@ -37,6 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.width
+
 /**
  * Modell fuer eine zulaessige Option im DnaDropdown.
  */
@@ -50,12 +54,6 @@ data class DnaDropdownOption<T>(
 
 /**
  * Zentrale typisierte Dropdown-Komponente des MauntingStudios Design-Systems.
- *
- * Entspricht der Implementierung in 'Dropdown.tsx' aus dem MSM-Repository:
- * - Keine nativen Formular-/Picker-Elemente
- * - Gestylte Trigger-Flaeche (SurfaceContainerHigh mit Border)
- * - Rotierender Chevron-Indikator
- * - Popover mit optischer Rueckmeldung, Hinweistexten und Selektionshaekchen
  */
 @Composable
 fun <T> DnaDropdown(
@@ -70,6 +68,7 @@ fun <T> DnaDropdown(
   testTag: String = "dna_dropdown"
 ) {
   var expanded by remember { mutableStateOf(false) }
+  var containerWidth by remember { mutableStateOf(0) }
   val currentOption = options.find { it.value == selectedValue }
   val rotationState by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "chevron_rotation")
 
@@ -85,7 +84,10 @@ fun <T> DnaDropdown(
       )
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier
+      .fillMaxWidth()
+      .onSizeChanged { containerWidth = it.width }
+    ) {
       Surface(
         onClick = { if (enabled) expanded = !expanded },
         enabled = enabled,
@@ -151,6 +153,7 @@ fun <T> DnaDropdown(
         expanded = expanded,
         onDismissRequest = { expanded = false },
         modifier = Modifier
+          .width(with(LocalDensity.current) { containerWidth.toDp() })
           .background(DnaColors.SurfaceContainerHigh)
           .border(1.dp, DnaColors.Border, RoundedCornerShape(10.dp))
           .padding(vertical = 4.dp)
