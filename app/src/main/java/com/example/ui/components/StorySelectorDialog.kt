@@ -177,9 +177,10 @@ fun StorySelectorDialog(
     npcRelation: String,
     openingText: String
   ) -> Unit,
+  initialCreateMode: Boolean = false,
   onDismiss: () -> Unit
 ) {
-  var isCreatingNew by remember { mutableStateOf(false) }
+  var isCreatingNew by remember { mutableStateOf(initialCreateMode) }
   var storyToDelete by remember { mutableStateOf<StoryEntity?>(null) }
   var storyToBranch by remember { mutableStateOf<StoryEntity?>(null) }
   var branchTitleInput by remember { mutableStateOf("") }

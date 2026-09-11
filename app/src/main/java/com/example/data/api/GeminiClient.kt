@@ -456,32 +456,39 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     }
 
     val extractionPrompt = """
-Du bist die State-Tracking-Engine des Spiels. Analysiere den bisherigen Zustand und was in dieser Runde geschehen ist.
+Du bist die State-Tracking-Engine des interaktiven Spiels. Analysiere den bisherigen Zustand, die Spieler-Aktion und die Game-Master-Erzählung dieser Runde.
 Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema erfüllt:
 
 {
-  "in_game_time": "z. B. Tag 1, 22:15 Uhr",
-  "location": "Aktueller Ort des Spielers",
-  "weather": "Wetterlage",
-  "player": {
-    "outfit": "Aktuelle Kleidung des Spielers",
-    "condition": "Körperlicher/mentaler Zustand",
-    "inventory": ["Item 1", "Item 2"]
-  },
-  "npcs_present": [
+  "in_game_time": "Format IMMER: Tag X, HH:MM Uhr (z. B. Tag 3, 09:30 Uhr)",
+  "location": "Aktueller Aufenthaltsort des Spielers",
+  "weather": "Aktuelle Wetterlage & Atmosphäre",
+  "player_outfit": "Aktuelle Kleidung/Rüstung (inkl. Adult/NSFW z. B. entblößt, Dessous, zerrissen, voller Schutz)",
+  "player_condition": "Körperlicher/mentaler/erotischer Zustand (z. B. Unverletzt, Erschöpft, Erregt, Angeschlagen)",
+  "player_inventory": ["Item 1", "Item 2"],
+  "npcs": [
     {
       "name": "NPC Name",
-      "outfit": "Kleidung dieses NPCs",
-      "relationship_to_player": "Aktuelle Haltung zum Spieler",
+      "outfit": "Kleidung/Zustand dieses NPCs",
+      "relationship_to_player": "Aktuelle Beziehung/Haltung zum Spieler",
       "current_mood": "Stimmung",
       "status": "Anwesend oder Abwesend"
     }
   ],
   "milestones": [
-    "Dauerhafte, prägende Ereignisse, Schwüre, Enthüllungen oder Verluste"
+    "Dauerhafte, prägende Ereignisse, Zeitsprünge, Schwüre, Enthüllungen, intime Momente oder Verluste"
   ],
   "previous_events_summary": "1-3 prägnante Sätze über die wichtigsten Ereignisse bisher."
 }
+
+[REGELN ZUR ZEIT- & TAGEBERECHNUNG - EXTREM WICHTIG]:
+1. Lies den bisherigen Zeitstempel genau (z. B. bisher "Tag 1, 20:00 Uhr").
+2. Wenn in der Spieleraktion oder der Erzählung Tage oder Stunden vergehen (z. B. "es vergehen zwei Tage", "3 Tage später", "am nächsten Morgen", "wir schlafen eine Nacht", "zwei Tage Vorbereitung"), addiere diese Tage mathematisch zur bisherigen Tageszahl!
+   - Beispiel: Aus bisher "Tag 1, 20:00 Uhr" wird bei "Es vergehen zwei Tage" zwingend "Tag 3, 08:00 Uhr" (oder 20:00 Uhr je nach Kontext).
+   - Aus "Tag 1" wird nach einer Nacht "Tag 2, 07:30 Uhr".
+3. Wetter & Atmosphäre: Bei Zeitsprüngen über Tage oder bei Ortswechseln MUSS sich das Wetter realistisch weiterentwickeln (z. B. Regen klart auf, Nebel zieht auf, schwüle Hitze, Sturm).
+4. Meilensteine: Wenn ein Zeitsprung ("Zwei Tage im Lager verbracht") oder ein wichtiges Ereignis (Geheimnis gelüftet, Vertrauen gewonnen, Erotik/Intimität, Kampf) stattfand, MUSS ein neuer Meilenstein der Liste hinzugefügt werden. Behalte bestehende Meilensteine bei!
+5. Adult Content & Erotik: Sei unzensiert und akkurat bei Kleidung und Verfassung.
 
 [BISHERIGER ZUSTAND]:
 $currentStateJson
@@ -494,8 +501,6 @@ $userAction
 
 [ANTWORT DES GAME MASTERS DIESER RUNDE]:
 $storyResponse
-
-Wichtig: Falls ein Outfit gewechselt, beschädigt oder abgelegt wurde, aktualisiere es. Falls ein Meilenstein (z. B. ein Liebesgeständnis, Verrat, Pakt, Mord) passiert ist, füge ihn der 'milestones'-Liste hinzu.
 """.trimIndent()
 
     val payload = JSONObject()

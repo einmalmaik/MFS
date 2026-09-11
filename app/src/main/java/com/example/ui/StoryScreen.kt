@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +28,7 @@ import com.example.ui.components.NotebookDrawer
 import com.example.ui.components.SettingsSheet
 import com.example.ui.components.StoryActionInputBar
 import com.example.ui.components.StoryChatArea
+import com.example.ui.components.StoryNavigationDrawer
 import com.example.ui.components.StorySelectorDialog
 import com.example.ui.components.StoryTopBar
 import com.example.ui.theme.SlateDark900
@@ -40,11 +44,13 @@ fun StoryScreen(
   val uiState by viewModel.uiState.collectAsState()
   val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
+  val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
   var inputText by remember { mutableStateOf("") }
   var showNotebookSheet by remember { mutableStateOf(false) }
   var showSettingsSheet by remember { mutableStateOf(false) }
   var showStorySelector by remember { mutableStateOf(false) }
+  var storySelectorCreateMode by remember { mutableStateOf(false) }
   var showManualEditDialog by remember { mutableStateOf(false) }
   var messageToEdit by remember { mutableStateOf<MessageEntity?>(null) }
 
@@ -71,56 +77,88 @@ fun StoryScreen(
     )
   }
 
-  Scaffold(
-    modifier = modifier
-      .fillMaxSize()
-      .background(SlateDark900),
-    topBar = {
-      StoryTopBar(
-        story = story,
-        checkpoint = checkpoint,
-        onOpenStorySelector = { showStorySelector = true },
-        onOpenNotebook = { showNotebookSheet = true },
-        onOpenSettings = { showSettingsSheet = true }
-      )
-    },
-    bottomBar = {
-      StoryActionInputBar(
-        inputText = inputText,
-        onInputTextChange = { inputText = it },
-        onSendAction = { action ->
-          inputText = ""
-          viewModel.sendAction(action)
+  ModalNavigationDrawer(
+    drawerState = drawerState,
+    gesturesEnabled = true, // Enables left edge swipe!
+    drawerContent = {
+      StoryNavigationDrawer(
+        currentStoryId = story?.id,
+        stories = uiState.allStories,
+        onSelectStory = { id -> viewModel.switchStory(id) },
+        onOpenCreateStory = {
+          storySelectorCreateMode = true
+          showStorySelector = true
         },
-        isGenerating = uiState.isGenerating,
-        suggestions = suggestions
-      )
-    }
-  ) { innerPadding ->
-    Box(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(innerPadding)
-    ) {
-      StoryChatArea(
-        uiState = uiState,
-        listState = listState,
+        onToggleArchiveStory = { storyId, isArchived ->
+          viewModel.toggleStoryArchived(storyId, isArchived)
+        },
+        onBranchStory = { sourceStoryId, branchTitle ->
+          viewModel.branchStory(sourceStoryId, branchTitle)
+        },
+        onDeleteStory = { id -> viewModel.deleteStory(id) },
         onOpenSettings = { showSettingsSheet = true },
-        onDismissError = { viewModel.dismissError() },
-        onRewindToMessage = { targetMsg -> viewModel.rewindTo(targetMsg) },
-        onEditMessage = { targetMsg -> messageToEdit = targetMsg },
-        onBranchFromMessage = { targetMsg ->
-          if (story != null) {
-            viewModel.branchStory(story.id, "${story.title} (Zweig)")
-          }
+        onCloseDrawer = {
+          scope.launch { drawerState.close() }
         }
       )
     }
+  ) {
+    Scaffold(
+      modifier = modifier
+        .fillMaxSize()
+        .background(SlateDark900),
+      topBar = {
+        StoryTopBar(
+          story = story,
+          checkpoint = checkpoint,
+          onOpenDrawer = {
+            scope.launch { drawerState.open() }
+          },
+          onOpenStorySelector = {
+            scope.launch { drawerState.open() }
+          },
+          onOpenNotebook = { showNotebookSheet = true },
+          onOpenSettings = { showSettingsSheet = true }
+        )
+      },
+      bottomBar = {
+        StoryActionInputBar(
+          inputText = inputText,
+          onInputTextChange = { inputText = it },
+          onSendAction = { action ->
+            inputText = ""
+            viewModel.sendAction(action)
+          },
+          isGenerating = uiState.isGenerating,
+          suggestions = suggestions
+        )
+      }
+    ) { innerPadding ->
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(innerPadding)
+      ) {
+        StoryChatArea(
+          uiState = uiState,
+          listState = listState,
+          onOpenSettings = { showSettingsSheet = true },
+          onDismissError = { viewModel.dismissError() },
+          onRewindToMessage = { targetMsg -> viewModel.rewindTo(targetMsg) },
+          onEditMessage = { targetMsg -> messageToEdit = targetMsg },
+          onBranchFromMessage = { targetMsg ->
+            if (story != null) {
+              viewModel.branchStory(story.id, "${story.title} (Zweig)")
+            }
+          }
+        )
+      }
+    }
   }
 
-  // --- MODALS & DIALOGS ---
+  // --- MODALS & BOTTOM SHEETS ---
 
-  // 1. Notebook Sheet ("Das Notizbuch")
+  // 1. Notebook Sheet ("Das Notizbuch") with Day-by-Day Chronicler & Character Visualizer
   if (showNotebookSheet) {
     ModalBottomSheet(
       onDismissRequest = { showNotebookSheet = false },
@@ -130,6 +168,8 @@ fun StoryScreen(
     ) {
       NotebookDrawer(
         checkpoint = checkpoint,
+        allCheckpoints = uiState.allCheckpoints,
+        adultContentEnabled = story?.adultContentEnabled ?: true,
         onClose = {
           scope.launch {
             notebookSheetState.hide()
@@ -201,7 +241,7 @@ fun StoryScreen(
     )
   }
 
-  // 5. Story Selector Dialog
+  // 5. Story Selector & Creator Dialog
   if (showStorySelector) {
     StorySelectorDialog(
       currentStoryId = story?.id,
@@ -209,7 +249,10 @@ fun StoryScreen(
       availableModels = uiState.availableModels,
       isFetchingModels = uiState.isFetchingModels,
       onRefreshModels = { viewModel.refreshModelsFromGoogle() },
-      onSelectStory = { id -> viewModel.switchStory(id) },
+      onSelectStory = { id ->
+        viewModel.switchStory(id)
+        showStorySelector = false
+      },
       onDeleteStory = { id -> viewModel.deleteStory(id) },
       onBranchStory = { sourceId, branchTitle -> viewModel.branchStory(sourceId, branchTitle) },
       onCreateNewStory = { title, genre, perspective, prompt, model, temp, supportsTemp, thinkingLvl, thinkingBudget, adult, loc, outfit, inv, npcName, npcOutfit, npcRel, opening ->
@@ -232,8 +275,13 @@ fun StoryScreen(
           initialNpcRelation = npcRel,
           openingText = opening
         )
+        showStorySelector = false
       },
-      onDismiss = { showStorySelector = false }
+      initialCreateMode = storySelectorCreateMode,
+      onDismiss = {
+        showStorySelector = false
+        storySelectorCreateMode = false
+      }
     )
   }
 }

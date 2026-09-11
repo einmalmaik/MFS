@@ -82,6 +82,11 @@ class StoryRepository(
 
   suspend fun updateStory(story: StoryEntity) = storyDao.updateStory(story)
 
+  suspend fun toggleStoryArchived(storyId: Long, isArchived: Boolean) = withContext(Dispatchers.IO) {
+    val story = storyDao.getStoryById(storyId) ?: return@withContext
+    storyDao.updateStory(story.copy(isArchived = isArchived, updatedAt = System.currentTimeMillis()))
+  }
+
   suspend fun deleteStory(story: StoryEntity) = deleteStoryById(story.id)
 
   suspend fun deleteStoryById(storyId: Long) = withContext(Dispatchers.IO) {

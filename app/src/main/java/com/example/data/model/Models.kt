@@ -18,6 +18,7 @@ data class StoryEntity(
   val thinkingLevel: String = "MEDIUM", // "MINIMAL", "LOW", "MEDIUM", "HIGH", "OFF"
   val thinkingBudget: Int = 2048, // Legacy für 2.5: 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
   val adultContentEnabled: Boolean = true,
+  val isArchived: Boolean = false,
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis()
 )
@@ -98,6 +99,12 @@ data class CheckpointEntity(
       }
     }
     return list
+  }
+
+  fun extractDayNumber(): Int {
+    val regex = Regex("""Tag\s*(\d+)""", RegexOption.IGNORE_CASE)
+    val match = regex.find(inGameTime)
+    return match?.groupValues?.get(1)?.toIntOrNull() ?: 1
   }
 }
 

@@ -25,6 +25,7 @@ data class StoryUiState(
   val allStories: List<StoryEntity> = emptyList(),
   val messages: List<MessageEntity> = emptyList(),
   val latestCheckpoint: CheckpointEntity? = null,
+  val allCheckpoints: List<CheckpointEntity> = emptyList(),
   val isGenerating: Boolean = false,
   val streamChunk: String = "",
   val turnStatus: TurnProgress? = null,
@@ -61,8 +62,12 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val _latestCheckpoint = MutableStateFlow<CheckpointEntity?>(null)
   val latestCheckpoint: StateFlow<CheckpointEntity?> = _latestCheckpoint.asStateFlow()
 
+  private val _allCheckpoints = MutableStateFlow<List<CheckpointEntity>>(emptyList())
+  val allCheckpoints: StateFlow<List<CheckpointEntity>> = _allCheckpoints.asStateFlow()
+
   private var messagesJob: Job? = null
   private var checkpointJob: Job? = null
+  private var allCheckpointsJob: Job? = null
 
   init {
     viewModelScope.launch {
@@ -91,6 +96,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _activeStoryId.value = storyId
     messagesJob?.cancel()
     checkpointJob?.cancel()
+    allCheckpointsJob?.cancel()
 
     messagesJob = viewModelScope.launch {
       repository.getMessagesForStory(storyId).collect { msgs ->
@@ -102,6 +108,18 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       repository.observeLatestCheckpoint(storyId).collect { cp ->
         _latestCheckpoint.value = cp
       }
+    }
+
+    allCheckpointsJob = viewModelScope.launch {
+      repository.getAllCheckpoints(storyId).collect { list ->
+        _allCheckpoints.value = list
+      }
+    }
+  }
+
+  fun toggleStoryArchived(storyId: Long, isArchived: Boolean) {
+    viewModelScope.launch {
+      repository.toggleStoryArchived(storyId, isArchived)
     }
   }
 
@@ -399,6 +417,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _activeStoryId,
     _messages,
     _latestCheckpoint,
+    _allCheckpoints,
     _isGenerating,
     _streamChunk,
     _turnStatus,
@@ -414,15 +433,17 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     @Suppress("UNCHECKED_CAST")
     val msgs = args[2] as List<MessageEntity>
     val cp = args[3] as CheckpointEntity?
-    val generating = args[4] as Boolean
-    val chunk = args[5] as String
-    val turnStat = args[6] as TurnProgress?
-    val err = args[7] as String?
-    val customKey = args[8] as String
-    val globalPrompt = args[9] as String
     @Suppress("UNCHECKED_CAST")
-    val models = args[10] as List<GeminiModelInfo>
-    val fetchingModels = args[11] as Boolean
+    val allCps = args[4] as List<CheckpointEntity>
+    val generating = args[5] as Boolean
+    val chunk = args[6] as String
+    val turnStat = args[7] as TurnProgress?
+    val err = args[8] as String?
+    val customKey = args[9] as String
+    val globalPrompt = args[10] as String
+    @Suppress("UNCHECKED_CAST")
+    val models = args[11] as List<GeminiModelInfo>
+    val fetchingModels = args[12] as Boolean
 
     val activeStory = storyList.firstOrNull { it.id == activeId } ?: storyList.firstOrNull()
 
@@ -431,6 +452,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       allStories = storyList,
       messages = msgs,
       latestCheckpoint = cp,
+      allCheckpoints = allCps,
       isGenerating = generating,
       streamChunk = chunk,
       turnStatus = turnStat,

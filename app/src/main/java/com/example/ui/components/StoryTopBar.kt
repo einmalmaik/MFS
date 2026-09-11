@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
@@ -43,6 +44,7 @@ import com.example.ui.theme.TextParchmentMuted
 fun StoryTopBar(
   story: StoryEntity?,
   checkpoint: CheckpointEntity?,
+  onOpenDrawer: () -> Unit,
   onOpenStorySelector: () -> Unit,
   onOpenNotebook: () -> Unit,
   onOpenSettings: () -> Unit,
@@ -54,6 +56,18 @@ fun StoryTopBar(
       containerColor = SlateDark950,
       titleContentColor = TextParchment
     ),
+    navigationIcon = {
+      IconButton(
+        onClick = onOpenDrawer,
+        modifier = Modifier.testTag("open_drawer_button")
+      ) {
+        Icon(
+          imageVector = Icons.Default.Menu,
+          contentDescription = "Geschichten & Menü öffnen",
+          tint = AmberGoldPrimary
+        )
+      }
+    },
     title = {
       Column(
         modifier = Modifier.clickable { onOpenStorySelector() }
