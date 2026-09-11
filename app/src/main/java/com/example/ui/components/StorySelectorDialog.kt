@@ -16,14 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AltRoute
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AltRoute
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
@@ -344,11 +344,11 @@ fun StorySelectorDialog(
           Row(verticalAlignment = Alignment.CenterVertically) {
             if (isCreatingNew) {
               IconButton(onClick = { isCreatingNew = false }) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Zurück", tint = AmberGoldPrimary)
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück", tint = AmberGoldPrimary)
               }
             } else {
               Icon(
-                imageVector = Icons.Default.MenuBook,
+                imageVector = Icons.AutoMirrored.Filled.MenuBook,
                 contentDescription = null,
                 tint = AmberGoldPrimary
               )
@@ -426,7 +426,7 @@ fun StorySelectorDialog(
                       storyToBranch = story
                     }
                   ) {
-                    Icon(imageVector = Icons.Default.AltRoute, contentDescription = "Zweig erstellen", tint = AmberGoldLight)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.AltRoute, contentDescription = "Zweig erstellen", tint = AmberGoldLight)
                   }
 
                   if (stories.size > 1) {

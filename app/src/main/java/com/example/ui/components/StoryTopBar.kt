@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,9 +10,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,13 +33,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.StoryEntity
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.SlateDark950
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentMuted
+import com.example.ui.theme.IceBorderFaint
+import com.example.ui.theme.IceCyanContainer
+import com.example.ui.theme.IceCyanLight
+import com.example.ui.theme.IceCyanPrimary
+import com.example.ui.theme.InkBackground
+import com.example.ui.theme.TextFaint
+import com.example.ui.theme.TextForeground
+import com.example.ui.theme.TextMuted
 
+/**
+ * StoryTopBar - Gestaltet nach der MauntingStudios Design-DNA (Header-Standard):
+ * - Sticky, dezent transluzente Fläche mit Ice-Border
+ * - Ice-Cyan Akzenttöne und klare Pill-Badges
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryTopBar(
@@ -53,8 +61,8 @@ fun StoryTopBar(
   TopAppBar(
     modifier = modifier,
     colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = SlateDark950,
-      titleContentColor = TextParchment
+      containerColor = InkBackground,
+      titleContentColor = TextForeground
     ),
     navigationIcon = {
       IconButton(
@@ -64,7 +72,7 @@ fun StoryTopBar(
         Icon(
           imageVector = Icons.Default.Menu,
           contentDescription = "Geschichten & Menü öffnen",
-          tint = AmberGoldPrimary
+          tint = IceCyanPrimary
         )
       }
     },
@@ -78,48 +86,49 @@ fun StoryTopBar(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Serif,
-            maxLines = 1
+            maxLines = 1,
+            color = TextForeground
           )
           Spacer(modifier = Modifier.width(4.dp))
           Icon(
             imageVector = Icons.Default.SwapHoriz,
             contentDescription = "Geschichte wechseln",
-            tint = AmberGoldPrimary,
+            tint = IceCyanPrimary,
             modifier = Modifier.size(16.dp)
           )
         }
         Text(
           text = "${story?.genre ?: "Interaktives RPG"} • ${story?.selectedModel ?: ""}",
           style = MaterialTheme.typography.labelSmall,
-          color = AmberGoldLight
+          color = IceCyanLight
         )
       }
     },
     actions = {
-      // In-Game Time Pill (Tappable to view notebook)
+      // In-Game Time Pill (Stadium Badge style)
       Surface(
         modifier = Modifier
-          .clip(RoundedCornerShape(12.dp))
+          .clip(RoundedCornerShape(999.dp))
           .clickable { onOpenNotebook() }
           .testTag("in_game_time_pill"),
-        color = AmberGoldContainer,
-        border = androidx.compose.foundation.BorderStroke(1.dp, AmberGoldPrimary.copy(alpha = 0.4f))
+        color = IceCyanContainer,
+        border = BorderStroke(1.dp, IceCyanPrimary.copy(alpha = 0.35f))
       ) {
         Row(
           verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         ) {
           Icon(
             imageVector = Icons.Default.AccessTime,
             contentDescription = null,
-            tint = AmberGoldPrimary,
+            tint = IceCyanPrimary,
             modifier = Modifier.size(13.dp)
           )
           Spacer(modifier = Modifier.width(4.dp))
           Text(
             text = checkpoint?.inGameTime ?: "Tag 1, 20:00",
             style = MaterialTheme.typography.labelSmall,
-            color = AmberGoldLight,
+            color = IceCyanLight,
             fontWeight = FontWeight.Bold
           )
         }
@@ -133,9 +142,9 @@ fun StoryTopBar(
         modifier = Modifier.testTag("open_notebook_button")
       ) {
         Icon(
-          imageVector = Icons.Default.MenuBook,
+          imageVector = Icons.AutoMirrored.Filled.MenuBook,
           contentDescription = "Das Notizbuch öffnen",
-          tint = AmberGoldPrimary
+          tint = IceCyanPrimary
         )
       }
 
@@ -147,7 +156,7 @@ fun StoryTopBar(
         Icon(
           imageVector = Icons.Default.Tune,
           contentDescription = "Einstellungen",
-          tint = TextParchmentMuted
+          tint = TextMuted
         )
       }
     }

@@ -5,25 +5,29 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val StoryForgeColorScheme = darkColorScheme(
-  primary = AmberGoldPrimary,
-  onPrimary = SlateDark950,
-  primaryContainer = AmberGoldContainer,
-  onPrimaryContainer = OnAmberGoldContainer,
-  secondary = AmberGoldLight,
-  onSecondary = SlateDark950,
-  secondaryContainer = SlateDark700,
-  onSecondaryContainer = TextParchment,
-  tertiary = AmberGoldDark,
-  onTertiary = TextParchment,
-  background = SlateDark900,
-  onBackground = TextParchment,
-  surface = SlateDark800,
-  onSurface = TextParchment,
-  surfaceVariant = SlateDark700,
-  onSurfaceVariant = TextParchmentMuted,
-  outline = SlateDark600,
-  outlineVariant = SlateDark700,
+/**
+ * MauntingStudios Design-DNA Theme Configuration.
+ * Basiert auf der Dark-First Core-Palette, Elevation-Surfaces (Ink) und Ice-Cyan/Mint-Akzenten.
+ */
+private val MauntingDnaColorScheme = darkColorScheme(
+  primary = IceCyanPrimary,
+  onPrimary = TextOnPrimary,
+  primaryContainer = IceCyanContainer,
+  onPrimaryContainer = IceCyanLight,
+  secondary = MintSuccess,
+  onSecondary = TextOnPrimary,
+  secondaryContainer = InkOverlay,
+  onSecondaryContainer = TextForeground,
+  tertiary = IceCyanMuted,
+  onTertiary = TextForeground,
+  background = InkBackground,
+  onBackground = TextForeground,
+  surface = InkPanel,
+  onSurface = TextForeground,
+  surfaceVariant = InkOverlay,
+  onSurfaceVariant = TextMuted,
+  outline = IceBorder,
+  outlineVariant = IceBorderFaint,
   error = CrimsonDanger,
   onError = Color.White
 )
@@ -33,7 +37,7 @@ fun StoryForgeTheme(
   content: @Composable () -> Unit,
 ) {
   MaterialTheme(
-    colorScheme = StoryForgeColorScheme,
+    colorScheme = MauntingDnaColorScheme,
     typography = Typography,
     content = content
   )

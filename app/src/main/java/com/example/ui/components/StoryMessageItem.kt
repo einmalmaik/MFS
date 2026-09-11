@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.AltRoute
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
@@ -309,7 +309,7 @@ fun StoryMessageItem(
                 .testTag("branch_message_button_${message.id}")
             ) {
               Icon(
-                imageVector = Icons.Default.AltRoute,
+                imageVector = Icons.AutoMirrored.Filled.AltRoute,
                 contentDescription = "Zweig von hier erstellen",
                 tint = AmberGoldLight,
                 modifier = Modifier.size(16.dp)

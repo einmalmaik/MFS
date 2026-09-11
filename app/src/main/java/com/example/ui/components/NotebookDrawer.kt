@@ -30,7 +30,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Luggage
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.WbCloudy
 import androidx.compose.material3.Button
@@ -113,7 +113,7 @@ fun NotebookDrawer(
     ) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-          imageVector = Icons.Default.MenuBook,
+          imageVector = Icons.AutoMirrored.Filled.MenuBook,
           contentDescription = null,
           tint = AmberGoldPrimary,
           modifier = Modifier.size(24.dp)
