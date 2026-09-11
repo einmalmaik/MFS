@@ -17,29 +17,21 @@ import com.example.R
  */
 object DnaTypography {
 
-  val ManropeFamily = FontFamily(
-    Font(R.font.manrope, FontWeight.Normal),
-    Font(R.font.manrope, FontWeight.Medium),
-    Font(R.font.manrope, FontWeight.SemiBold),
-    Font(R.font.manrope, FontWeight.Bold)
-  )
-
-  val InterFamily = FontFamily(
+  val UnifiedFontFamily = FontFamily(
     Font(R.font.inter, FontWeight.Normal),
     Font(R.font.inter, FontWeight.Medium),
     Font(R.font.inter, FontWeight.SemiBold),
     Font(R.font.inter, FontWeight.Bold)
   )
 
-  val JetBrainsMonoFamily = FontFamily(
-    Font(R.font.jetbrainsmono, FontWeight.Normal),
-    Font(R.font.jetbrainsmono, FontWeight.Medium),
-    Font(R.font.jetbrainsmono, FontWeight.Bold)
-  )
+  // Keep these aliases so existing code doesn't break, but point them all to UnifiedFontFamily
+  val ManropeFamily = UnifiedFontFamily
+  val InterFamily = UnifiedFontFamily
+  val JetBrainsMonoFamily = UnifiedFontFamily
 
   val MaterialTypography = Typography(
     displayLarge = TextStyle(
-      fontFamily = ManropeFamily,
+      fontFamily = UnifiedFontFamily,
       fontWeight = FontWeight.Bold,
       fontSize = 32.sp,
       lineHeight = 38.sp,
