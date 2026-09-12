@@ -2,8 +2,8 @@ package com.example.ui.components
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,26 +30,15 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import com.example.ui.dna.DnaButton
-import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -71,7 +60,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -80,19 +68,14 @@ import androidx.compose.ui.unit.sp
 import com.example.data.api.GeminiClient
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.StoryEntity
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldDark
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.CrimsonDanger
-import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark700
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentFaint
-import com.example.ui.theme.TextParchmentMuted
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaDropdown
+import com.example.ui.dna.DnaDropdownOption
+import com.example.ui.dna.DnaFloatNumberStepper
+import com.example.ui.dna.DnaNumberStepper
+import com.example.ui.dna.DnaTypography
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,28 +108,30 @@ fun SettingsSheet(
   val scope = rememberCoroutineScope()
 
   var title by remember(story) { mutableStateOf(story.title) }
-  var storySystemPrompt by remember(story) { mutableStateOf(story.systemPrompt) }
+  var storySystemPrompt by remember(story) { mutableStateOf(story.systemPrompt ?: "") }
   var globalPrompt by remember(globalDefaultPrompt) { mutableStateOf(globalDefaultPrompt) }
-  var promptTabSelected by remember { mutableIntStateOf(if (story.systemPrompt.isNotBlank()) 0 else 1) }
+  var promptTabSelected by remember { mutableIntStateOf(0) }
 
-  var selectedModel by remember(story) { mutableStateOf(story.selectedModel) }
-  var selectedEmbeddingModel by remember(story) { mutableStateOf(story.selectedEmbeddingModel) }
-  val currentModelInfo = availableModels.firstOrNull { it.id == selectedModel }
-    ?: GeminiModelInfo(
+  var selectedModel by remember(story) { mutableStateOf<String>(story.selectedModel) }
+  var selectedEmbeddingModel by remember(story) { mutableStateOf<String>(story.selectedEmbeddingModel) }
+  val currentModelInfo = remember(selectedModel, availableModels) {
+    availableModels.find { it.id == selectedModel } ?: GeminiModelInfo(
       id = selectedModel,
       displayName = selectedModel,
       description = "",
-      supportsTemperature = story.supportsTemperature,
-      defaultTemperature = story.temperature,
-      isThinkingModel = true,
-      usesThinkingLevel = selectedModel.contains("3.") || selectedModel.contains("gemini-3")
+      supportsTemperature = true,
+      usesThinkingLevel = true
     )
+  }
 
-  var thinkingLevel by remember(story) { mutableStateOf(story.thinkingLevel) }
-  var thinkingBudget by remember(story) { mutableIntStateOf(story.thinkingBudget) }
-  var temperature by remember(story) { mutableFloatStateOf(story.temperature) }
   var supportsTemperature by remember(story, currentModelInfo) {
     mutableStateOf(currentModelInfo.supportsTemperature)
+  }
+  var temperature by remember(story) { mutableFloatStateOf(story.temperature) }
+  var thinkingLevel by remember(story) { mutableStateOf(story.thinkingLevel) }
+  var thinkingBudget by remember(story) {
+    val initial = if (story.thinkingBudget > 0) story.thinkingBudget else 2048
+    mutableIntStateOf(initial)
   }
   var adultContent by remember(story) { mutableStateOf(story.adultContentEnabled) }
 
@@ -155,15 +140,12 @@ fun SettingsSheet(
   var isTestingKey by remember { mutableStateOf(false) }
   var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
 
-  var modelDropdownExpanded by remember { mutableStateOf(false) }
-  var thinkingDropdownExpanded by remember { mutableStateOf(false) }
-
   val scrollState = rememberScrollState()
 
   Column(
     modifier = modifier
       .fillMaxWidth()
-      .background(SlateDark900)
+      .background(DnaColors.Surface)
       .padding(horizontal = 20.dp)
       .verticalScroll(scrollState)
       .testTag("settings_sheet")
@@ -176,7 +158,7 @@ fun SettingsSheet(
         .align(Alignment.CenterHorizontally)
         .width(40.dp)
         .height(4.dp)
-        .background(SlateDark600, RoundedCornerShape(2.dp))
+        .background(DnaColors.Border, RoundedCornerShape(2.dp))
     )
 
     Spacer(modifier = Modifier.height(16.dp))
@@ -191,16 +173,16 @@ fun SettingsSheet(
         Icon(
           imageVector = Icons.Default.Tune,
           contentDescription = null,
-          tint = AmberGoldPrimary,
+          tint = DnaColors.Primary,
           modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
           text = "Spieleinstellungen & KI-Regeln",
           style = MaterialTheme.typography.titleMedium,
-          fontFamily = FontFamily.Serif,
+          fontFamily = DnaTypography.ManropeFamily,
           fontWeight = FontWeight.Bold,
-          color = TextParchment
+          color = DnaColors.OnSurface
         )
       }
 
@@ -211,7 +193,7 @@ fun SettingsSheet(
         Icon(
           imageVector = Icons.Default.Close,
           contentDescription = "Schließen",
-          tint = TextParchmentMuted
+          tint = DnaColors.OnSurfaceVariant
         )
       }
     }
@@ -219,7 +201,8 @@ fun SettingsSheet(
     Text(
       text = "Passe das Google Gemini Modell, die Denkstufen und die Regieanweisungen für dieses Abenteuer an.",
       style = MaterialTheme.typography.bodySmall,
-      color = TextParchmentMuted
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.OnSurfaceVariant
     )
 
     Spacer(modifier = Modifier.height(20.dp))
@@ -228,7 +211,8 @@ fun SettingsSheet(
     Text(
       text = "TITEL DER GESCHICHTE",
       style = MaterialTheme.typography.labelSmall,
-      color = AmberGoldPrimary,
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.Primary,
       fontWeight = FontWeight.Bold
     )
     Spacer(modifier = Modifier.height(6.dp))
@@ -239,12 +223,12 @@ fun SettingsSheet(
         .fillMaxWidth()
         .testTag("story_title_input"),
       colors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = SlateDark800,
-        unfocusedContainerColor = SlateDark800,
-        focusedBorderColor = AmberGoldPrimary,
-        unfocusedBorderColor = SlateDark600,
-        focusedTextColor = TextParchment,
-        unfocusedTextColor = TextParchment
+        focusedContainerColor = DnaColors.SurfaceContainer,
+        unfocusedContainerColor = DnaColors.SurfaceContainer,
+        focusedBorderColor = DnaColors.Primary,
+        unfocusedBorderColor = DnaColors.Border,
+        focusedTextColor = DnaColors.OnSurface,
+        unfocusedTextColor = DnaColors.OnSurface
       ),
       shape = RoundedCornerShape(10.dp)
     )
@@ -253,9 +237,9 @@ fun SettingsSheet(
 
     // 1. Google Gemini API-Schlüssel
     Card(
-      colors = CardDefaults.cardColors(containerColor = SlateDark800),
+      colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
       shape = RoundedCornerShape(12.dp),
-      border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600)
+      border = BorderStroke(1.dp, DnaColors.Border)
     ) {
       Column(modifier = Modifier.padding(16.dp)) {
         Row(
@@ -267,15 +251,16 @@ fun SettingsSheet(
             Icon(
               imageVector = Icons.Default.Key,
               contentDescription = null,
-              tint = AmberGoldPrimary,
+              tint = DnaColors.Primary,
               modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
               text = "Google Gemini API-Key",
               style = MaterialTheme.typography.labelLarge,
+              fontFamily = DnaTypography.ManropeFamily,
               fontWeight = FontWeight.Bold,
-              color = TextParchment
+              color = DnaColors.OnSurface
             )
           }
 
@@ -285,16 +270,17 @@ fun SettingsSheet(
               context.startActivity(intent)
             }
           ) {
-            Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(14.dp), tint = AmberGoldLight)
+            Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(14.dp), tint = DnaColors.Secondary)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Key holen", style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+            Text("Key holen", style = MaterialTheme.typography.labelSmall, fontFamily = DnaTypography.InterFamily, color = DnaColors.Secondary)
           }
         }
 
         Text(
-          text = "Direkter Zugriff auf die offiziellen Google Gemini Modelle (inkl. 3.8 Flash, 3.1 Pro). Dein Key verbleibt sicher lokal auf diesem Gerät.",
+          text = "Direkter Zugriff auf die offiziellen Google Gemini Modelle. Dein Key verbleibt sicher lokal auf diesem Gerät.",
           style = MaterialTheme.typography.bodySmall,
-          color = TextParchmentMuted
+          fontFamily = DnaTypography.InterFamily,
+          color = DnaColors.OnSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -302,14 +288,14 @@ fun SettingsSheet(
         OutlinedTextField(
           value = apiKeyInput,
           onValueChange = { apiKeyInput = it },
-          placeholder = { Text("AIzaSy...", color = TextParchmentFaint) },
+          placeholder = { Text("AIzaSy...", color = DnaColors.MutedForeground) },
           visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
           trailingIcon = {
             IconButton(onClick = { showApiKey = !showApiKey }) {
               Icon(
                 imageVector = if (showApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                 contentDescription = null,
-                tint = TextParchmentMuted
+                tint = DnaColors.OnSurfaceVariant
               )
             }
           },
@@ -318,17 +304,17 @@ fun SettingsSheet(
             .fillMaxWidth()
             .testTag("api_key_input"),
           colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = SlateDark900,
-            unfocusedContainerColor = SlateDark900,
-            focusedBorderColor = AmberGoldPrimary,
-            unfocusedBorderColor = SlateDark700,
-            focusedTextColor = TextParchment,
-            unfocusedTextColor = TextParchment
+            focusedContainerColor = DnaColors.SurfaceContainerLow,
+            unfocusedContainerColor = DnaColors.SurfaceContainerLow,
+            focusedBorderColor = DnaColors.Primary,
+            unfocusedBorderColor = DnaColors.Border,
+            focusedTextColor = DnaColors.OnSurface,
+            unfocusedTextColor = DnaColors.OnSurface
           ),
           shape = RoundedCornerShape(10.dp)
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -369,15 +355,16 @@ fun SettingsSheet(
           val (success, msg) = result
           Spacer(modifier = Modifier.height(8.dp))
           Surface(
-            color = if (success) EmeraldSuccess.copy(alpha = 0.15f) else CrimsonDanger.copy(alpha = 0.15f),
+            color = if (success) DnaColors.StatusSuccess.copy(alpha = 0.15f) else DnaColors.StatusDestructive.copy(alpha = 0.15f),
             shape = RoundedCornerShape(8.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (success) EmeraldSuccess else CrimsonDanger),
+            border = BorderStroke(1.dp, if (success) DnaColors.StatusSuccess else DnaColors.StatusDestructive),
             modifier = Modifier.fillMaxWidth()
           ) {
             Text(
               text = msg,
               style = MaterialTheme.typography.bodySmall,
-              color = if (success) EmeraldSuccess else CrimsonDanger,
+              fontFamily = DnaTypography.InterFamily,
+              color = if (success) DnaColors.StatusSuccess else DnaColors.StatusDestructive,
               modifier = Modifier.padding(10.dp)
             )
           }
@@ -387,7 +374,7 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(20.dp))
 
-    // 2. Aktuelle Gemini-Modelle (Dynamisch von Google abrufen)
+    // 2. Aktuelle Gemini-Modelle
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -396,7 +383,8 @@ fun SettingsSheet(
       Text(
         text = "AKTUELLES GOOGLE GEMINI MODELL",
         style = MaterialTheme.typography.labelSmall,
-        color = AmberGoldPrimary,
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.Primary,
         fontWeight = FontWeight.Bold
       )
 
@@ -406,24 +394,25 @@ fun SettingsSheet(
         modifier = Modifier.testTag("refresh_models_button")
       ) {
         if (isFetchingModels) {
-          CircularProgressIndicator(color = AmberGoldPrimary, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+          CircularProgressIndicator(color = DnaColors.Primary, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
         } else {
-          Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = AmberGoldLight, modifier = Modifier.size(16.dp))
+          Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = DnaColors.Secondary, modifier = Modifier.size(16.dp))
         }
         Spacer(modifier = Modifier.width(4.dp))
-        Text("Von Google abrufen", style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+        Text("Von Google abrufen", style = MaterialTheme.typography.labelSmall, fontFamily = DnaTypography.InterFamily, color = DnaColors.Secondary)
       }
     }
     Text(
       text = "Aktuelle Modelle werden live aus der Google Gemini API geladen. Neue Modelle wie Gemini 3.8 Flash stehen sofort bereit.",
       style = MaterialTheme.typography.bodySmall,
-      color = TextParchmentFaint
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.MutedForeground
     )
     Spacer(modifier = Modifier.height(6.dp))
 
     val modelOptions = remember(availableModels) {
       availableModels.map { modelInfo ->
-        com.example.ui.dna.DnaDropdownOption(
+        DnaDropdownOption(
           value = modelInfo.id,
           label = modelInfo.displayName,
           hint = "${modelInfo.id} • ${if (modelInfo.usesThinkingLevel) "Denkstufen" else "Token-Budget"}"
@@ -431,7 +420,7 @@ fun SettingsSheet(
       }
     }
 
-    com.example.ui.dna.DnaDropdown(
+    DnaDropdown(
       options = modelOptions,
       selectedValue = selectedModel,
       onOptionSelected = { modelId ->
@@ -451,21 +440,23 @@ fun SettingsSheet(
     Text(
       text = "EMBEDDING MODELL (VEKTOREN)",
       style = MaterialTheme.typography.labelSmall,
-      color = AmberGoldPrimary,
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.Primary,
       fontWeight = FontWeight.Bold
     )
     Text(
       text = "Das Modell für das semantische Langzeitgedächtnis. Achtung: Ein Wechsel bricht die Kompatibilität zu bestehenden Erinnerungen in dieser Story.",
       style = MaterialTheme.typography.bodySmall,
-      color = TextParchmentFaint
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.MutedForeground
     )
     Spacer(modifier = Modifier.height(6.dp))
-    
+
     val embeddingModelOptions = listOf(
-      com.example.ui.dna.DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
-      com.example.ui.dna.DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
+      DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
+      DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
     )
-    com.example.ui.dna.DnaDropdown(
+    DnaDropdown(
       options = embeddingModelOptions,
       selectedValue = selectedEmbeddingModel,
       onOptionSelected = { selectedEmbeddingModel = it },
@@ -476,30 +467,31 @@ fun SettingsSheet(
 
     // 3. Denkstufe (Thinking Level) oder Token-Budget je nach Modelltyp
     if (currentModelInfo.usesThinkingLevel) {
-      // Gemini 3.x+ Modelle: Denkstufen (Minimal, Niedrig, Mittel, Hoch)
       Text(
         text = "DENKSTUFE (REASONING EFFORT)",
         style = MaterialTheme.typography.labelSmall,
-        color = AmberGoldPrimary,
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.Primary,
         fontWeight = FontWeight.Bold
       )
       Text(
         text = "Moderne Modelle (wie Gemini 3.8 Flash) nutzen abgestufte Denkstufen statt starrer Token-Budgets für NPC-Logik & Konsistenzprüfung.",
         style = MaterialTheme.typography.bodySmall,
-        color = TextParchmentFaint
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.MutedForeground
       )
       Spacer(modifier = Modifier.height(8.dp))
 
       val thinkingOptions = remember {
         listOf(
-          com.example.ui.dna.DnaDropdownOption("MINIMAL", "Minimal", "Blitzschnell, minimale Denkzeit"),
-          com.example.ui.dna.DnaDropdownOption("LOW", "Niedrig", "Schnelle Reflexion, geringe Latenz"),
-          com.example.ui.dna.DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie"),
-          com.example.ui.dna.DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & maximale Konsistenz")
+          DnaDropdownOption("MINIMAL", "Minimal", "Blitzschnell, minimale Denkzeit"),
+          DnaDropdownOption("LOW", "Niedrig", "Schnelle Reflexion, geringe Latenz"),
+          DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie"),
+          DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & maximale Konsistenz")
         )
       }
 
-      com.example.ui.dna.DnaDropdown(
+      DnaDropdown(
         options = thinkingOptions,
         selectedValue = thinkingLevel,
         onOptionSelected = { thinkingLevel = it },
@@ -507,87 +499,44 @@ fun SettingsSheet(
         modifier = Modifier.fillMaxWidth().testTag("thinking_level_selector")
       )
     } else {
-      // Legacy Token-Budget für ältere Modelle (z. B. Gemini 2.5 Flash)
-      Text(
-        text = "DENKINTENSITÄT (THINKING BUDGET IN TOKEN)",
-        style = MaterialTheme.typography.labelSmall,
-        color = AmberGoldPrimary,
-        fontWeight = FontWeight.Bold
-      )
-      Text(
-        text = "Tokenbasiertes Denkzeit-Budget für ältere Modellserien.",
-        style = MaterialTheme.typography.bodySmall,
-        color = TextParchmentFaint
-      )
-      Spacer(modifier = Modifier.height(6.dp))
-
-      val thinkingPresets = remember {
-        GeminiClient.THINKING_BUDGET_PRESETS.map { (budget, label) ->
-          com.example.ui.dna.DnaDropdownOption(
-            value = budget.toString(),
-            label = label,
-            hint = "$budget Token"
-          )
-        }
-      }
-
-      com.example.ui.dna.DnaDropdown(
-        options = thinkingPresets,
-        selectedValue = thinkingBudget.toString(),
-        onOptionSelected = { budgetStr ->
-          thinkingBudget = budgetStr.toIntOrNull() ?: 2048
-        },
-        icon = Icons.Default.Psychology,
-        modifier = Modifier.fillMaxWidth().testTag("thinking_budget_selector")
+      DnaNumberStepper(
+        value = thinkingBudget,
+        onValueChange = { thinkingBudget = it },
+        min = 512,
+        max = 8192,
+        step = 512,
+        label = "DENKINTENSITÄT (THINKING BUDGET IN TOKEN)",
+        unit = "Tokens",
+        modifier = Modifier.fillMaxWidth().testTag("thinking_budget_stepper")
       )
     }
 
     Spacer(modifier = Modifier.height(20.dp))
 
-    // 4. Kreativität (Temperature) oder Hinweis bei nicht-unterstützten Modellen
+    // 4. Kreativität (Temperature) mit DnaFloatNumberStepper
     if (supportsTemperature) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text(
-          text = "KREATIVITÄT (TEMPERATURE)",
-          style = MaterialTheme.typography.labelSmall,
-          color = AmberGoldPrimary,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          text = String.format("%.2f", temperature),
-          style = MaterialTheme.typography.labelMedium,
-          color = TextParchment,
-          fontWeight = FontWeight.Bold
-        )
-      }
-      Slider(
+      DnaFloatNumberStepper(
         value = temperature,
         onValueChange = { temperature = it },
-        valueRange = 0.2f..1.5f,
-        steps = 26,
-        colors = SliderDefaults.colors(
-          thumbColor = AmberGoldPrimary,
-          activeTrackColor = AmberGoldPrimary,
-          inactiveTrackColor = SlateDark700
-        ),
-        modifier = Modifier.testTag("temperature_slider")
+        min = 0.2f,
+        max = 1.5f,
+        step = 0.1f,
+        label = "KREATIVITÄT (TEMPERATURE)",
+        modifier = Modifier.fillMaxWidth().testTag("temperature_stepper")
       )
+      Spacer(modifier = Modifier.height(4.dp))
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
       ) {
-        Text("Präziser (0.2)", style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
-        Text("Kreativ & Variantenreich (1.5)", style = MaterialTheme.typography.labelSmall, color = TextParchmentFaint)
+        Text("0.2: Präzise & linientreu", style = MaterialTheme.typography.labelSmall, fontFamily = DnaTypography.InterFamily, color = DnaColors.MutedForeground)
+        Text("1.5: Kreativ & überraschend", style = MaterialTheme.typography.labelSmall, fontFamily = DnaTypography.InterFamily, color = DnaColors.MutedForeground)
       }
     } else {
       Card(
-        colors = CardDefaults.cardColors(containerColor = SlateDark800),
+        colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
         shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark700)
+        border = BorderStroke(1.dp, DnaColors.Border)
       ) {
         Row(
           modifier = Modifier
@@ -598,7 +547,7 @@ fun SettingsSheet(
           Icon(
             imageVector = Icons.Default.Info,
             contentDescription = null,
-            tint = AmberGoldLight,
+            tint = DnaColors.Primary,
             modifier = Modifier.size(20.dp)
           )
           Spacer(modifier = Modifier.width(10.dp))
@@ -606,13 +555,15 @@ fun SettingsSheet(
             Text(
               text = "Temperatur: Fest vorgegeben",
               style = MaterialTheme.typography.labelMedium,
+              fontFamily = DnaTypography.InterFamily,
               fontWeight = FontWeight.Bold,
-              color = TextParchment
+              color = DnaColors.OnSurface
             )
             Text(
               text = "Das Modell $selectedModel arbeitet mit fest verankerten Sampling-Parametern. Manuelle Temperatur-Steuerung wird nicht unterstützt.",
               style = MaterialTheme.typography.bodySmall,
-              color = TextParchmentMuted
+              fontFamily = DnaTypography.InterFamily,
+              color = DnaColors.OnSurfaceVariant
             )
           }
         }
@@ -621,11 +572,11 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(20.dp))
 
-    // 5. Mature / Adult Content (Full BLOCK_NONE across all 5 categories)
+    // 5. Mature / Adult Content
     Card(
-      colors = CardDefaults.cardColors(containerColor = SlateDark800),
+      colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
       shape = RoundedCornerShape(12.dp),
-      border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600)
+      border = BorderStroke(1.dp, DnaColors.Border)
     ) {
       Row(
         modifier = Modifier
@@ -639,15 +590,16 @@ fun SettingsSheet(
             Icon(
               imageVector = Icons.Default.Security,
               contentDescription = null,
-              tint = if (adultContent) AmberGoldPrimary else TextParchmentMuted,
+              tint = if (adultContent) DnaColors.Primary else DnaColors.OnSurfaceVariant,
               modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
               text = "Mature / Adult Content Filter",
               style = MaterialTheme.typography.labelLarge,
+              fontFamily = DnaTypography.ManropeFamily,
               fontWeight = FontWeight.Bold,
-              color = TextParchment
+              color = DnaColors.OnSurface
             )
           }
           Spacer(modifier = Modifier.height(4.dp))
@@ -658,7 +610,8 @@ fun SettingsSheet(
               "Standard-Sicherheitsfilter von Google aktiv."
             },
             style = MaterialTheme.typography.bodySmall,
-            color = if (adultContent) AmberGoldLight else TextParchmentMuted
+            fontFamily = DnaTypography.InterFamily,
+            color = if (adultContent) DnaColors.OnPrimaryContainer else DnaColors.OnSurfaceVariant
           )
         }
 
@@ -666,10 +619,10 @@ fun SettingsSheet(
           checked = adultContent,
           onCheckedChange = { adultContent = it },
           colors = SwitchDefaults.colors(
-            checkedThumbColor = AmberGoldPrimary,
-            checkedTrackColor = AmberGoldDark,
-            uncheckedThumbColor = TextParchmentMuted,
-            uncheckedTrackColor = SlateDark700
+            checkedThumbColor = DnaColors.Primary,
+            checkedTrackColor = DnaColors.PrimaryContainer,
+            uncheckedThumbColor = DnaColors.TextDisabled,
+            uncheckedTrackColor = DnaColors.SurfaceContainerLow
           ),
           modifier = Modifier.testTag("adult_content_switch")
         )
@@ -682,24 +635,26 @@ fun SettingsSheet(
     Text(
       text = "REGIEANWEISUNG / SYSTEM-PROMPT",
       style = MaterialTheme.typography.labelSmall,
-      color = AmberGoldPrimary,
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.Primary,
       fontWeight = FontWeight.Bold
     )
     Text(
       text = "Definiere das Fundament der Spielwelt, Sprachregeln, Verbot von Kosenamen und das autonome Handeln der Charaktere.",
       style = MaterialTheme.typography.bodySmall,
-      color = TextParchmentMuted
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.OnSurfaceVariant
     )
     Spacer(modifier = Modifier.height(8.dp))
 
     TabRow(
       selectedTabIndex = promptTabSelected,
-      containerColor = SlateDark800,
-      contentColor = AmberGoldPrimary,
+      containerColor = DnaColors.SurfaceContainerLow,
+      contentColor = DnaColors.Primary,
       indicator = { tabPositions ->
         TabRowDefaults.SecondaryIndicator(
           modifier = Modifier.tabIndicatorOffset(tabPositions[promptTabSelected]),
-          color = AmberGoldPrimary
+          color = DnaColors.Primary
         )
       }
     ) {
@@ -710,7 +665,8 @@ fun SettingsSheet(
           Text(
             text = "Diese Geschichte",
             style = MaterialTheme.typography.labelMedium,
-            color = if (promptTabSelected == 0) AmberGoldPrimary else TextParchmentMuted
+            fontFamily = DnaTypography.InterFamily,
+            color = if (promptTabSelected == 0) DnaColors.Primary else DnaColors.OnSurfaceVariant
           )
         },
         modifier = Modifier.testTag("tab_story_prompt")
@@ -722,7 +678,8 @@ fun SettingsSheet(
           Text(
             text = "Globaler Standard",
             style = MaterialTheme.typography.labelMedium,
-            color = if (promptTabSelected == 1) AmberGoldPrimary else TextParchmentMuted
+            fontFamily = DnaTypography.InterFamily,
+            color = if (promptTabSelected == 1) DnaColors.Primary else DnaColors.OnSurfaceVariant
           )
         },
         modifier = Modifier.testTag("tab_global_prompt")
@@ -735,33 +692,35 @@ fun SettingsSheet(
       Text(
         text = "Individueller Prompt für diese Geschichte (überschreibt den globalen Standard):",
         style = MaterialTheme.typography.bodySmall,
-        color = TextParchmentFaint
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.MutedForeground
       )
       Spacer(modifier = Modifier.height(6.dp))
       OutlinedTextField(
         value = storySystemPrompt,
         onValueChange = { storySystemPrompt = it },
-        placeholder = { Text("Leer lassen, um den globalen Standard-Prompt zu verwenden...", color = TextParchmentFaint) },
+        placeholder = { Text("Leer lassen, um den globalen Standard-Prompt zu verwenden...", color = DnaColors.MutedForeground) },
         modifier = Modifier
           .fillMaxWidth()
           .height(200.dp)
           .testTag("story_prompt_input"),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = SlateDark800,
-          unfocusedContainerColor = SlateDark800,
-          focusedBorderColor = AmberGoldPrimary,
-          unfocusedBorderColor = SlateDark600,
-          focusedTextColor = TextParchment,
-          unfocusedTextColor = TextParchment
+          focusedContainerColor = DnaColors.SurfaceContainer,
+          unfocusedContainerColor = DnaColors.SurfaceContainer,
+          focusedBorderColor = DnaColors.Primary,
+          unfocusedBorderColor = DnaColors.Border,
+          focusedTextColor = DnaColors.OnSurface,
+          unfocusedTextColor = DnaColors.OnSurface
         ),
         shape = RoundedCornerShape(10.dp),
-        textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
+        textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontFamily = DnaTypography.InterFamily)
       )
     } else {
       Text(
         text = "Globaler Standard-Prompt (gilt für alle neuen Geschichten):",
         style = MaterialTheme.typography.bodySmall,
-        color = TextParchmentFaint
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.MutedForeground
       )
       Spacer(modifier = Modifier.height(6.dp))
       OutlinedTextField(
@@ -772,15 +731,15 @@ fun SettingsSheet(
           .height(200.dp)
           .testTag("global_prompt_input"),
         colors = OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = SlateDark800,
-          unfocusedContainerColor = SlateDark800,
-          focusedBorderColor = AmberGoldPrimary,
-          unfocusedBorderColor = SlateDark600,
-          focusedTextColor = TextParchment,
-          unfocusedTextColor = TextParchment
+          focusedContainerColor = DnaColors.SurfaceContainer,
+          unfocusedContainerColor = DnaColors.SurfaceContainer,
+          focusedBorderColor = DnaColors.Primary,
+          unfocusedBorderColor = DnaColors.Border,
+          focusedTextColor = DnaColors.OnSurface,
+          unfocusedTextColor = DnaColors.OnSurface
         ),
         shape = RoundedCornerShape(10.dp),
-        textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
+        textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontFamily = DnaTypography.InterFamily)
       )
     }
 

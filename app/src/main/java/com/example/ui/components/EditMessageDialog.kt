@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,12 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MessageEntity
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.CrimsonDanger
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.TextParchment
 
 @Composable
 fun EditMessageDialog(
@@ -41,13 +37,13 @@ fun EditMessageDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Nachricht bearbeiten & Zukunft neu berechnen", color = TextParchment) },
+    title = { Text("Nachricht bearbeiten & Zukunft neu berechnen", color = DnaColors.OnSurface) },
     text = {
       Column {
         Text(
           text = "Alle nachfolgenden Nachrichten und Antworten werden aus der Datenbank gelöscht. Die Geschichte wird ab diesem Punkt mit deinen neuen Worten fortgesetzt.",
           style = MaterialTheme.typography.bodySmall,
-          color = CrimsonDanger
+          color = DnaColors.StatusDestructive
         )
         Spacer(modifier = Modifier.height(10.dp))
         OutlinedTextField(
@@ -57,12 +53,12 @@ fun EditMessageDialog(
             .fillMaxWidth()
             .height(120.dp),
           colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = SlateDark900,
-            unfocusedContainerColor = SlateDark900,
-            focusedTextColor = TextParchment,
-            unfocusedTextColor = TextParchment,
-            focusedBorderColor = AmberGoldPrimary,
-            unfocusedBorderColor = SlateDark600
+            focusedContainerColor = DnaColors.Surface,
+            unfocusedContainerColor = DnaColors.Surface,
+            focusedTextColor = DnaColors.OnSurface,
+            unfocusedTextColor = DnaColors.OnSurface,
+            focusedBorderColor = DnaColors.Primary,
+            unfocusedBorderColor = DnaColors.Border
           ),
           shape = RoundedCornerShape(8.dp)
         )
@@ -89,6 +85,6 @@ fun EditMessageDialog(
         testTag = "cancel_edit_message_button"
       )
     },
-    containerColor = SlateDark800
+    containerColor = DnaColors.SurfaceContainer
   )
 }

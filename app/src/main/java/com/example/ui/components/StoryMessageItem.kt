@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -43,16 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.MessageEntity
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.OnAmberGoldContainer
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark700
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentFaint
-import com.example.ui.theme.TextParchmentMuted
+
 
 /**
  * Richly formats story text:
@@ -82,7 +75,7 @@ fun formatStoryText(content: String): AnnotatedString {
             val dialogue = content.substring(index, nextIndex + 1)
             pushStyle(
               SpanStyle(
-                color = AmberGoldLight,
+                color = DnaColors.StoryAmberCampfire,
                 fontWeight = FontWeight.SemiBold
               )
             )
@@ -93,7 +86,7 @@ fun formatStoryText(content: String): AnnotatedString {
             // Unclosed quote: style to end of line or next quote
             val endOfLine = content.indexOf('\n', index)
             val endIdx = if (endOfLine != -1) endOfLine else length
-            pushStyle(SpanStyle(color = AmberGoldLight, fontWeight = FontWeight.SemiBold))
+            pushStyle(SpanStyle(color = DnaColors.StoryAmberCampfire, fontWeight = FontWeight.SemiBold))
             append(content.substring(index, endIdx))
             pop()
             index = endIdx
@@ -108,7 +101,7 @@ fun formatStoryText(content: String): AnnotatedString {
             val note = content.substring(index, nextIndex + 1)
             pushStyle(
               SpanStyle(
-                color = TextParchmentFaint,
+                color = DnaColors.MutedForeground,
                 fontStyle = FontStyle.Italic
               )
             )
@@ -153,8 +146,8 @@ fun StoryMessageItem(
         modifier = Modifier
           .fillMaxWidth(0.90f)
           .clip(RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
-          .background(AmberGoldContainer)
-          .border(1.dp, AmberGoldPrimary.copy(alpha = 0.35f), RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
+          .background(DnaColors.PrimaryContainer)
+          .border(1.dp, DnaColors.Primary.copy(alpha = 0.35f), RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
           .padding(14.dp)
       ) {
         Column {
@@ -168,13 +161,13 @@ fun StoryMessageItem(
                 modifier = Modifier
                   .size(24.dp)
                   .clip(CircleShape)
-                  .background(AmberGoldPrimary.copy(alpha = 0.2f)),
+                  .background(DnaColors.Primary.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
               ) {
                 Icon(
                   imageVector = Icons.Default.Person,
                   contentDescription = "Charakter",
-                  tint = AmberGoldPrimary,
+                  tint = DnaColors.Primary,
                   modifier = Modifier.size(15.dp)
                 )
               }
@@ -182,7 +175,7 @@ fun StoryMessageItem(
               Text(
                 text = "Deine Handlung",
                 style = MaterialTheme.typography.labelSmall,
-                color = OnAmberGoldContainer,
+                color = DnaColors.OnPrimaryContainer,
                 fontWeight = FontWeight.Bold
               )
             }
@@ -192,7 +185,7 @@ fun StoryMessageItem(
                 Text(
                   text = message.inGameTimeTag,
                   style = MaterialTheme.typography.labelSmall,
-                  color = TextParchmentFaint,
+                  color = DnaColors.MutedForeground,
                   modifier = Modifier.padding(end = 4.dp)
                 )
               }
@@ -207,7 +200,7 @@ fun StoryMessageItem(
                 Icon(
                   imageVector = Icons.Default.Edit,
                   contentDescription = "Nachricht bearbeiten & Zukunft neu berechnen",
-                  tint = AmberGoldPrimary,
+                  tint = DnaColors.Primary,
                   modifier = Modifier.size(14.dp)
                 )
               }
@@ -222,7 +215,7 @@ fun StoryMessageItem(
               fontStyle = FontStyle.Italic,
               lineHeight = 22.sp
             ),
-            color = TextParchment
+            color = DnaColors.OnSurface
           )
         }
       }
@@ -234,8 +227,8 @@ fun StoryMessageItem(
         .fillMaxWidth()
         .padding(vertical = 8.dp),
       shape = RoundedCornerShape(12.dp),
-      color = SlateDark800.copy(alpha = 0.88f),
-      border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600.copy(alpha = 0.6f))
+      color = DnaColors.SurfaceContainer.copy(alpha = 0.88f),
+      border = androidx.compose.foundation.BorderStroke(1.dp, DnaColors.Border.copy(alpha = 0.6f))
     ) {
       Column(
         modifier = Modifier.padding(16.dp)
@@ -251,13 +244,13 @@ fun StoryMessageItem(
               modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(SlateDark700),
+                .background(DnaColors.SurfaceContainerHigh),
               contentAlignment = Alignment.Center
             ) {
               Icon(
                 imageVector = Icons.Default.AutoAwesome,
                 contentDescription = "Game Master",
-                tint = AmberGoldPrimary,
+                tint = DnaColors.Primary,
                 modifier = Modifier.size(16.dp)
               )
             }
@@ -265,7 +258,7 @@ fun StoryMessageItem(
             Text(
               text = "Game Master",
               style = MaterialTheme.typography.labelLarge,
-              color = AmberGoldPrimary,
+              color = DnaColors.Primary,
               fontWeight = FontWeight.Bold
             )
           }
@@ -273,14 +266,14 @@ fun StoryMessageItem(
           Row(verticalAlignment = Alignment.CenterVertically) {
             if (!message.inGameTimeTag.isNullOrBlank()) {
               Surface(
-                color = SlateDark700,
+                color = DnaColors.SurfaceContainerHigh,
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier.padding(end = 6.dp)
               ) {
                 Text(
                   text = message.inGameTimeTag,
                   style = MaterialTheme.typography.labelSmall,
-                  color = TextParchmentMuted,
+                  color = DnaColors.OnSurfaceVariant,
                   modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
               }
@@ -296,7 +289,7 @@ fun StoryMessageItem(
               Icon(
                 imageVector = Icons.Default.ContentCopy,
                 contentDescription = "Text kopieren",
-                tint = TextParchmentFaint,
+                tint = DnaColors.MutedForeground,
                 modifier = Modifier.size(16.dp)
               )
             }
@@ -311,7 +304,7 @@ fun StoryMessageItem(
               Icon(
                 imageVector = Icons.AutoMirrored.Filled.AltRoute,
                 contentDescription = "Zweig von hier erstellen",
-                tint = AmberGoldLight,
+                tint = DnaColors.StoryAmberCampfire,
                 modifier = Modifier.size(16.dp)
               )
             }
@@ -326,7 +319,7 @@ fun StoryMessageItem(
               Icon(
                 imageVector = Icons.Default.History,
                 contentDescription = "Hierhin zurücksetzen",
-                tint = AmberGoldPrimary.copy(alpha = 0.85f),
+                tint = DnaColors.Primary.copy(alpha = 0.85f),
                 modifier = Modifier.size(18.dp)
               )
             }
@@ -341,9 +334,9 @@ fun StoryMessageItem(
         Text(
           text = formattedText,
           style = MaterialTheme.typography.bodyLarge.copy(
-            fontFamily = FontFamily.Serif,
+            fontFamily = DnaTypography.InterFamily,
             lineHeight = 26.sp,
-            color = TextParchment
+            color = DnaColors.OnSurface
           )
         )
       }

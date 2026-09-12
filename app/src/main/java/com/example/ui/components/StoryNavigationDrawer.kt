@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,22 +22,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ForkRight
-import androidx.compose.material.icons.filled.HistoryEdu
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -43,18 +37,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import com.example.ui.dna.DnaActionConfirmDialog
-import com.example.ui.dna.DnaButton
-import com.example.ui.dna.DnaButtonVariant
-import com.example.ui.dna.DnaColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,29 +52,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.StoryEntity
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.CrimsonDanger
-import com.example.ui.theme.OnAmberGoldContainer
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark700
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.SlateDark950
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentFaint
-import com.example.ui.theme.TextParchmentMuted
+import com.example.ui.dna.DnaActionConfirmDialog
+import com.example.ui.dna.DnaButton
+import com.example.ui.dna.DnaButtonVariant
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
 
 /**
- * Left-side navigation drawer providing swipe-to-open and quick story switching,
- * story creation, active vs archived view, branching, and global settings triggers.
+ * Left-side navigation drawer styled after MauntingStudios Design-DNA:
+ * - Employs brand logo with ambient edge glow
+ * - Technical calm dark surfaces and precise Ice Cyan highlights
+ * - Full story lifecycle controls (New, Active, Archived, Branching, Deletion, Settings)
  */
 @Composable
 fun StoryNavigationDrawer(
@@ -113,14 +97,14 @@ fun StoryNavigationDrawer(
     modifier = modifier
       .width(320.dp)
       .fillMaxHeight(),
-    drawerContainerColor = SlateDark950
+    drawerContainerColor = DnaColors.Surface
   ) {
     Column(
       modifier = Modifier
         .fillMaxHeight()
         .padding(16.dp)
     ) {
-      // Header
+      // Header with Logo
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -129,31 +113,31 @@ fun StoryNavigationDrawer(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Surface(
             shape = CircleShape,
-            color = AmberGoldContainer,
-            modifier = Modifier.size(36.dp)
+            color = DnaColors.SurfaceContainerHigh,
+            border = BorderStroke(1.5.dp, DnaColors.Primary),
+            modifier = Modifier.size(42.dp)
           ) {
-            Box(contentAlignment = Alignment.Center) {
-              Icon(
-                imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                contentDescription = null,
-                tint = AmberGoldPrimary,
-                modifier = Modifier.size(20.dp)
-              )
-            }
+            Image(
+              painter = painterResource(id = R.drawable.app_logo),
+              contentDescription = "Maunting Story Fable Logo",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize()
+            )
           }
           Spacer(modifier = Modifier.width(10.dp))
           Column {
             Text(
-              text = "StoryForge",
-              style = MaterialTheme.typography.titleLarge,
+              text = "Maunting Story Fable",
+              style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.Bold,
-              fontFamily = FontFamily.Serif,
-              color = TextParchment
+              fontFamily = DnaTypography.ManropeFamily,
+              color = DnaColors.OnSurface
             )
             Text(
               text = "Deine Geschichten & Chroniken",
               style = MaterialTheme.typography.labelSmall,
-              color = TextParchmentFaint
+              fontFamily = DnaTypography.InterFamily,
+              color = DnaColors.OnSurfaceVariant
             )
           }
         }
@@ -162,7 +146,7 @@ fun StoryNavigationDrawer(
           Icon(
             imageVector = Icons.Default.Close,
             contentDescription = "Menü schließen",
-            tint = TextParchmentMuted
+            tint = DnaColors.OnSurfaceVariant
           )
         }
       }
@@ -187,12 +171,12 @@ fun StoryNavigationDrawer(
       // Tabs: Aktive vs Archiviert
       TabRow(
         selectedTabIndex = selectedTab,
-        containerColor = SlateDark900,
-        contentColor = AmberGoldPrimary,
+        containerColor = DnaColors.SurfaceContainerLow,
+        contentColor = DnaColors.Primary,
         indicator = { tabPositions ->
           TabRowDefaults.SecondaryIndicator(
             modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-            color = AmberGoldPrimary
+            color = DnaColors.Primary
           )
         }
       ) {
@@ -202,8 +186,9 @@ fun StoryNavigationDrawer(
           text = {
             Text(
               text = "Aktiv (${activeStories.size})",
+              fontFamily = DnaTypography.InterFamily,
               fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-              color = if (selectedTab == 0) AmberGoldPrimary else TextParchmentMuted
+              color = if (selectedTab == 0) DnaColors.Primary else DnaColors.OnSurfaceVariant
             )
           }
         )
@@ -213,8 +198,9 @@ fun StoryNavigationDrawer(
           text = {
             Text(
               text = "Archiv (${archivedStories.size})",
+              fontFamily = DnaTypography.InterFamily,
               fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-              color = if (selectedTab == 1) AmberGoldPrimary else TextParchmentMuted
+              color = if (selectedTab == 1) DnaColors.Primary else DnaColors.OnSurfaceVariant
             )
           }
         )
@@ -233,7 +219,8 @@ fun StoryNavigationDrawer(
           Text(
             text = if (selectedTab == 0) "Keine aktiven Geschichten vorhanden." else "Keine archivierten Geschichten.",
             style = MaterialTheme.typography.bodySmall,
-            color = TextParchmentMuted
+            fontFamily = DnaTypography.InterFamily,
+            color = DnaColors.OnSurfaceVariant
           )
         }
       } else {
@@ -268,7 +255,7 @@ fun StoryNavigationDrawer(
       }
 
       Spacer(modifier = Modifier.height(10.dp))
-      HorizontalDivider(color = SlateDark700)
+      HorizontalDivider(color = DnaColors.BorderFaint)
       Spacer(modifier = Modifier.height(10.dp))
 
       // Bottom Bar: Settings & API Configuration
@@ -281,8 +268,8 @@ fun StoryNavigationDrawer(
             onOpenSettings()
           }
           .testTag("drawer_settings_button"),
-        color = SlateDark900,
-        border = BorderStroke(1.dp, SlateDark700)
+        color = DnaColors.SurfaceContainerHigh,
+        border = BorderStroke(1.dp, DnaColors.Border)
       ) {
         Row(
           modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -293,7 +280,7 @@ fun StoryNavigationDrawer(
             Icon(
               imageVector = Icons.Default.Tune,
               contentDescription = null,
-              tint = AmberGoldPrimary,
+              tint = DnaColors.Primary,
               modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -301,13 +288,15 @@ fun StoryNavigationDrawer(
               Text(
                 text = "Einstellungen & API-Key",
                 style = MaterialTheme.typography.bodyMedium,
+                fontFamily = DnaTypography.InterFamily,
                 fontWeight = FontWeight.SemiBold,
-                color = TextParchment
+                color = DnaColors.OnSurface
               )
               Text(
                 text = "Modelle, Denkkraft & Prompts",
                 style = MaterialTheme.typography.labelSmall,
-                color = TextParchmentFaint
+                fontFamily = DnaTypography.InterFamily,
+                color = DnaColors.OnSurfaceVariant
               )
             }
           }
@@ -367,12 +356,12 @@ private fun DrawerStoryCard(
       .clickable { onClick() }
       .testTag("drawer_story_card_${story.id}"),
     colors = CardDefaults.cardColors(
-      containerColor = if (isSelected) SlateDark800 else SlateDark900
+      containerColor = if (isSelected) DnaColors.SurfaceContainerHighest else DnaColors.SurfaceContainer
     ),
     shape = RoundedCornerShape(10.dp),
     border = BorderStroke(
       width = if (isSelected) 1.5.dp else 1.dp,
-      color = if (isSelected) AmberGoldPrimary else SlateDark700
+      color = if (isSelected) DnaColors.Primary else DnaColors.Border
     )
   ) {
     Column(modifier = Modifier.padding(10.dp)) {
@@ -389,7 +378,7 @@ private fun DrawerStoryCard(
             Icon(
               imageVector = Icons.Default.Check,
               contentDescription = "Aktiv",
-              tint = AmberGoldPrimary,
+              tint = DnaColors.Primary,
               modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -397,8 +386,9 @@ private fun DrawerStoryCard(
           Text(
             text = story.title,
             style = MaterialTheme.typography.bodyMedium,
+            fontFamily = DnaTypography.InterFamily,
             fontWeight = FontWeight.Bold,
-            color = if (isSelected) AmberGoldPrimary else TextParchment,
+            color = if (isSelected) DnaColors.Primary else DnaColors.OnSurface,
             maxLines = 1
           )
         }
@@ -409,7 +399,8 @@ private fun DrawerStoryCard(
       Text(
         text = "${story.genre} • ${story.selectedModel}",
         style = MaterialTheme.typography.labelSmall,
-        color = TextParchmentMuted,
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.OnSurfaceVariant,
         fontSize = 11.sp
       )
 
@@ -426,7 +417,8 @@ private fun DrawerStoryCard(
       Text(
         text = "Spielzeit: $timeString",
         style = MaterialTheme.typography.labelSmall,
-        color = TextParchmentMuted,
+        fontFamily = DnaTypography.JetBrainsMonoFamily,
+        color = DnaColors.MutedForeground,
         fontSize = 10.sp
       )
 
@@ -446,7 +438,7 @@ private fun DrawerStoryCard(
           Icon(
             imageVector = if (story.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
             contentDescription = if (story.isArchived) "Wiederherstellen" else "Archivieren",
-            tint = AmberGoldLight,
+            tint = DnaColors.Secondary,
             modifier = Modifier.size(16.dp)
           )
         }
@@ -461,7 +453,7 @@ private fun DrawerStoryCard(
           Icon(
             imageVector = Icons.Default.ForkRight,
             contentDescription = "Zweig erstellen",
-            tint = TextParchmentMuted,
+            tint = DnaColors.OnSurfaceVariant,
             modifier = Modifier.size(16.dp)
           )
         }
@@ -476,7 +468,7 @@ private fun DrawerStoryCard(
           Icon(
             imageVector = Icons.Default.Delete,
             contentDescription = "Löschen",
-            tint = CrimsonDanger.copy(alpha = 0.8f),
+            tint = DnaColors.StatusDestructive.copy(alpha = 0.85f),
             modifier = Modifier.size(16.dp)
           )
         }

@@ -33,7 +33,7 @@ private val MauntingDnaColorScheme = darkColorScheme(
 )
 
 @Composable
-fun StoryForgeTheme(
+fun MauntingStoryTheme(
   content: @Composable () -> Unit,
 ) {
   MaterialTheme(
@@ -42,3 +42,8 @@ fun StoryForgeTheme(
     content = content
   )
 }
+
+@Composable
+fun StoryForgeTheme(
+  content: @Composable () -> Unit,
+) = MauntingStoryTheme(content = content)

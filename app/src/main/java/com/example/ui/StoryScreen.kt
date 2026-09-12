@@ -1,5 +1,8 @@
 package com.example.ui
 
+
+import com.example.ui.dna.DnaColors
+import com.example.ui.components.StorySplashScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,8 +34,8 @@ import com.example.ui.components.StoryChatArea
 import com.example.ui.components.StoryNavigationDrawer
 import com.example.ui.components.StorySelectorDialog
 import com.example.ui.components.StoryTopBar
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.SlateDark950
+
+
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +59,13 @@ fun StoryScreen(
 
   val notebookSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  var isAppInitializing by remember { mutableStateOf(true) }
+
+  LaunchedEffect(Unit) {
+    kotlinx.coroutines.delay(1100L)
+    isAppInitializing = false
+  }
+
 
   // Playtime Tracking
   LaunchedEffect(uiState.currentStory?.id) {
@@ -116,7 +126,7 @@ fun StoryScreen(
     Scaffold(
       modifier = modifier
         .fillMaxSize()
-        .background(SlateDark900),
+        .background(DnaColors.Surface),
       topBar = {
         StoryTopBar(
           story = story,
@@ -172,8 +182,8 @@ fun StoryScreen(
     ModalBottomSheet(
       onDismissRequest = { showNotebookSheet = false },
       sheetState = notebookSheetState,
-      containerColor = SlateDark900,
-      scrimColor = SlateDark950.copy(alpha = 0.7f)
+      containerColor = DnaColors.Surface,
+      scrimColor = DnaColors.SurfaceDim.copy(alpha = 0.7f)
     ) {
       NotebookDrawer(
         checkpoint = checkpoint,
@@ -198,8 +208,8 @@ fun StoryScreen(
     ModalBottomSheet(
       onDismissRequest = { showSettingsSheet = false },
       sheetState = settingsSheetState,
-      containerColor = SlateDark900,
-      scrimColor = SlateDark950.copy(alpha = 0.7f)
+      containerColor = DnaColors.Surface,
+      scrimColor = DnaColors.SurfaceDim.copy(alpha = 0.7f)
     ) {
       SettingsSheet(
         story = story,
@@ -297,4 +307,6 @@ fun StoryScreen(
       }
     )
   }
+  // 4. Startup Splash Screen
+  StorySplashScreen(visible = isAppInitializing)
 }

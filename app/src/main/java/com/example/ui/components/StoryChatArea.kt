@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,14 +44,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.MessageEntity
 import com.example.domain.model.TurnProgress
 import com.example.ui.StoryUiState
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.CrimsonDanger
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentMuted
 
 @Composable
 fun StoryChatArea(
@@ -71,8 +65,8 @@ fun StoryChatArea(
     if (!uiState.effectiveApiKeyPresent) {
       item(key = "api_key_banner") {
         Card(
-          colors = CardDefaults.cardColors(containerColor = AmberGoldContainer),
-          border = BorderStroke(1.dp, AmberGoldPrimary),
+          colors = CardDefaults.cardColors(containerColor = DnaColors.PrimaryContainer),
+          border = BorderStroke(1.dp, DnaColors.Primary),
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier
             .fillMaxWidth()
@@ -85,7 +79,7 @@ fun StoryChatArea(
             Icon(
               imageVector = Icons.Default.Key,
               contentDescription = null,
-              tint = AmberGoldPrimary,
+              tint = DnaColors.Primary,
               modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -93,13 +87,13 @@ fun StoryChatArea(
               Text(
                 text = "Gemini API-Schlüssel hinterlegen",
                 style = MaterialTheme.typography.titleSmall,
-                color = AmberGoldLight,
+                color = DnaColors.StoryAmberCampfire,
                 fontWeight = FontWeight.Bold
               )
               Text(
                 text = "Trage deinen Google AI Studio Key in den Einstellungen ein, um interaktiv zu spielen.",
                 style = MaterialTheme.typography.bodySmall,
-                color = TextParchment
+                color = DnaColors.OnSurface
               )
             }
             DnaButton(
@@ -117,8 +111,8 @@ fun StoryChatArea(
     uiState.errorMessage?.let { error ->
       item(key = "error_banner") {
         Card(
-          colors = CardDefaults.cardColors(containerColor = CrimsonDanger.copy(alpha = 0.15f)),
-          border = BorderStroke(1.dp, CrimsonDanger),
+          colors = CardDefaults.cardColors(containerColor = DnaColors.StatusDestructive.copy(alpha = 0.15f)),
+          border = BorderStroke(1.dp, DnaColors.StatusDestructive),
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier
             .fillMaxWidth()
@@ -128,16 +122,16 @@ fun StoryChatArea(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = CrimsonDanger)
+            Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = DnaColors.StatusDestructive)
             Spacer(modifier = Modifier.width(10.dp))
             Text(
               text = error,
               style = MaterialTheme.typography.bodySmall,
-              color = TextParchment,
+              color = DnaColors.OnSurface,
               modifier = Modifier.weight(1f)
             )
             IconButton(onClick = onDismissError) {
-              Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = TextParchmentMuted)
+              Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = DnaColors.OnSurfaceVariant)
             }
           }
         }
@@ -161,8 +155,8 @@ fun StoryChatArea(
     if (uiState.isGenerating) {
       item(key = "streaming_response") {
         Card(
-          colors = CardDefaults.cardColors(containerColor = SlateDark800.copy(alpha = 0.85f)),
-          border = BorderStroke(1.dp, AmberGoldPrimary.copy(alpha = 0.4f)),
+          colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer.copy(alpha = 0.85f)),
+          border = BorderStroke(1.dp, DnaColors.Primary.copy(alpha = 0.4f)),
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier
             .fillMaxWidth()
@@ -178,7 +172,7 @@ fun StoryChatArea(
                 Icon(
                   imageVector = Icons.Default.AutoAwesome,
                   contentDescription = null,
-                  tint = AmberGoldPrimary,
+                  tint = DnaColors.Primary,
                   modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -190,12 +184,12 @@ fun StoryChatArea(
                     else -> "Antwort wird generiert..."
                   },
                   style = MaterialTheme.typography.labelMedium,
-                  color = AmberGoldPrimary
+                  color = DnaColors.Primary
                 )
               }
               CircularProgressIndicator(
                 modifier = Modifier.size(16.dp),
-                color = AmberGoldPrimary,
+                color = DnaColors.Primary,
                 strokeWidth = 2.dp
               )
             }
@@ -205,9 +199,9 @@ fun StoryChatArea(
               Text(
                 text = uiState.streamChunk,
                 style = MaterialTheme.typography.bodyLarge.copy(
-                  fontFamily = FontFamily.Serif,
+                  fontFamily = DnaTypography.InterFamily,
                   lineHeight = 26.sp,
-                  color = TextParchment
+                  color = DnaColors.OnSurface
                 )
               )
             }

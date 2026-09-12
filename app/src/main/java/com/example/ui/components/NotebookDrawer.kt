@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,17 +66,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CheckpointEntity
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark700
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.SlateDark950
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentFaint
-import com.example.ui.theme.TextParchmentMuted
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -105,7 +96,7 @@ fun NotebookDrawer(
   Column(
     modifier = modifier
       .fillMaxHeight()
-      .background(SlateDark900)
+      .background(DnaColors.Surface)
       .padding(horizontal = 16.dp, vertical = 12.dp)
   ) {
     // Header
@@ -118,7 +109,7 @@ fun NotebookDrawer(
         Icon(
           imageVector = Icons.AutoMirrored.Filled.MenuBook,
           contentDescription = null,
-          tint = AmberGoldPrimary,
+          tint = DnaColors.Primary,
           modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(10.dp))
@@ -126,13 +117,13 @@ fun NotebookDrawer(
           Text(
             text = "Das Notizbuch",
             style = MaterialTheme.typography.titleLarge,
-            color = TextParchment,
-            fontFamily = FontFamily.Serif
+            color = DnaColors.OnSurface,
+            fontFamily = DnaTypography.ManropeFamily
           )
           Text(
             text = "Aktiver Checkpoint & Langzeitgedächtnis",
             style = MaterialTheme.typography.labelSmall,
-            color = TextParchmentFaint
+            color = DnaColors.MutedForeground
           )
         }
       }
@@ -145,7 +136,7 @@ fun NotebookDrawer(
           Icon(
             imageVector = Icons.Default.Edit,
             contentDescription = "Zustand manuell bearbeiten",
-            tint = AmberGoldPrimary
+            tint = DnaColors.Primary
           )
         }
         IconButton(
@@ -155,7 +146,7 @@ fun NotebookDrawer(
           Icon(
             imageVector = Icons.Default.Close,
             contentDescription = "Schließen",
-            tint = TextParchmentMuted
+            tint = DnaColors.OnSurfaceVariant
           )
         }
       }
@@ -166,12 +157,12 @@ fun NotebookDrawer(
     // 3 View Tabs
     TabRow(
       selectedTabIndex = selectedTab,
-      containerColor = SlateDark950,
-      contentColor = AmberGoldPrimary,
+      containerColor = DnaColors.SurfaceDim,
+      contentColor = DnaColors.Primary,
       indicator = { tabPositions ->
         TabRowDefaults.SecondaryIndicator(
           modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-          color = AmberGoldPrimary
+          color = DnaColors.Primary
         )
       }
     ) {
@@ -224,21 +215,21 @@ fun NotebookDrawer(
           Text(
             text = "CHRONIK DER TAGE",
             style = MaterialTheme.typography.labelSmall,
-            color = AmberGoldLight,
+            color = DnaColors.StoryAmberCampfire,
             fontWeight = FontWeight.Bold
           )
           Spacer(modifier = Modifier.height(8.dp))
 
           if (dayGroups.isEmpty()) {
             Card(
-              colors = CardDefaults.cardColors(containerColor = SlateDark800),
+              colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
               shape = RoundedCornerShape(12.dp)
             ) {
               Box(modifier = Modifier.padding(16.dp)) {
                 Text(
                   text = "Die Geschichte hat gerade erst begonnen. Tage und Erlebnisse werden hier chronologisch archiviert.",
                   style = MaterialTheme.typography.bodySmall,
-                  color = TextParchmentMuted
+                  color = DnaColors.OnSurfaceVariant
                 )
               }
             }
@@ -249,12 +240,12 @@ fun NotebookDrawer(
 
               Card(
                 colors = CardDefaults.cardColors(
-                  containerColor = if (isCurrentDay) SlateDark800 else SlateDark950
+                  containerColor = if (isCurrentDay) DnaColors.SurfaceContainer else DnaColors.SurfaceDim
                 ),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(
                   1.dp,
-                  if (isCurrentDay) AmberGoldPrimary.copy(alpha = 0.6f) else SlateDark700
+                  if (isCurrentDay) DnaColors.Primary.copy(alpha = 0.6f) else DnaColors.SurfaceContainerHigh
                 ),
                 modifier = Modifier
                   .fillMaxWidth()
@@ -268,13 +259,13 @@ fun NotebookDrawer(
                   ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                       Surface(
-                        color = if (isCurrentDay) AmberGoldContainer else SlateDark700,
+                        color = if (isCurrentDay) DnaColors.PrimaryContainer else DnaColors.SurfaceContainerHigh,
                         shape = RoundedCornerShape(6.dp)
                       ) {
                         Text(
                           text = "TAG $dayNumber",
                           style = MaterialTheme.typography.labelSmall,
-                          color = if (isCurrentDay) AmberGoldLight else TextParchmentMuted,
+                          color = if (isCurrentDay) DnaColors.StoryAmberCampfire else DnaColors.OnSurfaceVariant,
                           fontWeight = FontWeight.Bold,
                           modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
@@ -284,7 +275,7 @@ fun NotebookDrawer(
                         Text(
                           text = "(Aktuell)",
                           style = MaterialTheme.typography.labelSmall,
-                          color = AmberGoldLight
+                          color = DnaColors.StoryAmberCampfire
                         )
                       }
                     }
@@ -292,7 +283,7 @@ fun NotebookDrawer(
                     Text(
                       text = latestInDay?.inGameTime ?: "",
                       style = MaterialTheme.typography.labelSmall,
-                      color = TextParchmentMuted
+                      color = DnaColors.OnSurfaceVariant
                     )
                   }
 
@@ -303,7 +294,7 @@ fun NotebookDrawer(
                     Icon(
                       imageVector = Icons.Default.LocationOn,
                       contentDescription = null,
-                      tint = AmberGoldPrimary,
+                      tint = DnaColors.Primary,
                       modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -311,7 +302,7 @@ fun NotebookDrawer(
                       text = latestInDay?.location ?: "Unbekannter Ort",
                       style = MaterialTheme.typography.bodySmall,
                       fontWeight = FontWeight.SemiBold,
-                      color = TextParchment
+                      color = DnaColors.OnSurface
                     )
                   }
 
@@ -321,14 +312,14 @@ fun NotebookDrawer(
                     Icon(
                       imageVector = Icons.Default.WbCloudy,
                       contentDescription = null,
-                      tint = TextParchmentMuted,
+                      tint = DnaColors.OnSurfaceVariant,
                       modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                       text = latestInDay?.weather ?: "Ruhig",
                       style = MaterialTheme.typography.bodySmall,
-                      color = TextParchmentMuted
+                      color = DnaColors.OnSurfaceVariant
                     )
                   }
 
@@ -340,7 +331,7 @@ fun NotebookDrawer(
                     Text(
                       text = daySummary,
                       style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                      color = TextParchment
+                      color = DnaColors.OnSurface
                     )
                   }
                 }
@@ -364,7 +355,7 @@ fun NotebookDrawer(
 
           if (npcs.isEmpty()) {
             Card(
-              colors = CardDefaults.cardColors(containerColor = SlateDark800),
+              colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.fillMaxWidth()
             ) {
@@ -372,16 +363,16 @@ fun NotebookDrawer(
                 Text(
                   text = "Noch keine NPCs erfasst. Die KI ergänzt automatisch Charaktere, wenn sie auftauchen.",
                   style = MaterialTheme.typography.bodySmall,
-                  color = TextParchmentMuted
+                  color = DnaColors.OnSurfaceVariant
                 )
               }
             }
           } else {
             npcs.forEach { npc ->
               Card(
-                colors = CardDefaults.cardColors(containerColor = SlateDark800),
+                colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, SlateDark600),
+                border = BorderStroke(1.dp, DnaColors.Border),
                 modifier = Modifier
                   .fillMaxWidth()
                   .padding(bottom = 8.dp)
@@ -395,17 +386,17 @@ fun NotebookDrawer(
                     Text(
                       text = npc.name,
                       style = MaterialTheme.typography.titleSmall,
-                      color = AmberGoldPrimary,
+                      color = DnaColors.Primary,
                       fontWeight = FontWeight.Bold
                     )
                     Surface(
-                      color = SlateDark700,
+                      color = DnaColors.SurfaceContainerHigh,
                       shape = RoundedCornerShape(6.dp)
                     ) {
                       Text(
                         text = npc.currentMood,
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextParchmentMuted,
+                        color = DnaColors.OnSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                       )
                     }
@@ -415,13 +406,13 @@ fun NotebookDrawer(
                   Text(
                     text = "Kleidung: ${npc.outfit}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextParchment
+                    color = DnaColors.OnSurface
                   )
                   Spacer(modifier = Modifier.height(2.dp))
                   Text(
                     text = "Beziehung: ${npc.relationshipToPlayer}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextParchmentMuted
+                    color = DnaColors.OnSurfaceVariant
                   )
                 }
               }
@@ -434,9 +425,9 @@ fun NotebookDrawer(
           SectionHeader(title = "Aktueller Aufenthaltsort", icon = Icons.Default.LocationOn)
 
           Card(
-            colors = CardDefaults.cardColors(containerColor = SlateDark800),
+            colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, SlateDark600),
+            border = BorderStroke(1.dp, DnaColors.Border),
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
@@ -466,9 +457,9 @@ fun NotebookDrawer(
           SectionHeader(title = "Inventar (${inventory.size})", icon = Icons.Default.Luggage)
 
           Card(
-            colors = CardDefaults.cardColors(containerColor = SlateDark800),
+            colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, SlateDark600),
+            border = BorderStroke(1.dp, DnaColors.Border),
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
@@ -476,7 +467,7 @@ fun NotebookDrawer(
                 Text(
                   text = "Keine Gegenstände im Inventar",
                   style = MaterialTheme.typography.bodySmall,
-                  color = TextParchmentFaint
+                  color = DnaColors.MutedForeground
                 )
               } else {
                 FlowRow(
@@ -485,9 +476,9 @@ fun NotebookDrawer(
                 ) {
                   inventory.forEach { item ->
                     Surface(
-                      color = SlateDark700,
+                      color = DnaColors.SurfaceContainerHigh,
                       shape = RoundedCornerShape(8.dp),
-                      border = BorderStroke(1.dp, SlateDark600)
+                      border = BorderStroke(1.dp, DnaColors.Border)
                     ) {
                       Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -496,14 +487,14 @@ fun NotebookDrawer(
                         Icon(
                           imageVector = Icons.Default.Luggage,
                           contentDescription = null,
-                          tint = AmberGoldPrimary,
+                          tint = DnaColors.Primary,
                           modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                           text = item,
                           style = MaterialTheme.typography.labelSmall,
-                          color = TextParchment
+                          color = DnaColors.OnSurface
                         )
                       }
                     }
@@ -519,9 +510,9 @@ fun NotebookDrawer(
           SectionHeader(title = "Bedeutsame Meilensteine (${milestones.size})", icon = Icons.Default.Book)
 
           Card(
-            colors = CardDefaults.cardColors(containerColor = SlateDark800),
+            colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, SlateDark600),
+            border = BorderStroke(1.dp, DnaColors.Border),
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
@@ -529,7 +520,7 @@ fun NotebookDrawer(
                 Text(
                   text = "Noch keine tiefen Meilensteine verzeichnet. Die KI wird prägende Schwüre, Verluste und Wendepunkte hier dauerhaft verankern.",
                   style = MaterialTheme.typography.bodySmall,
-                  color = TextParchmentFaint
+                  color = DnaColors.MutedForeground
                 )
               } else {
                 milestones.forEach { milestone ->
@@ -541,13 +532,13 @@ fun NotebookDrawer(
                   ) {
                     Text(
                       text = "• ",
-                      color = AmberGoldPrimary,
+                      color = DnaColors.Primary,
                       fontWeight = FontWeight.Bold
                     )
                     Text(
                       text = milestone,
                       style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                      color = TextParchment
+                      color = DnaColors.OnSurface
                     )
                   }
                 }
@@ -583,14 +574,14 @@ private fun SectionHeader(title: String, icon: ImageVector) {
     Icon(
       imageVector = icon,
       contentDescription = null,
-      tint = AmberGoldPrimary,
+      tint = DnaColors.Primary,
       modifier = Modifier.size(16.dp)
     )
     Spacer(modifier = Modifier.width(6.dp))
     Text(
       text = title,
       style = MaterialTheme.typography.titleMedium,
-      color = TextParchment,
+      color = DnaColors.OnSurface,
       fontWeight = FontWeight.SemiBold
     )
   }
@@ -602,7 +593,7 @@ private fun InfoRow(icon: ImageVector, label: String, value: String) {
     Icon(
       imageVector = icon,
       contentDescription = null,
-      tint = AmberGoldPrimary.copy(alpha = 0.8f),
+      tint = DnaColors.Primary.copy(alpha = 0.8f),
       modifier = Modifier.size(16.dp)
     )
     Spacer(modifier = Modifier.width(8.dp))
@@ -610,13 +601,13 @@ private fun InfoRow(icon: ImageVector, label: String, value: String) {
       Text(
         text = label.uppercase(),
         style = MaterialTheme.typography.labelSmall,
-        color = TextParchmentFaint,
+        color = DnaColors.MutedForeground,
         fontSize = 10.sp
       )
       Text(
         text = value,
         style = MaterialTheme.typography.bodyMedium,
-        color = TextParchment
+        color = DnaColors.OnSurface
       )
     }
   }

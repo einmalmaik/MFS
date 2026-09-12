@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,14 +45,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.CheckpointEntity
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark700
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentFaint
-import com.example.ui.theme.TextParchmentMuted
 
 @Composable
 fun ManualStateEditDialog(
@@ -87,8 +81,8 @@ fun ManualStateEditDialog(
         .fillMaxWidth(0.95f)
         .padding(16.dp),
       shape = RoundedCornerShape(16.dp),
-      colors = CardDefaults.cardColors(containerColor = SlateDark900),
-      border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600)
+      colors = CardDefaults.cardColors(containerColor = DnaColors.Surface),
+      border = androidx.compose.foundation.BorderStroke(1.dp, DnaColors.Border)
     ) {
       Column(
         modifier = Modifier
@@ -105,30 +99,30 @@ fun ManualStateEditDialog(
             Icon(
               imageVector = Icons.Default.EditNote,
               contentDescription = null,
-              tint = AmberGoldPrimary
+              tint = DnaColors.Primary
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
               text = "Zustand manuell anpassen",
               style = MaterialTheme.typography.titleMedium,
-              color = TextParchment,
+              color = DnaColors.OnSurface,
               fontFamily = FontFamily.Serif
             )
           }
 
           IconButton(onClick = onDismiss, modifier = Modifier.testTag("dismiss_manual_edit")) {
-            Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = TextParchmentMuted)
+            Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = DnaColors.OnSurfaceVariant)
           }
         }
 
         Text(
           text = "Korrigiere Details wie Kleidung, Inventar oder Zeit direkt. Gemini übernimmt diese Werte sofort als Fakten-Anker.",
           style = MaterialTheme.typography.bodySmall,
-          color = TextParchmentMuted
+          color = DnaColors.OnSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(14.dp))
-        HorizontalDivider(color = SlateDark700)
+        HorizontalDivider(color = DnaColors.SurfaceContainerHigh)
         Spacer(modifier = Modifier.height(14.dp))
 
         // In-game time & Location
@@ -221,7 +215,7 @@ private fun EditField(
     Text(
       text = label.uppercase(),
       style = MaterialTheme.typography.labelSmall,
-      color = AmberGoldPrimary,
+      color = DnaColors.Primary,
       fontWeight = FontWeight.Bold,
       fontSize = 11.sp
     )
@@ -234,12 +228,12 @@ private fun EditField(
         .testTag(testTag),
       singleLine = !multiline,
       colors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = SlateDark800,
-        unfocusedContainerColor = SlateDark800,
-        focusedBorderColor = AmberGoldPrimary,
-        unfocusedBorderColor = SlateDark600,
-        focusedTextColor = TextParchment,
-        unfocusedTextColor = TextParchment
+        focusedContainerColor = DnaColors.SurfaceContainer,
+        unfocusedContainerColor = DnaColors.SurfaceContainer,
+        focusedBorderColor = DnaColors.Primary,
+        unfocusedBorderColor = DnaColors.Border,
+        focusedTextColor = DnaColors.OnSurface,
+        unfocusedTextColor = DnaColors.OnSurface
       ),
       shape = RoundedCornerShape(8.dp)
     )

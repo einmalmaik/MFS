@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.example.ui.StoryScreen
 import com.example.ui.StoryViewModel
-import com.example.ui.theme.StoryForgeTheme
+import com.example.ui.theme.MauntingStoryTheme
 
 class MainActivity : ComponentActivity() {
   private val storyViewModel: StoryViewModel by viewModels()
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
-      StoryForgeTheme {
+      MauntingStoryTheme {
         StoryScreen(
           viewModel = storyViewModel,
           modifier = Modifier.fillMaxSize()

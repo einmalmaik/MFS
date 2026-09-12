@@ -1,14 +1,16 @@
-# StoryForge
+# Maunting Story Fable (MSF)
 
-StoryForge ist ein interaktives Text-RPG und eine Storytelling-App mit einem KI-gesteuerten Game-Master (angetrieben durch die Gemini API). Die App bietet ein immersives Checkpoint-Gedächtnissystem, dynamisches Tracking von Charakterzuständen, Wunden (inkl. detailliertem 3D-Mannequin) und ein komplettes RPG-Erlebnis direkt auf dem Smartphone.
+Maunting Story Fable ist ein interaktives Text-RPG und eine immersive Storytelling-App mit einem KI-gesteuerten Game-Master (angetrieben durch die Google Gemini API) im Stil der **MauntingStudios Design-DNA**. Die App bietet ein immersives Checkpoint-Gedächtnissystem, dynamisches Tracking von Charakterzuständen, Wunden (inkl. detailliertem 3D-Mannequin) und ein komplettes RPG-Erlebnis direkt auf dem Smartphone.
 
 ## ✨ Features
 
+- **Atmosphärische Design-DNA:** Dark-First Elevation-Oberflächen, Ice-Cyan Akzente, gemütliche Bernstein-Akzente für gesprochene Dialoge (`StoryAmberCampfire`), Manrope-Typografie für epische Titel und Inter für ermüdungsfreies Lesen.
+- **Zentrale Design-Komponenten:** DnaDropdown, DnaNumberStepper, DnaButton, DnaCard und DnaBadge.
 - **KI Game-Master:** Erlebe dynamische und interaktive Abenteuer, in denen die KI als Spielleiter fungiert.
 - **Vektor-basiertes Gedächtnis:** Nutzt Embedding-Modelle (wie `text-embedding-004` oder `embedding-001`), um die Vergangenheit der Geschichte nahtlos in aktuelle Ereignisse einzuflechten und sich Charaktere und Entscheidungen exakt zu merken.
 - **Charakter & Anatomie-Tracking:** Behalte deine Spielfigur und Begleiter (NPCs) im Auge. Inklusive visuellem Mannequin, Körperteil-Filterung und einem detaillierten Verletzungs- und Wundsystem, auf das die KI zugreifen und das sie beeinflussen kann.
 - **Offline-Gedächtnis-Speicher:** Alle Episoden, Charaktere und Weltdetails werden über eine lokale Room-Datenbank sicher und performant gespeichert.
-- **Sicheres Secrets-Management:** Konzipiert für einen sauberen und sicheren Umgang mit API-Schlüsseln (Gemini AI).
+- **Sicheres Secrets-Management:** Konzipiert für einen sauberen und sicheren Umgang mit API-Schlüsseln (Google Gemini AI).
 
 ## 🚀 Installation via GitHub Release (APK)
 
@@ -20,6 +22,7 @@ Du kannst diese APK dann direkt von deinem Smartphone aus unter dem Reiter **Rel
 
 ## 🛠️ Entwickelt mit
 - Kotlin
-- Jetpack Compose (Material Design 3)
+- Jetpack Compose & MauntingStudios Design-DNA
 - Room Database (Local SQLite)
-- Gemini API (AI Studio)
+- Google Gemini API (AI Studio)
+

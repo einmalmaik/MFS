@@ -1,6 +1,6 @@
 {
-  "name": "StoryForge",
-  "description": "Interaktive Geschichten & Text-RPG mit KI-Game-Master, State-Tracking und Checkpoint-Gedächtnis via Gemini API.",
+  "name": "Maunting Story Fable",
+  "description": "Interaktive Geschichten & Text-RPG im Stil der MauntingStudios Design-DNA mit KI-Game-Master, State-Tracking und Checkpoint-Gedächtnis via Gemini API.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

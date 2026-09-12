@@ -72,18 +72,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.api.GeminiClient
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.StoryEntity
-import com.example.ui.theme.AmberGoldContainer
-import com.example.ui.theme.AmberGoldDark
-import com.example.ui.theme.AmberGoldLight
-import com.example.ui.theme.AmberGoldPrimary
-import com.example.ui.theme.CrimsonDanger
-import com.example.ui.theme.SlateDark600
-import com.example.ui.theme.SlateDark700
-import com.example.ui.theme.SlateDark800
-import com.example.ui.theme.SlateDark900
-import com.example.ui.theme.TextParchment
-import com.example.ui.theme.TextParchmentFaint
-import com.example.ui.theme.TextParchmentMuted
+import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaTypography
+import com.example.ui.dna.DnaFloatNumberStepper
+import com.example.ui.dna.DnaNumberStepper
 
 data class StoryPreset(
   val title: String,
@@ -260,28 +252,28 @@ fun StorySelectorDialog(
     val target = storyToBranch!!
     AlertDialog(
       onDismissRequest = { storyToBranch = null },
-      title = { Text("Zweig erstellen (Branching)", color = TextParchment) },
+      title = { Text("Zweig erstellen (Branching)", color = DnaColors.OnSurface) },
       text = {
         Column {
           Text(
             "Erstelle eine unabhängige Kopie von '${target.title}', um ab jetzt alternative Entscheidungen zu erkunden:",
-            color = TextParchmentMuted,
+            color = DnaColors.OnSurfaceVariant,
             style = MaterialTheme.typography.bodySmall
           )
           Spacer(modifier = Modifier.height(10.dp))
           OutlinedTextField(
             value = branchTitleInput,
             onValueChange = { branchTitleInput = it },
-            placeholder = { Text("${target.title} (Alternativer Pfad)", color = TextParchmentFaint) },
+            placeholder = { Text("${target.title} (Alternativer Pfad)", color = DnaColors.MutedForeground) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark900,
-              unfocusedContainerColor = SlateDark900,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.Surface,
+              unfocusedContainerColor = DnaColors.Surface,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             )
           )
         }
@@ -306,7 +298,7 @@ fun StorySelectorDialog(
           testTag = "cancel_branch_story_button"
         )
       },
-      containerColor = SlateDark800
+      containerColor = DnaColors.SurfaceContainer
     )
   }
 
@@ -319,8 +311,8 @@ fun StorySelectorDialog(
         .fillMaxWidth(0.95f)
         .padding(16.dp),
       shape = RoundedCornerShape(16.dp),
-      colors = CardDefaults.cardColors(containerColor = SlateDark900),
-      border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark600)
+      colors = CardDefaults.cardColors(containerColor = DnaColors.Surface),
+      border = androidx.compose.foundation.BorderStroke(1.dp, DnaColors.Border)
     ) {
       Column(
         modifier = Modifier
@@ -336,32 +328,32 @@ fun StorySelectorDialog(
           Row(verticalAlignment = Alignment.CenterVertically) {
             if (isCreatingNew) {
               IconButton(onClick = { isCreatingNew = false }) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück", tint = AmberGoldPrimary)
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück", tint = DnaColors.Primary)
               }
             } else {
               Icon(
                 imageVector = Icons.AutoMirrored.Filled.MenuBook,
                 contentDescription = null,
-                tint = AmberGoldPrimary
+                tint = DnaColors.Primary
               )
               Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
               text = if (isCreatingNew) "Neues Abenteuer erschaffen" else "Deine Geschichten",
               style = MaterialTheme.typography.titleMedium,
-              color = TextParchment,
-              fontFamily = FontFamily.Serif,
+              color = DnaColors.OnSurface,
+              fontFamily = DnaTypography.ManropeFamily,
               fontWeight = FontWeight.Bold
             )
           }
 
           IconButton(onClick = onDismiss, modifier = Modifier.testTag("close_story_selector")) {
-            Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = TextParchmentMuted)
+            Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = DnaColors.OnSurfaceVariant)
           }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        HorizontalDivider(color = SlateDark700)
+        HorizontalDivider(color = DnaColors.SurfaceContainerHigh)
         Spacer(modifier = Modifier.height(14.dp))
 
         if (!isCreatingNew) {
@@ -369,7 +361,7 @@ fun StorySelectorDialog(
           Text(
             text = "GESPEICHERTE GESCHICHTEN (${stories.size})",
             style = MaterialTheme.typography.labelSmall,
-            color = AmberGoldPrimary,
+            color = DnaColors.Primary,
             fontWeight = FontWeight.Bold
           )
           Spacer(modifier = Modifier.height(8.dp))
@@ -385,10 +377,10 @@ fun StorySelectorDialog(
                   onDismiss()
                 },
               shape = RoundedCornerShape(10.dp),
-              color = if (isCurrent) AmberGoldContainer else SlateDark800,
+              color = if (isCurrent) DnaColors.PrimaryContainer else DnaColors.SurfaceContainer,
               border = androidx.compose.foundation.BorderStroke(
                 1.dp,
-                if (isCurrent) AmberGoldPrimary else SlateDark600
+                if (isCurrent) DnaColors.Primary else DnaColors.Border
               )
             ) {
               Row(
@@ -400,14 +392,14 @@ fun StorySelectorDialog(
                   Text(
                     text = story.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (isCurrent) AmberGoldPrimary else TextParchment,
+                    color = if (isCurrent) DnaColors.Primary else DnaColors.OnSurface,
                     fontWeight = FontWeight.Bold
                   )
                   Spacer(modifier = Modifier.height(2.dp))
                   Text(
                     text = "${story.genre} • ${story.selectedModel} (${story.thinkingLevel})",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextParchmentMuted
+                    color = DnaColors.OnSurfaceVariant
                   )
                   Spacer(modifier = Modifier.height(4.dp))
                   val hours = story.playTimeSeconds / 3600
@@ -422,7 +414,7 @@ fun StorySelectorDialog(
                   Text(
                     text = "Spielzeit: $timeString",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextParchmentMuted
+                    color = DnaColors.OnSurfaceVariant
                   )
                 }
 
@@ -433,14 +425,14 @@ fun StorySelectorDialog(
                       storyToBranch = story
                     }
                   ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.AltRoute, contentDescription = "Zweig erstellen", tint = AmberGoldLight)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.AltRoute, contentDescription = "Zweig erstellen", tint = DnaColors.Secondary)
                   }
 
                   if (stories.size > 1) {
                     IconButton(
                       onClick = { storyToDelete = story }
                     ) {
-                      Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = "Löschen", tint = CrimsonDanger)
+                      Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = "Löschen", tint = DnaColors.StatusDestructive)
                     }
                   }
                 }
@@ -466,7 +458,7 @@ fun StorySelectorDialog(
           Text(
             text = "SCHNELLE VORLAGEN (PRESETS)",
             style = MaterialTheme.typography.labelSmall,
-            color = AmberGoldPrimary,
+            color = DnaColors.Primary,
             fontWeight = FontWeight.Bold
           )
           Spacer(modifier = Modifier.height(6.dp))
@@ -482,10 +474,10 @@ fun StorySelectorDialog(
                     loadPreset(preset)
                   },
                 shape = RoundedCornerShape(8.dp),
-                color = if (isSelected) AmberGoldContainer else SlateDark800,
+                color = if (isSelected) DnaColors.PrimaryContainer else DnaColors.SurfaceContainer,
                 border = androidx.compose.foundation.BorderStroke(
                   1.dp,
-                  if (isSelected) AmberGoldPrimary else SlateDark700
+                  if (isSelected) DnaColors.Primary else DnaColors.SurfaceContainerHigh
                 )
               ) {
                 Row(
@@ -495,7 +487,7 @@ fun StorySelectorDialog(
                   Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = if (isSelected) AmberGoldPrimary else TextParchmentMuted,
+                    tint = if (isSelected) DnaColors.Primary else DnaColors.OnSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                   )
                   Spacer(modifier = Modifier.width(8.dp))
@@ -503,13 +495,13 @@ fun StorySelectorDialog(
                     Text(
                       text = preset.title,
                       style = MaterialTheme.typography.bodyMedium,
-                      color = if (isSelected) AmberGoldPrimary else TextParchment,
+                      color = if (isSelected) DnaColors.Primary else DnaColors.OnSurface,
                       fontWeight = FontWeight.Bold
                     )
                     Text(
                       text = preset.genre,
                       style = MaterialTheme.typography.bodySmall,
-                      color = TextParchmentMuted
+                      color = DnaColors.OnSurfaceVariant
                     )
                   }
                 }
@@ -518,7 +510,7 @@ fun StorySelectorDialog(
           }
 
           Spacer(modifier = Modifier.height(16.dp))
-          HorizontalDivider(color = SlateDark700)
+          HorizontalDivider(color = DnaColors.SurfaceContainerHigh)
           Spacer(modifier = Modifier.height(16.dp))
 
           // Model selection for new story
@@ -530,7 +522,7 @@ fun StorySelectorDialog(
             Text(
               text = "GEMINI-MODELL FÜR DIESE GESCHICHTE",
               style = MaterialTheme.typography.labelSmall,
-              color = AmberGoldPrimary,
+              color = DnaColors.Primary,
               fontWeight = FontWeight.Bold
             )
 
@@ -539,12 +531,12 @@ fun StorySelectorDialog(
               enabled = !isFetchingModels
             ) {
               if (isFetchingModels) {
-                CircularProgressIndicator(color = AmberGoldPrimary, modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(color = DnaColors.Primary, modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
               } else {
-                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = AmberGoldLight, modifier = Modifier.size(14.dp))
+                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = DnaColors.Secondary, modifier = Modifier.size(14.dp))
               }
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Aktualisieren", style = MaterialTheme.typography.labelSmall, color = AmberGoldLight)
+              Text("Aktualisieren", style = MaterialTheme.typography.labelSmall, color = DnaColors.Secondary)
             }
           }
 
@@ -616,8 +608,8 @@ fun StorySelectorDialog(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Text(text = "TEMPERATUR (KREATIVITÄT)", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
-              Text(String.format("%.2f", temperature), style = MaterialTheme.typography.labelMedium, color = TextParchment, fontWeight = FontWeight.Bold)
+              Text(text = "TEMPERATUR (KREATIVITÄT)", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+              Text(String.format("%.2f", temperature), style = MaterialTheme.typography.labelMedium, color = DnaColors.OnSurface, fontWeight = FontWeight.Bold)
             }
             Slider(
               value = temperature,
@@ -625,21 +617,21 @@ fun StorySelectorDialog(
               valueRange = 0.2f..1.5f,
               steps = 26,
               colors = SliderDefaults.colors(
-                thumbColor = AmberGoldPrimary,
-                activeTrackColor = AmberGoldPrimary,
-                inactiveTrackColor = SlateDark700
+                thumbColor = DnaColors.Primary,
+                activeTrackColor = DnaColors.Primary,
+                inactiveTrackColor = DnaColors.SurfaceContainerHigh
               )
             )
           } else {
             Card(
-              colors = CardDefaults.cardColors(containerColor = SlateDark800),
+              colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
               shape = RoundedCornerShape(8.dp),
-              border = androidx.compose.foundation.BorderStroke(1.dp, SlateDark700)
+              border = androidx.compose.foundation.BorderStroke(1.dp, DnaColors.SurfaceContainerHigh)
             ) {
               Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = AmberGoldLight, modifier = Modifier.size(16.dp))
+                Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = DnaColors.Secondary, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Temperatur wird von $selectedModelId fest verwaltet.", style = MaterialTheme.typography.bodySmall, color = TextParchmentMuted)
+                Text("Temperatur wird von $selectedModelId fest verwaltet.", style = MaterialTheme.typography.bodySmall, color = DnaColors.OnSurfaceVariant)
               }
             }
           }
@@ -650,188 +642,188 @@ fun StorySelectorDialog(
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .background(SlateDark800, RoundedCornerShape(8.dp))
+              .background(DnaColors.SurfaceContainer, RoundedCornerShape(8.dp))
               .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(imageVector = Icons.Default.Security, contentDescription = null, tint = AmberGoldPrimary, modifier = Modifier.size(16.dp))
+              Icon(imageVector = Icons.Default.Security, contentDescription = null, tint = DnaColors.Primary, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(8.dp))
-              Text("Adult Content Filter (BLOCK_NONE)", style = MaterialTheme.typography.bodyMedium, color = TextParchment)
+              Text("Adult Content Filter (BLOCK_NONE)", style = MaterialTheme.typography.bodyMedium, color = DnaColors.OnSurface)
             }
             Switch(
               checked = adultContent,
               onCheckedChange = { adultContent = it },
               colors = SwitchDefaults.colors(
-                checkedThumbColor = AmberGoldPrimary,
-                checkedTrackColor = AmberGoldDark,
-                uncheckedThumbColor = TextParchmentMuted,
-                uncheckedTrackColor = SlateDark700
+                checkedThumbColor = DnaColors.Primary,
+                checkedTrackColor = DnaColors.PrimaryContainer,
+                uncheckedThumbColor = DnaColors.OnSurfaceVariant,
+                uncheckedTrackColor = DnaColors.SurfaceContainerHigh
               )
             )
           }
 
           Spacer(modifier = Modifier.height(16.dp))
-          HorizontalDivider(color = SlateDark700)
+          HorizontalDivider(color = DnaColors.SurfaceContainerHigh)
           Spacer(modifier = Modifier.height(16.dp))
 
           Text(
             text = "DETAILS & CHARAKTER-SETTING",
             style = MaterialTheme.typography.labelSmall,
-            color = AmberGoldPrimary,
+            color = DnaColors.Primary,
             fontWeight = FontWeight.Bold
           )
           Spacer(modifier = Modifier.height(8.dp))
 
-          Text(text = "TITEL DER GESCHICHTE", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "TITEL DER GESCHICHTE", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customTitle,
             onValueChange = { customTitle = it },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp)
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "GENRE & SETTING", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "GENRE & SETTING", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customGenre,
             onValueChange = { customGenre = it },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp)
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "STARTORT", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "STARTORT", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customLocation,
             onValueChange = { customLocation = it },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp)
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "DEIN OUTFIT ZU BEGINN", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "DEIN OUTFIT ZU BEGINN", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customOutfit,
             onValueChange = { customOutfit = it },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp)
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "START-INVENTAR (KOMMAGETRENNT)", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "START-INVENTAR (KOMMAGETRENNT)", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customInventory,
             onValueChange = { customInventory = it },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp)
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "ERSTER BEGLEITER / NPC NAME (OPTIONAL)", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "ERSTER BEGLEITER / NPC NAME (OPTIONAL)", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customNpcName,
             onValueChange = { customNpcName = it },
-            placeholder = { Text("z. B. Elena", color = TextParchmentFaint) },
+            placeholder = { Text("z. B. Elena", color = DnaColors.MutedForeground) },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp)
           )
 
           if (customNpcName.isNotBlank()) {
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "OUTFIT VON $customNpcName", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+            Text(text = "OUTFIT VON $customNpcName", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
               value = customNpcOutfit,
               onValueChange = { customNpcOutfit = it },
               modifier = Modifier.fillMaxWidth(),
               colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SlateDark800,
-                unfocusedContainerColor = SlateDark800,
-                focusedTextColor = TextParchment,
-                unfocusedTextColor = TextParchment,
-                focusedBorderColor = AmberGoldPrimary,
-                unfocusedBorderColor = SlateDark600
+                focusedContainerColor = DnaColors.SurfaceContainer,
+                unfocusedContainerColor = DnaColors.SurfaceContainer,
+                focusedTextColor = DnaColors.OnSurface,
+                unfocusedTextColor = DnaColors.OnSurface,
+                focusedBorderColor = DnaColors.Primary,
+                unfocusedBorderColor = DnaColors.Border
               ),
               shape = RoundedCornerShape(8.dp)
             )
 
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "BEZIEHUNG ZU DIR", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+            Text(text = "BEZIEHUNG ZU DIR", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
               value = customNpcRelation,
               onValueChange = { customNpcRelation = it },
               modifier = Modifier.fillMaxWidth(),
               colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SlateDark800,
-                unfocusedContainerColor = SlateDark800,
-                focusedTextColor = TextParchment,
-                unfocusedTextColor = TextParchment,
-                focusedBorderColor = AmberGoldPrimary,
-                unfocusedBorderColor = SlateDark600
+                focusedContainerColor = DnaColors.SurfaceContainer,
+                unfocusedContainerColor = DnaColors.SurfaceContainer,
+                focusedTextColor = DnaColors.OnSurface,
+                unfocusedTextColor = DnaColors.OnSurface,
+                focusedBorderColor = DnaColors.Primary,
+                unfocusedBorderColor = DnaColors.Border
               ),
               shape = RoundedCornerShape(8.dp)
             )
           }
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "ERÖFFNUNGSTEXT / PROLOG", style = MaterialTheme.typography.labelSmall, color = AmberGoldPrimary, fontWeight = FontWeight.Bold)
+          Text(text = "ERÖFFNUNGSTEXT / PROLOG", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customOpening,
@@ -840,12 +832,12 @@ fun StorySelectorDialog(
               .fillMaxWidth()
               .height(150.dp),
             colors = OutlinedTextFieldDefaults.colors(
-              focusedContainerColor = SlateDark800,
-              unfocusedContainerColor = SlateDark800,
-              focusedTextColor = TextParchment,
-              unfocusedTextColor = TextParchment,
-              focusedBorderColor = AmberGoldPrimary,
-              unfocusedBorderColor = SlateDark600
+              focusedContainerColor = DnaColors.SurfaceContainer,
+              unfocusedContainerColor = DnaColors.SurfaceContainer,
+              focusedTextColor = DnaColors.OnSurface,
+              unfocusedTextColor = DnaColors.OnSurface,
+              focusedBorderColor = DnaColors.Primary,
+              unfocusedBorderColor = DnaColors.Border
             ),
             shape = RoundedCornerShape(8.dp),
             textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
