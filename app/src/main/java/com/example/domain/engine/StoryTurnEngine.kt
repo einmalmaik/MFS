@@ -31,6 +31,29 @@ class StoryTurnEngine(
     private const val TAG = "StoryTurnEngine"
     private const val SLIDING_WINDOW_SIZE = 8
     private const val REGENERATE_WINDOW_SIZE = 6
+
+    /**
+     * Der Auftrag für den ersten Zug. Er steht hier und nicht in der Standard-Regie, weil er
+     * genau einmal gilt — in jedem weiteren Zug wäre er eine Aufforderung, neu anzufangen.
+     */
+    private const val OPENING_INSTRUCTION =
+      "Eröffne die Geschichte. Etabliere Ort, Zeit, Atmosphäre, die Ausgangslage des Spielers " +
+        "und die Figuren, die jetzt wirklich anwesend sind — alles aus dem Prompt dieser " +
+        "Geschichte hergeleitet. Setze mitten in der Szene ein, nicht mit einer Vorrede."
+
+    /**
+     * Setzt die Systemanweisung aus beiden Ebenen zusammen.
+     *
+     * [globalPrompt] ist die generische Standard-Regie für alle Geschichten, [storyPrompt] sagt,
+     * worum es in dieser einen geht. Früher verdrängte der zweite den ersten — dadurch verlor
+     * jede Geschichte mit eigenem Prompt sämtliche Qualitätsregeln. Beide Teile dürfen einzeln
+     * leer sein; die Standard-Regie darf der Nutzer bewusst ganz entfernen.
+     */
+    fun composeSystemPrompt(globalPrompt: String, storyPrompt: String): String =
+      listOf(globalPrompt, storyPrompt)
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .joinToString("\n\n")
   }
 
   /**
@@ -75,13 +98,55 @@ class StoryTurnEngine(
       return@flow
     }
 
-    finalizeTurn(
+    val stateFrozen = finalizeTurn(
       story = story,
       latestCheckpoint = latestCheckpoint,
       userAction = userAction,
       finalResponseText = finalResponseText
     )
 
+    if (stateFrozen) emit(TurnProgress.StateFrozen)
+    emit(TurnProgress.Completed)
+  }.flowOn(Dispatchers.IO)
+
+  /**
+   * Erzählt den Eröffnungszug einer frisch angelegten Geschichte.
+   *
+   * Wie [executeTurn], nur ohne Spieler-Nachricht: Die Aufforderung ist ein interner Auftrag an
+   * den Game Master und hat in der Historie nichts verloren — sonst stünde am Anfang jeder
+   * Geschichte eine Zeile, die der Spieler nie geschrieben hat.
+   */
+  fun openStory(
+    storyId: Long,
+    onChunk: (String) -> Unit
+  ): Flow<TurnProgress> = flow {
+    emit(TurnProgress.Thinking)
+
+    val story = storyDao.getStoryById(storyId)
+      ?: throw IllegalStateException("Story $storyId existiert nicht.")
+    val latestCheckpoint = storyDao.getLatestCheckpoint(storyId)
+
+    emit(TurnProgress.Streaming)
+
+    val finalResponseText = streamContent(
+      story = story,
+      latestCheckpoint = latestCheckpoint,
+      slidingWindow = emptyList(),
+      userAction = OPENING_INSTRUCTION,
+      onChunk = onChunk
+    ) ?: run {
+      emit(TurnProgress.Failed("Die KI hat die Geschichte nicht eröffnet. Bitte prüfe den API-Key oder die Verbindung."))
+      return@flow
+    }
+
+    val stateFrozen = finalizeTurn(
+      story = story,
+      latestCheckpoint = latestCheckpoint,
+      userAction = OPENING_INSTRUCTION,
+      finalResponseText = finalResponseText
+    )
+
+    if (stateFrozen) emit(TurnProgress.StateFrozen)
     emit(TurnProgress.Completed)
   }.flowOn(Dispatchers.IO)
 
@@ -115,13 +180,14 @@ class StoryTurnEngine(
       return@flow
     }
 
-    finalizeTurn(
+    val stateFrozen = finalizeTurn(
       story = story,
       latestCheckpoint = latestCheckpoint,
       userAction = userAction,
       finalResponseText = finalResponseText
     )
 
+    if (stateFrozen) emit(TurnProgress.StateFrozen)
     emit(TurnProgress.Completed)
   }.flowOn(Dispatchers.IO)
 
@@ -169,6 +235,8 @@ class StoryTurnEngine(
     val summary = latestCheckpoint?.previousEventsSummary ?: ""
     val currentInGameTime = latestCheckpoint?.inGameTime ?: "Tag 1, 09:00 Uhr"
 
+    val settings = preferences.getAiSettings()
+
     val presentNpcNames = latestCheckpoint?.getNpcList()
       ?.filter { it.status.equals("Anwesend", ignoreCase = true) }
       ?.map { it.name }
@@ -185,26 +253,25 @@ class StoryTurnEngine(
       queryText = retrievalQuery,
       currentInGameTime = currentInGameTime,
       presentNpcNames = presentNpcNames,
-      embeddingModel = story.selectedEmbeddingModel
+      embeddingModel = settings.embeddingModel
     )
     val npcProfiles = npcEngine.buildProfiles(
       storyId = story.id,
       memoryEngine = memoryEngine,
       currentInGameTime = currentInGameTime,
-      embeddingModel = story.selectedEmbeddingModel,
+      embeddingModel = settings.embeddingModel,
       queryText = retrievalQuery
     )
 
-    val effectivePrompt = if (story.systemPrompt.isNotBlank()) {
-      story.systemPrompt
-    } else {
-      preferences.getGlobalDefaultSystemPrompt()
-    }
+    val effectivePrompt = composeSystemPrompt(
+      globalPrompt = preferences.getGlobalDefaultSystemPrompt(),
+      storyPrompt = story.systemPrompt
+    )
 
     val buffer = StringBuilder()
     try {
       geminiClient.streamGenerateStory(
-        model = story.selectedModel,
+        model = settings.chatModel,
         systemInstruction = effectivePrompt,
         stateJson = stateJson,
         currentInGameTime = currentInGameTime,
@@ -215,11 +282,11 @@ class StoryTurnEngine(
         semanticMemories = semanticMemories,
         recentHistory = slidingWindow,
         userAction = userAction,
-        temperature = story.temperature,
-        supportsTemperature = story.supportsTemperature,
-        thinkingLevel = story.thinkingLevel,
-        thinkingBudget = story.thinkingBudget,
-        allowAdultContent = story.adultContentEnabled
+        temperature = settings.temperature,
+        supportsTemperature = settings.supportsTemperature,
+        thinkingLevel = settings.thinkingLevel,
+        thinkingBudget = settings.thinkingBudget,
+        allowAdultContent = settings.adultContentEnabled
       ).collect { chunk ->
         buffer.append(chunk)
         onChunk(chunk)
@@ -232,12 +299,13 @@ class StoryTurnEngine(
     return if (text.isNotBlank()) text else null
   }
 
+  /** @return true, wenn der Spielstand nur fortgeschrieben statt aktualisiert werden konnte. */
   private suspend fun finalizeTurn(
     story: StoryEntity,
     latestCheckpoint: CheckpointEntity?,
     userAction: String,
     finalResponseText: String
-  ) {
+  ): Boolean {
     val currentTurn = (latestCheckpoint?.turnNumber ?: 0) + 1
 
     val modelMsgId = storyDao.insertMessage(
@@ -250,7 +318,7 @@ class StoryTurnEngine(
     )
 
     // Die Extraktion schreibt Checkpoint, Erinnerungen und Figuren in einem Durchgang.
-    val newCheckpointId = stateExtractionEngine.extractAndCommitCheckpoint(
+    val result = stateExtractionEngine.extractAndCommitCheckpoint(
       story = story,
       latestCheckpoint = latestCheckpoint,
       userAction = userAction,
@@ -268,8 +336,10 @@ class StoryTurnEngine(
         sender = "model",
         content = finalResponseText,
         inGameTimeTag = inGameTime,
-        checkpointId = newCheckpointId
+        checkpointId = result.checkpointId
       )
     )
+
+    return result.carriedOver
   }
 }

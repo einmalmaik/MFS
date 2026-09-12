@@ -41,11 +41,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.data.model.MessageEntity
+import com.example.data.model.displayTitle
 import com.example.ui.components.ManualStateEditDialog
 import com.example.ui.components.NotebookDrawer
 import com.example.ui.components.SettingsSheet
 import com.example.ui.components.StoryActionInputBar
 import com.example.ui.components.StoryChatArea
+import com.example.ui.components.StoryPromptSheet
 import com.example.ui.components.StoryNavigationDrawer
 import com.example.ui.components.StorySelectorDialog
 import com.example.ui.components.StorySplashScreen
@@ -72,6 +74,7 @@ fun StoryScreen(
   var inputText by remember { mutableStateOf("") }
   var showNotebookSheet by remember { mutableStateOf(false) }
   var showSettingsSheet by remember { mutableStateOf(false) }
+  var showStoryPromptSheet by remember { mutableStateOf(false) }
   var showStorySelector by remember { mutableStateOf(false) }
   var storySelectorCreateMode by remember { mutableStateOf(false) }
   var showManualEditDialog by remember { mutableStateOf(false) }
@@ -160,6 +163,7 @@ fun StoryScreen(
 
   val notebookSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val storyPromptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   var isAppInitializing by remember { mutableStateOf(false) }
 
   // Playtime Tracking
@@ -222,7 +226,8 @@ fun StoryScreen(
           onOpenStorySelector = {
             scope.launch { drawerState.open() }
           },
-          onOpenNotebook = { showNotebookSheet = true }
+          onOpenNotebook = { showNotebookSheet = true },
+          onEditStoryPrompt = { showStoryPromptSheet = true }
         )
       }
     ) { innerPadding ->
@@ -249,7 +254,7 @@ fun StoryScreen(
             },
             onBranchFromMessage = { _ ->
               if (story != null) {
-                viewModel.branchStory(story.id, "${story.title} (Zweig)")
+                viewModel.branchStory(story.id, "${story.displayTitle} (Zweig)")
               }
             }
           )
@@ -313,8 +318,8 @@ fun StoryScreen(
     }
   }
 
-  // 2. Settings Sheet
-  if (showSettingsSheet && story != null) {
+  // 2. Settings Sheet — global, deshalb auch ohne aktive Geschichte erreichbar.
+  if (showSettingsSheet) {
     ModalBottomSheet(
       onDismissRequest = { showSettingsSheet = false },
       sheetState = settingsSheetState,
@@ -322,7 +327,7 @@ fun StoryScreen(
       scrimColor = DnaColors.SurfaceDim.copy(alpha = 0.7f)
     ) {
       SettingsSheet(
-        story = story,
+        aiSettings = uiState.aiSettings,
         globalDefaultPrompt = uiState.globalDefaultPrompt,
         customApiKey = uiState.customApiKey,
         availableModels = uiState.availableModels,
@@ -331,9 +336,7 @@ fun StoryScreen(
         isFetchingModels = uiState.isFetchingModels,
         modelCatalogIsLive = uiState.modelCatalogIsLive,
         onRefreshModels = { viewModel.refreshModelsFromGoogle() },
-        onSaveStorySettings = { title, prompt, model, embeddingModel, transcriptionModel, temp, supportsTemp, thinkingLvl, thinkingBudget, adult ->
-          viewModel.updateStorySettings(title, prompt, model, embeddingModel, transcriptionModel, temp, supportsTemp, thinkingLvl, thinkingBudget, adult)
-        },
+        onSaveAiSettings = { settings -> viewModel.saveAiSettings(settings) },
         onSaveGlobalDefaultPrompt = { globalPrompt ->
           viewModel.saveGlobalDefaultPrompt(globalPrompt)
         },
@@ -347,6 +350,27 @@ fun StoryScreen(
           scope.launch {
             settingsSheetState.hide()
             showSettingsSheet = false
+          }
+        }
+      )
+    }
+  }
+
+  // 2b. Prompt dieser Geschichte
+  if (showStoryPromptSheet && story != null) {
+    ModalBottomSheet(
+      onDismissRequest = { showStoryPromptSheet = false },
+      sheetState = storyPromptSheetState,
+      containerColor = DnaColors.Surface,
+      scrimColor = DnaColors.SurfaceDim.copy(alpha = 0.7f)
+    ) {
+      StoryPromptSheet(
+        story = story,
+        onSave = { title, prompt -> viewModel.updateStorySettings(title, prompt) },
+        onClose = {
+          scope.launch {
+            storyPromptSheetState.hide()
+            showStoryPromptSheet = false
           }
         }
       )
@@ -393,39 +417,14 @@ fun StoryScreen(
     StorySelectorDialog(
       currentStoryId = story?.id,
       stories = uiState.allStories,
-      availableModels = uiState.availableModels,
-      availableEmbeddingModels = uiState.availableEmbeddingModels,
-      availableTranscriptionModels = uiState.availableTranscriptionModels,
-      isFetchingModels = uiState.isFetchingModels,
-      onRefreshModels = { viewModel.refreshModelsFromGoogle() },
       onSelectStory = { id ->
         viewModel.switchStory(id)
         showStorySelector = false
       },
       onDeleteStory = { id -> viewModel.deleteStory(id) },
       onBranchStory = { sourceId, branchTitle -> viewModel.branchStory(sourceId, branchTitle) },
-      onCreateNewStory = { title, genre, perspective, prompt, model, embeddingModel, transcriptionModel, temp, supportsTemp, thinkingLvl, thinkingBudget, adult, loc, outfit, inv, npcName, npcOutfit, npcRel, opening ->
-        viewModel.createNewStory(
-          title = title,
-          genre = genre,
-          perspective = perspective,
-          systemPrompt = prompt,
-          selectedModel = model,
-          selectedEmbeddingModel = embeddingModel,
-          selectedTranscriptionModel = transcriptionModel,
-          temperature = temp,
-          supportsTemperature = supportsTemp,
-          thinkingLevel = thinkingLvl,
-          thinkingBudget = thinkingBudget,
-          adultContent = adult,
-          initialLocation = loc,
-          initialOutfit = outfit,
-          initialInventory = inv,
-          initialNpcName = npcName,
-          initialNpcOutfit = npcOutfit,
-          initialNpcRelation = npcRel,
-          openingText = opening
-        )
+      onCreateNewStory = { prompt ->
+        viewModel.createNewStory(prompt)
         showStorySelector = false
       },
       initialCreateMode = storySelectorCreateMode,

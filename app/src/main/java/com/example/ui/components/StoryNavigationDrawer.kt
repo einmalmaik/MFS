@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.StoryEntity
+import com.example.data.model.displayTitle
 import com.example.ui.dna.DnaActionConfirmDialog
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
@@ -315,7 +316,7 @@ fun StoryNavigationDrawer(
   storyToDelete?.let { story ->
     DnaActionConfirmDialog(
       title = "Geschichte löschen?",
-      description = "Möchtest du '${story.title}' wirklich unwiderruflich löschen? Alle Nachrichten, Meilensteine und der Speicherstand gehen verloren.",
+      description = "Möchtest du '${story.displayTitle}' wirklich unwiderruflich löschen? Alle Nachrichten, Meilensteine und der Speicherstand gehen verloren.",
       confirmButtonText = "Endgültig löschen",
       cancelButtonText = "Abbrechen",
       isDestructive = true,
@@ -332,12 +333,12 @@ fun StoryNavigationDrawer(
   storyToBranch?.let { sourceStory ->
     DnaActionConfirmDialog(
       title = "Zeitlinie verzweigen",
-      description = "Erstelle eine neue alternative Geschichte basierend auf dem aktuellen Stand von '${sourceStory.title}'. Du kannst dort andere Entscheidungen testen.",
+      description = "Erstelle eine neue alternative Geschichte basierend auf dem aktuellen Stand von '${sourceStory.displayTitle}'. Du kannst dort andere Entscheidungen testen.",
       confirmButtonText = "Zweig erstellen",
       cancelButtonText = "Abbrechen",
       isDestructive = false,
       onConfirm = {
-        onBranchStory(sourceStory.id, "${sourceStory.title} (Zweig)")
+        onBranchStory(sourceStory.id, "${sourceStory.displayTitle} (Zweig)")
         storyToBranch = null
         onCloseDrawer()
       },
@@ -390,7 +391,7 @@ private fun DrawerStoryCard(
             Spacer(modifier = Modifier.width(6.dp))
           }
           Text(
-            text = story.title,
+            text = story.displayTitle,
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = DnaTypography.InterFamily,
             fontWeight = FontWeight.Bold,

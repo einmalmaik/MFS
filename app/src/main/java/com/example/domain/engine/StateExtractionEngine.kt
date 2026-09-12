@@ -7,6 +7,7 @@ import com.example.data.model.CheckpointEntity
 import com.example.data.model.MemoryKind
 import com.example.data.model.StoryEntity
 import com.example.domain.model.TimeAnchor
+import com.example.domain.service.StoryPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -19,7 +20,8 @@ class StateExtractionEngine(
   private val geminiClient: GeminiClient,
   private val storyDao: StoryDao,
   private val memoryEngine: MemoryEngine,
-  private val npcEngine: NpcEngine
+  private val npcEngine: NpcEngine,
+  private val preferences: StoryPreferences
 ) {
   companion object {
     private const val TAG = "StateExtractionEngine"
@@ -87,6 +89,16 @@ class StateExtractionEngine(
      * wenn eine einzelne Extraktion sie auslässt.
      */
     private val NPC_STICKY_FIELDS = listOf("condition", "gender")
+
+    /**
+     * Entscheidet, ob ein von der KI vorgeschlagener Wert übernommen wird.
+     *
+     * Übernommen wird nur in ein leeres Feld. Eine frisch angelegte Geschichte hat weder Titel
+     * noch Genre und bekommt beides aus dem ersten Zug; hat der Spieler dagegen selbst einen
+     * Titel gesetzt, gehört er ihm und darf bei keiner späteren Extraktion umbenannt werden.
+     */
+    fun fillIfBlank(current: String, extracted: String): String =
+      if (current.isBlank() && extracted.isNotBlank()) extracted.trim() else current
 
     /**
      * Trägt [NPC_STICKY_FIELDS] aus dem vorherigen Checkpoint nach, wo die neue Extraktion sie
@@ -174,8 +186,17 @@ class StateExtractionEngine(
   data class HealingResult(val injuries: JSONArray, val scars: List<Scar>)
 
   /**
+   * Ergebnis eines Extraktionsversuchs.
+   *
+   * [carriedOver] ist true, wenn der vorherige Zustand fortgeschrieben werden musste. Der
+   * Spielstand ist dann unbeschädigt, aber auch unverändert: Ort, Uhrzeit, Inventar,
+   * Verletzungen und Erinnerungen stehen still, während die Erzählung weitergelaufen ist.
+   * Ohne diese Rückmeldung geschah das lautlos.
+   */
+  data class CheckpointResult(val checkpointId: Long, val carriedOver: Boolean)
+
+  /**
    * Performs post-turn background state extraction and saves the resulting CheckpointEntity.
-   * Returns the newly generated checkpoint ID.
    */
   suspend fun extractAndCommitCheckpoint(
     story: StoryEntity,
@@ -183,7 +204,7 @@ class StateExtractionEngine(
     userAction: String,
     modelResponse: String,
     turnNumber: Int
-  ): Long {
+  ): CheckpointResult {
     val currentStateJson = latestCheckpoint?.rawStateJson ?: ""
     val summary = latestCheckpoint?.previousEventsSummary ?: ""
     val milestones = latestCheckpoint?.getMilestonesList() ?: emptyList()
@@ -197,10 +218,12 @@ class StateExtractionEngine(
         }
       }
 
+      val settings = preferences.getAiSettings()
+
       val updatedStateJsonObj = geminiClient.extractUpdatedState(
-        model = story.selectedModel,
-        thinkingLevel = story.thinkingLevel,
-        thinkingBudget = story.thinkingBudget,
+        model = settings.chatModel,
+        thinkingLevel = settings.thinkingLevel,
+        thinkingBudget = settings.thinkingBudget,
         currentStateJson = currentStateJson,
         userAction = userAction,
         storyResponse = modelResponse,
@@ -337,6 +360,8 @@ class StateExtractionEngine(
 
       val checkpointId = storyDao.insertCheckpoint(newCheckpoint)
 
+      nameStoryIfUnnamed(story, updatedStateJsonObj)
+
       persistMemories(
         story = story,
         updatedState = updatedStateJsonObj,
@@ -347,10 +372,10 @@ class StateExtractionEngine(
         newMilestones = cumulativeMilestones - milestones.toSet()
       )
 
-      checkpointId
+      CheckpointResult(checkpointId, carriedOver = false)
     } catch (e: Exception) {
       Log.w(TAG, "State extraction fallback triggered", e)
-      if (latestCheckpoint != null) {
+      val carriedId = if (latestCheckpoint != null) {
         storyDao.insertCheckpoint(
           latestCheckpoint.copy(
             id = 0,
@@ -361,7 +386,25 @@ class StateExtractionEngine(
       } else {
         0L
       }
+      CheckpointResult(carriedId, carriedOver = true)
     }
+  }
+
+  /**
+   * Gibt der Geschichte ihren Namen, sobald die Erzählung ihn hergibt.
+   *
+   * Beim Anlegen wird nichts abgefragt außer dem Prompt — Titel und Genre bleiben leer und
+   * werden hier aus dem ersten Zug nachgetragen. Ein bereits vorhandener Wert wird niemals
+   * überschrieben: Hat der Spieler selbst einen Titel gesetzt, gehört er ihm.
+   */
+  private suspend fun nameStoryIfUnnamed(story: StoryEntity, updatedState: JSONObject) {
+    val newTitle = fillIfBlank(story.title, updatedState.optString("story_title"))
+    val newGenre = fillIfBlank(story.genre, updatedState.optString("genre"))
+    if (newTitle == story.title && newGenre == story.genre) return
+
+    storyDao.updateStory(
+      story.copy(title = newTitle, genre = newGenre, updatedAt = System.currentTimeMillis())
+    )
   }
 
   /**
@@ -392,7 +435,7 @@ class StateExtractionEngine(
           dayNumber = day,
           inGameTime = newInGameTime,
           turnNumber = turnNumber,
-          embeddingModel = story.selectedEmbeddingModel
+          embeddingModel = preferences.getAiSettings().embeddingModel
         )
       }
 
@@ -405,7 +448,7 @@ class StateExtractionEngine(
           dayNumber = day,
           inGameTime = newInGameTime,
           turnNumber = turnNumber,
-          embeddingModel = story.selectedEmbeddingModel
+          embeddingModel = preferences.getAiSettings().embeddingModel
         )
       }
 
@@ -420,7 +463,7 @@ class StateExtractionEngine(
           dayNumber = previousDay,
           inGameTime = previousInGameTime ?: "",
           turnNumber = turnNumber,
-          embeddingModel = story.selectedEmbeddingModel
+          embeddingModel = preferences.getAiSettings().embeddingModel
         )
       }
 
@@ -435,7 +478,7 @@ class StateExtractionEngine(
           inGameTime = newInGameTime,
           turnNumber = turnNumber,
           npcId = entry.npcId,
-          embeddingModel = story.selectedEmbeddingModel
+          embeddingModel = preferences.getAiSettings().embeddingModel
         )
       }
     } catch (e: Exception) {

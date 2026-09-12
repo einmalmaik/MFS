@@ -3,6 +3,7 @@ package com.example.data.repository
 import android.content.Context
 import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDao
+import com.example.data.model.AiSettings
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
@@ -52,7 +53,8 @@ class StoryRepository(
     geminiClient = geminiClient,
     storyDao = storyDao,
     memoryEngine = memoryEngine,
-    npcEngine = npcEngine
+    npcEngine = npcEngine,
+    preferences = preferences
   )
 
   private val turnEngine = StoryTurnEngine(
@@ -78,13 +80,19 @@ class StoryRepository(
 
   fun setGlobalDefaultSystemPrompt(prompt: String) = preferences.setGlobalDefaultSystemPrompt(prompt)
 
+  fun getAiSettings(): AiSettings = preferences.getAiSettings()
+
+  fun setAiSettings(settings: AiSettings) = preferences.setAiSettings(settings)
+
+  fun seedAiSettingsOnce(from: AiSettings): Boolean = preferences.seedAiSettingsOnce(from)
+
   fun getEffectiveApiKey(): String = preferences.getEffectiveApiKey()
 
   /**
-   * @param model Das Modell, mit dem die Geschichte tatsächlich erzählt wird. Ein fest
-   *   verdrahtetes Testmodell hätte genau den 404 verschwiegen, den der Test finden soll.
+   * Testet den Schlüssel mit genau dem Modell, das auch erzählt. Ein fest verdrahtetes
+   * Testmodell hätte den 404 verschwiegen, den der Test finden soll.
    */
-  suspend fun testApiKey(model: String = GeminiDefaults.CHAT_MODEL): Pair<Boolean, String> =
+  suspend fun testApiKey(model: String = preferences.getAiSettings().chatModel): Pair<Boolean, String> =
     geminiClient.testConnection(getEffectiveApiKey(), model)
 
   suspend fun fetchAvailableModels(): List<GeminiModelInfo> = geminiClient.fetchAvailableModels()
@@ -93,13 +101,12 @@ class StoryRepository(
 
   suspend fun transcribeAudio(
     audioBytes: ByteArray,
-    mimeType: String = "audio/mp4",
-    model: String? = null
-  ): String {
-    val effectiveModel = model?.ifBlank { GeminiDefaults.TRANSCRIPTION_MODEL }
-      ?: GeminiDefaults.TRANSCRIPTION_MODEL
-    return geminiClient.transcribeAudio(audioBytes, mimeType, effectiveModel)
-  }
+    mimeType: String = "audio/mp4"
+  ): String = geminiClient.transcribeAudio(
+    audioBytes,
+    mimeType,
+    preferences.getAiSettings().transcriptionModel
+  )
 
   // --- STORY PERSISTENCE (ROOM) ---
 
@@ -131,128 +138,62 @@ class StoryRepository(
     memoryEngine.invalidate()
   }
 
-  suspend fun ensureInitialData(): Long = withContext(Dispatchers.IO) {
-    val firstSnapshot = storyDao.getAllStories().firstOrNull() ?: emptyList()
-    if (firstSnapshot.isNotEmpty()) {
-      return@withContext firstSnapshot.first().id
-    }
-    createStory(
-      title = "Schatten über der Hafenstadt",
-      genre = "Dark Noir & Mystery",
-      perspective = "Zweite Person (Du)",
-      systemPrompt = "",
-      selectedModel = GeminiDefaults.CHAT_MODEL,
-      selectedEmbeddingModel = GeminiDefaults.EMBEDDING_MODEL,
-      selectedTranscriptionModel = GeminiDefaults.TRANSCRIPTION_MODEL,
-      temperature = 0.85f,
-      supportsTemperature = true,
-      thinkingLevel = "MEDIUM",
-      thinkingBudget = 2048,
-      adultContent = true,
-      initialLocation = "Alte Lagerhalle am Nordhafen",
-      initialOutfit = "Durchnässte dunkle Lederjacke, grauer Hoodie, robuste Stiefel",
-      initialInventory = listOf("Taschenlampe", "Dietrich-Set", "altes Notizbuch"),
-      initialNpcName = "Elena",
-      initialNpcOutfit = "Dunkelblauer Wollmantel, Lederstiefel, hochgeschlagener Kragen",
-      initialNpcRelation = "Misstrauisch, hält Abstand wegen der Ereignisse am Vortag",
-      initialPromptOpening = "Der Regen schlägt unbarmherzig gegen die verrosteten Wellblechwände der alten Lagerhalle am Nordhafen. Der Geruch von feuchtem Beton, Motorenöl und salziger Meeresluft hängt schwer im Raum.\n\nElena steht ein paar Schritte entfernt an einer umgestürzten Holzkiste. Sie hat die Hände tief in den Taschen ihres dunkelblauen Wollmantels vergraben. Ihr Blick wandert zur schweren Schiebetür, die nur einen Spalt breit offen steht. Im trüben Schein deiner schwachen Taschenlampe wirkt ihr Gesicht angespannt.\n\n\"Sie wissen, dass wir hier sind\", sagt sie leise, ohne dich direkt anzusehen. \"Die Frage ist nur, wie viel Zeit wir noch haben.\""
+  /**
+   * Legt eine Geschichte an, die nur aus ihrem Prompt besteht.
+   *
+   * Titel, Genre, Ort, Wetter, Outfit, Inventar und Begleiter bleiben leer: Sie stehen im
+   * Prompt und werden von der Extraktion des ersten Zuges daraus hergeleitet. Ein
+   * vorgeschriebener Prolog entfällt — die Geschichte beginnt direkt mit dem ersten Zug.
+   */
+  suspend fun createStory(systemPrompt: String): Long = withContext(Dispatchers.IO) {
+    val storyId = storyDao.insertStory(
+      StoryEntity(
+        title = "",
+        genre = "",
+        systemPrompt = systemPrompt.trim()
+      )
     )
-  }
-
-  suspend fun createStory(
-    title: String,
-    genre: String,
-    perspective: String = "Zweite Person (Du)",
-    systemPrompt: String = "",
-    selectedModel: String = GeminiDefaults.CHAT_MODEL,
-    selectedEmbeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
-    selectedTranscriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
-    temperature: Float = 0.85f,
-    supportsTemperature: Boolean = true,
-    thinkingLevel: String = "MEDIUM",
-    thinkingBudget: Int = 2048,
-    adultContent: Boolean = true,
-    initialLocation: String = "Startort",
-    initialOutfit: String = "Alltagskleidung",
-    initialInventory: List<String> = emptyList(),
-    initialNpcName: String = "",
-    initialNpcOutfit: String = "",
-    initialNpcRelation: String = "",
-    initialPromptOpening: String = ""
-  ): Long = withContext(Dispatchers.IO) {
-    val story = StoryEntity(
-      title = title,
-      systemPrompt = systemPrompt,
-      genre = genre,
-      perspective = perspective,
-      selectedModel = selectedModel,
-      selectedEmbeddingModel = selectedEmbeddingModel,
-      selectedTranscriptionModel = selectedTranscriptionModel,
-      temperature = temperature,
-      supportsTemperature = supportsTemperature,
-      thinkingLevel = thinkingLevel,
-      thinkingBudget = thinkingBudget,
-      adultContentEnabled = adultContent
-    )
-    val storyId = storyDao.insertStory(story)
-
-    val npcsJsonArray = JSONArray()
-    if (initialNpcName.isNotBlank()) {
-      val npcObj = JSONObject().apply {
-        put("name", initialNpcName)
-        put("outfit", initialNpcOutfit.ifBlank { "Passende Zivilkleidung" })
-        put("relationship_to_player", initialNpcRelation.ifBlank { "Zurückhaltend" })
-        put("current_mood", "Aufmerksam")
-        put("status", "Anwesend")
-      }
-      npcsJsonArray.put(npcObj)
-    }
-
-    val invArray = JSONArray()
-    initialInventory.forEach { invArray.put(it) }
 
     val rawStateObj = JSONObject().apply {
       put("in_game_time", "Tag 1, 20:00 Uhr")
-      put("location", initialLocation)
-      put("weather", "Klar, kühl")
+      put("location", "")
+      put("weather", "")
       put("player", JSONObject().apply {
-        put("outfit", initialOutfit)
+        put("outfit", "")
         put("condition", "Unverletzt")
-        put("inventory", invArray)
+        put("inventory", JSONArray())
       })
-      put("npcs_present", npcsJsonArray)
+      put("npcs_present", JSONArray())
       put("previous_events_summary", "Das Abenteuer beginnt.")
     }
 
-    val initialCheckpoint = CheckpointEntity(
-      storyId = storyId,
-      turnNumber = 0,
-      inGameTime = "Tag 1, 20:00 Uhr",
-      location = initialLocation,
-      weather = "Klar, kühl",
-      playerOutfit = initialOutfit,
-      playerInventory = invArray.toString(),
-      playerCondition = "Unverletzt",
-      npcsJson = npcsJsonArray.toString(),
-      milestonesJson = "[]",
-      previousEventsSummary = "Das Abenteuer beginnt.",
-      rawStateJson = rawStateObj.toString()
-    )
-    val cpId = storyDao.insertCheckpoint(initialCheckpoint)
-
-    if (initialPromptOpening.isNotBlank()) {
-      storyDao.insertMessage(
-        MessageEntity(
-          storyId = storyId,
-          sender = "model",
-          content = initialPromptOpening,
-          inGameTimeTag = "Tag 1, 20:00 Uhr",
-          checkpointId = cpId
-        )
+    storyDao.insertCheckpoint(
+      CheckpointEntity(
+        storyId = storyId,
+        turnNumber = 0,
+        inGameTime = "Tag 1, 20:00 Uhr",
+        location = "",
+        weather = "",
+        playerOutfit = "",
+        playerInventory = "[]",
+        playerCondition = "Unverletzt",
+        npcsJson = "[]",
+        milestonesJson = "[]",
+        previousEventsSummary = "Das Abenteuer beginnt.",
+        rawStateJson = rawStateObj.toString()
       )
-    }
+    )
 
     storyId
+  }
+
+  /** Erzählt den Eröffnungszug, ohne dass der Spieler etwas eingeben muss. */
+  fun openStory(storyId: Long, onChunk: (String) -> Unit): Flow<TurnProgress> =
+    turnEngine.openStory(storyId, onChunk)
+
+  /** true, solange noch kein einziger Zug erzählt wurde. */
+  suspend fun isUnopened(storyId: Long): Boolean = withContext(Dispatchers.IO) {
+    storyDao.getRecentMessages(storyId, 1).isEmpty()
   }
 
   // --- TURN EXECUTION & STREAMING ---

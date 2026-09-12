@@ -24,26 +24,61 @@ object GeminiDefaults {
   const val EMBEDDING_MODEL = "gemini-embedding-001"
 }
 
+/**
+ * Die KI-Einstellungen der App — global, nicht pro Geschichte.
+ *
+ * Modellwahl, Denkstufe, Kreativität und Adult Content sind Werkzeug-Einstellungen, keine
+ * Eigenschaften einer Erzählung. Sie einmal pro Geschichte abzufragen hat den Erstell-Dialog
+ * mit Entscheidungen gefüllt, die mit der Geschichte nichts zu tun haben. Gespeichert wird in
+ * `StoryPreferences`; die gleichnamigen Spalten in [StoryEntity] sind nur noch Altbestand.
+ */
+data class AiSettings(
+  val chatModel: String = GeminiDefaults.CHAT_MODEL,
+  val embeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
+  val transcriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
+  val thinkingLevel: String = "MEDIUM",
+  val thinkingBudget: Int = 2048,
+  val temperature: Float = 0.85f,
+  val supportsTemperature: Boolean = true,
+  val adultContentEnabled: Boolean = true
+)
+
 @Entity(tableName = "stories")
 data class StoryEntity(
   @PrimaryKey(autoGenerate = true) val id: Long = 0,
   val title: String,
-  val systemPrompt: String = "", // Empty means: use global default prompt
-  val genre: String = "Dark Noir & Mystery",
+  /** Der Prompt dieser Geschichte. Wird zusätzlich zur globalen Standard-Regie geschickt. */
+  val systemPrompt: String = "",
+  val genre: String = "",
   val perspective: String = "Zweite Person (Du)",
+  // --- Altbestand ---
+  // Diese acht Spalten wurden früher pro Geschichte gesetzt. Seit die KI-Einstellungen global
+  // sind, liest und schreibt sie niemand mehr; die Wahrheit steht in AiSettings. Entfernt
+  // werden sie trotzdem nicht: Ein Spaltenabbau in Room ist eine destruktive Migration und
+  // würde bestehende Spielstände gefährden (CLAUDE.md §0.1).
   val selectedModel: String = GeminiDefaults.CHAT_MODEL,
   val selectedEmbeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
   val selectedTranscriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
   val temperature: Float = 0.85f,
   val supportsTemperature: Boolean = true,
-  val thinkingLevel: String = "MEDIUM", // "LOW", "MEDIUM", "HIGH", "OFF"
-  val thinkingBudget: Int = 2048, // Legacy für 2.5: 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
+  val thinkingLevel: String = "MEDIUM",
+  val thinkingBudget: Int = 2048,
   val adultContentEnabled: Boolean = true,
+  // --- Ende Altbestand ---
   val isArchived: Boolean = false,
   val playTimeSeconds: Long = 0L, // Total tracked play time in seconds
   val createdAt: Long = System.currentTimeMillis(),
   val updatedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * Der Titel, solange die KI ihn noch nicht vergeben hat.
+ *
+ * Eine frisch angelegte Geschichte hat bewusst keinen Titel — sie bekommt ihn nach dem ersten
+ * Zug aus der Extraktion. Bis dahin darf in der Kopfleiste und im Menü kein Loch klaffen.
+ */
+val StoryEntity.displayTitle: String
+  get() = title.ifBlank { "Neue Geschichte" }
 
 data class GeminiModelInfo(
   val id: String,

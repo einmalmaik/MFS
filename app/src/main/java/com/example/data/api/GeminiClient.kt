@@ -41,8 +41,9 @@ class GeminiClient(
    * vorherigen Checkpoint fortschreibt: Ort, Uhrzeit, Inventar, Verletzungen und Erinnerungen
    * blieben stehen, während die Erzählung weiterlief.
    *
-   * 429 wird mitwiederholt: kurze Burst-Limits erholen sich in Sekunden. Ist das Tageskontingent
-   * erschöpft, kostet die Wiederholung nur die Wartezeit und die Meldung bleibt dieselbe.
+   * 429 wird nicht wiederholt: Googles Free-Tier begrenzt pro Modell und Tag, und gegen ein
+   * erschöpftes Tageskontingent hilft kein dritter Versuch — er kostet nur zehn Sekunden,
+   * bevor dieselbe Meldung erscheint.
    */
   private suspend fun executeWithRetry(request: Request): Response {
     var attempt = 0
@@ -62,8 +63,8 @@ class GeminiClient(
     private const val TAG = "GeminiClient"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    /** Fehler, die Google selbst als vorübergehend bezeichnet. */
-    private val TRANSIENT_HTTP_CODES = setOf(429, 500, 502, 503, 504)
+    /** Fehler, die Google selbst als vorübergehend bezeichnet und die sich von allein erholen. */
+    private val TRANSIENT_HTTP_CODES = setOf(500, 502, 503, 504)
 
     /** Wartezeiten zwischen den Versuchen. Vier Versuche insgesamt, höchstens 10 s Verzug. */
     private val RETRY_DELAYS_MS = longArrayOf(1_000L, 3_000L, 6_000L)
@@ -666,6 +667,8 @@ Du bist die State-Tracking-Engine des interaktiven Spiels. Analysiere den bisher
 Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema erfüllt:
 
 {
+  "story_title": "NUR ausfüllen, solange die Geschichte noch keinen Titel trägt: 3-5 Wörter, atmosphärisch, ohne Untertitel und ohne Anführungszeichen. Sonst leer lassen.",
+  "genre": "NUR ausfüllen, solange kein Genre feststeht: z. B. Dark Fantasy & Horror, Cyberpunk / Dystopie, Sci-Fi Survival. Sonst leer lassen.",
   "in_game_time": "Format IMMER: Tag X, HH:MM Uhr (z. B. Tag 3, 09:30 Uhr)",
   "location": "Aktueller Aufenthaltsort des Spielers",
   "weather": "Aktuelle Wetterlage & Atmosphäre",
@@ -1030,6 +1033,32 @@ $storyResponse
     }
   }
 
+  /**
+   * Unterscheidet die kurze Drosselung vom erschöpften Tageskontingent.
+   *
+   * Googles 429 heißt beides. Der Free-Tier erlaubt pro Modell und Tag nur eine feste Zahl von
+   * Anfragen (am 2026-09-12 zwanzig für `gemini-3.8-flash`) — "warte einen Moment" wäre dann
+   * eine Falschauskunft, die den Nutzer die Ursache in der App suchen lässt. Google selbst
+   * liefert die Unterscheidung in `quotaId` und die Wartezeit in `retryDelay`.
+   */
+  private fun buildRateLimitMessage(body: String): String {
+    val perDay = body.contains("PerDay", ignoreCase = true)
+    val retryHint = Regex("\"retryDelay\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
+    val model = Regex("model:\\s*([\\w.\\-]+)").find(body)?.groupValues?.get(1)
+
+    return buildString {
+      if (perDay) {
+        append("Das Tageskontingent deines Schlüssels ist aufgebraucht")
+        model?.let { append(" (Modell $it)") }
+        append(". Es füllt sich erst wieder auf — wähle in den Einstellungen ein anderes Modell ")
+        append("oder spiele morgen weiter.")
+      } else {
+        append("Zu viele Anfragen in kurzer Zeit (429).")
+        retryHint?.let { append(" Google nennt eine Wartezeit von $it.") }
+      }
+    }
+  }
+
   private fun parseErrorMessage(code: Int, body: String): String {
     // Auth-Fehler zuerst über den reason-Code auflösen – die HTTP-Codes allein sind mehrdeutig.
     when (extractErrorReason(body)) {
@@ -1048,7 +1077,7 @@ $storyResponse
       401 -> "Authentifizierung fehlgeschlagen (401). Google hat den hinterlegten Schlüssel nicht akzeptiert. Prüfe ihn in den Einstellungen über 'Testen'."
       403 -> "Keine Berechtigung (403). Der Schlüssel darf nicht auf die Gemini-API zugreifen. Bitte prüfe seine Einschränkungen."
       404 -> "Dieses Modell ist über deinen Schlüssel nicht mehr erreichbar (404). Es wurde aus der Auswahl entfernt — wähle in den Einstellungen ein anderes."
-      429 -> "Ratenlimit erreicht (429). Bitte warte einen Moment, bevor du weiterspielst."
+      429 -> buildRateLimitMessage(body)
       500, 503 -> "Google Gemini Server temporär überlastet (500/503). Bitte versuche es in wenigen Sekunden erneut."
       else -> "Fehler beim Aufruf der Gemini API (Code $code): $body"
     }

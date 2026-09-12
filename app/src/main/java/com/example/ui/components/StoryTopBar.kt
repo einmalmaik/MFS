@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.StoryEntity
+import com.example.data.model.displayTitle
 import androidx.compose.ui.text.style.TextOverflow
 import com.example.ui.dna.DnaBadge
 import com.example.ui.dna.DnaBadgeTone
@@ -58,6 +60,7 @@ fun StoryTopBar(
   onOpenDrawer: () -> Unit,
   onOpenStorySelector: () -> Unit,
   onOpenNotebook: () -> Unit,
+  onEditStoryPrompt: () -> Unit,
   modifier: Modifier = Modifier
 ) {
   TopAppBar(
@@ -107,7 +110,7 @@ fun StoryTopBar(
         Column {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-              text = story?.title ?: "Maunting Story Fable",
+              text = story?.displayTitle ?: "Maunting Story Fable",
               style = MaterialTheme.typography.titleMedium,
               fontWeight = FontWeight.Bold,
               fontFamily = DnaTypography.ManropeFamily,
@@ -155,7 +158,23 @@ fun StoryTopBar(
           .testTag("in_game_time_pill")
       )
 
-      Spacer(modifier = Modifier.width(6.dp))
+      Spacer(modifier = Modifier.width(2.dp))
+
+      // Prompt dieser Geschichte. Steht hier und nicht in den Einstellungen, weil dort nur
+      // noch Globales liegt — und weil man beim Lesen merkt, dass die Regie nachgeschärft
+      // gehört, nicht beim Aufräumen der Modellwahl.
+      if (story != null) {
+        IconButton(
+          onClick = onEditStoryPrompt,
+          modifier = Modifier.testTag("edit_story_prompt_button")
+        ) {
+          Icon(
+            imageVector = Icons.Default.Edit,
+            contentDescription = "Prompt dieser Geschichte bearbeiten",
+            tint = DnaColors.Primary
+          )
+        }
+      }
 
       // Notebook Button
       IconButton(

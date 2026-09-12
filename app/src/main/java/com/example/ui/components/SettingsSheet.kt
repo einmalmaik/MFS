@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,10 +41,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,9 +60,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.api.GeminiClient
+import com.example.data.model.AiSettings
 import com.example.data.model.GeminiModelInfo
-import com.example.data.model.StoryEntity
 import com.example.ui.dna.DnaBadge
 import com.example.ui.dna.DnaBadgeTone
 import com.example.ui.dna.DnaButton
@@ -83,7 +77,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(
-  story: StoryEntity,
+  aiSettings: AiSettings,
   globalDefaultPrompt: String,
   customApiKey: String,
   availableModels: List<GeminiModelInfo>,
@@ -92,18 +86,7 @@ fun SettingsSheet(
   isFetchingModels: Boolean,
   modelCatalogIsLive: Boolean = false,
   onRefreshModels: () -> Unit,
-  onSaveStorySettings: (
-    title: String,
-    systemPrompt: String,
-    model: String,
-    embeddingModel: String,
-    transcriptionModel: String,
-    temperature: Float,
-    supportsTemperature: Boolean,
-    thinkingLevel: String,
-    thinkingBudget: Int,
-    adultContent: Boolean
-  ) -> Unit,
+  onSaveAiSettings: (AiSettings) -> Unit,
   onSaveGlobalDefaultPrompt: (String) -> Unit,
   onSaveApiKey: (String) -> Unit,
   onTestApiKey: suspend () -> Pair<Boolean, String>,
@@ -113,14 +96,11 @@ fun SettingsSheet(
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
 
-  var title by remember(story) { mutableStateOf(story.title) }
-  var storySystemPrompt by remember(story) { mutableStateOf(story.systemPrompt ?: "") }
   var globalPrompt by remember(globalDefaultPrompt) { mutableStateOf(globalDefaultPrompt) }
-  var promptTabSelected by remember { mutableIntStateOf(0) }
 
-  var selectedModel by remember(story) { mutableStateOf<String>(story.selectedModel) }
-  var selectedEmbeddingModel by remember(story) { mutableStateOf<String>(story.selectedEmbeddingModel) }
-  var selectedTranscriptionModel by remember(story) { mutableStateOf<String>(story.selectedTranscriptionModel) }
+  var selectedModel by remember(aiSettings) { mutableStateOf(aiSettings.chatModel) }
+  var selectedEmbeddingModel by remember(aiSettings) { mutableStateOf(aiSettings.embeddingModel) }
+  var selectedTranscriptionModel by remember(aiSettings) { mutableStateOf(aiSettings.transcriptionModel) }
   val currentModelInfo = remember(selectedModel, availableModels) {
     availableModels.find { it.id == selectedModel } ?: GeminiModelInfo(
       id = selectedModel,
@@ -131,16 +111,15 @@ fun SettingsSheet(
     )
   }
 
-  var supportsTemperature by remember(story, currentModelInfo) {
+  var supportsTemperature by remember(aiSettings, currentModelInfo) {
     mutableStateOf(currentModelInfo.supportsTemperature)
   }
-  var temperature by remember(story) { mutableFloatStateOf(story.temperature) }
-  var thinkingLevel by remember(story) { mutableStateOf(story.thinkingLevel) }
-  var thinkingBudget by remember(story) {
-    val initial = if (story.thinkingBudget > 0) story.thinkingBudget else 2048
-    mutableIntStateOf(initial)
+  var temperature by remember(aiSettings) { mutableFloatStateOf(aiSettings.temperature) }
+  var thinkingLevel by remember(aiSettings) { mutableStateOf(aiSettings.thinkingLevel) }
+  var thinkingBudget by remember(aiSettings) {
+    mutableIntStateOf(if (aiSettings.thinkingBudget > 0) aiSettings.thinkingBudget else 2048)
   }
-  var adultContent by remember(story) { mutableStateOf(story.adultContentEnabled) }
+  var adultContent by remember(aiSettings) { mutableStateOf(aiSettings.adultContentEnabled) }
 
   var apiKeyInput by remember(customApiKey) { mutableStateOf(customApiKey) }
   var showApiKey by remember { mutableStateOf(false) }
@@ -206,38 +185,10 @@ fun SettingsSheet(
     }
 
     Text(
-      text = "Modell, Denkkraft und Regie für diese Geschichte.",
+      text = "Gilt für alle Geschichten.",
       style = MaterialTheme.typography.bodySmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.OnSurfaceVariant
-    )
-
-    Spacer(modifier = Modifier.height(20.dp))
-
-    // Story Title
-    Text(
-      text = "TITEL",
-      style = MaterialTheme.typography.labelSmall,
-      fontFamily = DnaTypography.InterFamily,
-      color = DnaColors.Primary,
-      fontWeight = FontWeight.Bold
-    )
-    Spacer(modifier = Modifier.height(6.dp))
-    OutlinedTextField(
-      value = title,
-      onValueChange = { title = it },
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("story_title_input"),
-      colors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = DnaColors.SurfaceContainer,
-        unfocusedContainerColor = DnaColors.SurfaceContainer,
-        focusedBorderColor = DnaColors.Primary,
-        unfocusedBorderColor = DnaColors.Border,
-        focusedTextColor = DnaColors.OnSurface,
-        unfocusedTextColor = DnaColors.OnSurface
-      ),
-      shape = RoundedCornerShape(10.dp)
     )
 
     Spacer(modifier = Modifier.height(20.dp))
@@ -740,135 +691,69 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(24.dp))
 
-    // 6. System-Prompt Regieanweisungen
+    // 6. Standard-Regie
+    //
+    // Frueher standen hier zwei Reiter: der Prompt dieser Geschichte und ein globaler, von dem
+    // der erste den zweiten verdraengte. Jetzt gehoert der Geschichten-Prompt in die Geschichte
+    // (Stift in der Kopfleiste), und dieser Text hier ist die generische Qualitaetsgrundlage,
+    // die zusaetzlich mitgeschickt wird.
     Text(
-      text = "REGIEANWEISUNG",
+      text = "STANDARD-REGIE",
       style = MaterialTheme.typography.labelSmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.Primary,
       fontWeight = FontWeight.Bold
     )
     Text(
-      text = "Definiere das Fundament der Spielwelt, Sprachregeln, Verbot von Kosenamen und das autonome Handeln der Charaktere.",
+      text = "Erzählhaltung für alle Geschichten. Wird zusätzlich zum Prompt der " +
+        "jeweiligen Geschichte geschickt — leeren ist erlaubt.",
       style = MaterialTheme.typography.bodySmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.OnSurfaceVariant
     )
     Spacer(modifier = Modifier.height(8.dp))
 
-    TabRow(
-      selectedTabIndex = promptTabSelected,
-      containerColor = DnaColors.SurfaceContainerLow,
-      contentColor = DnaColors.Primary,
-      indicator = { tabPositions ->
-        TabRowDefaults.SecondaryIndicator(
-          modifier = Modifier.tabIndicatorOffset(tabPositions[promptTabSelected]),
-          color = DnaColors.Primary
+    OutlinedTextField(
+      value = globalPrompt,
+      onValueChange = { globalPrompt = it },
+      placeholder = {
+        Text(
+          "Leer: Es gilt nur der Prompt der jeweiligen Geschichte.",
+          color = DnaColors.MutedForeground
         )
-      }
-    ) {
-      Tab(
-        selected = promptTabSelected == 0,
-        onClick = { promptTabSelected = 0 },
-        text = {
-          Text(
-            text = "Diese Geschichte",
-            style = MaterialTheme.typography.labelMedium,
-            fontFamily = DnaTypography.InterFamily,
-            color = if (promptTabSelected == 0) DnaColors.Primary else DnaColors.OnSurfaceVariant
-          )
-        },
-        modifier = Modifier.testTag("tab_story_prompt")
-      )
-      Tab(
-        selected = promptTabSelected == 1,
-        onClick = { promptTabSelected = 1 },
-        text = {
-          Text(
-            text = "Globaler Standard",
-            style = MaterialTheme.typography.labelMedium,
-            fontFamily = DnaTypography.InterFamily,
-            color = if (promptTabSelected == 1) DnaColors.Primary else DnaColors.OnSurfaceVariant
-          )
-        },
-        modifier = Modifier.testTag("tab_global_prompt")
-      )
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    if (promptTabSelected == 0) {
-      Text(
-        text = "Individueller Prompt für diese Geschichte (überschreibt den globalen Standard):",
-        style = MaterialTheme.typography.bodySmall,
-        fontFamily = DnaTypography.InterFamily,
-        color = DnaColors.MutedForeground
-      )
-      Spacer(modifier = Modifier.height(6.dp))
-      OutlinedTextField(
-        value = storySystemPrompt,
-        onValueChange = { storySystemPrompt = it },
-        placeholder = { Text("Leer lassen, um den globalen Standard-Prompt zu verwenden...", color = DnaColors.MutedForeground) },
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(200.dp)
-          .testTag("story_prompt_input"),
-        colors = OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = DnaColors.SurfaceContainer,
-          unfocusedContainerColor = DnaColors.SurfaceContainer,
-          focusedBorderColor = DnaColors.Primary,
-          unfocusedBorderColor = DnaColors.Border,
-          focusedTextColor = DnaColors.OnSurface,
-          unfocusedTextColor = DnaColors.OnSurface
-        ),
-        shape = RoundedCornerShape(10.dp),
-        textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontFamily = DnaTypography.InterFamily)
-      )
-    } else {
-      Text(
-        text = "Globaler Standard-Prompt (gilt für alle neuen Geschichten):",
-        style = MaterialTheme.typography.bodySmall,
-        fontFamily = DnaTypography.InterFamily,
-        color = DnaColors.MutedForeground
-      )
-      Spacer(modifier = Modifier.height(6.dp))
-      OutlinedTextField(
-        value = globalPrompt,
-        onValueChange = { globalPrompt = it },
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(200.dp)
-          .testTag("global_prompt_input"),
-        colors = OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = DnaColors.SurfaceContainer,
-          unfocusedContainerColor = DnaColors.SurfaceContainer,
-          focusedBorderColor = DnaColors.Primary,
-          unfocusedBorderColor = DnaColors.Border,
-          focusedTextColor = DnaColors.OnSurface,
-          unfocusedTextColor = DnaColors.OnSurface
-        ),
-        shape = RoundedCornerShape(10.dp),
-        textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontFamily = DnaTypography.InterFamily)
-      )
-    }
+      },
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(200.dp)
+        .testTag("global_prompt_input"),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = DnaColors.SurfaceContainer,
+        unfocusedContainerColor = DnaColors.SurfaceContainer,
+        focusedBorderColor = DnaColors.Primary,
+        unfocusedBorderColor = DnaColors.Border,
+        focusedTextColor = DnaColors.OnSurface,
+        unfocusedTextColor = DnaColors.OnSurface
+      ),
+      shape = RoundedCornerShape(10.dp),
+      textStyle = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontFamily = DnaTypography.InterFamily)
+    )
 
     Spacer(modifier = Modifier.height(28.dp))
 
-    // Save All Button
     DnaButton(
-      text = "Einstellungen anwenden & speichern",
+      text = "Speichern",
       onClick = {
-        onSaveStorySettings(
-          title,
-          storySystemPrompt,
-          selectedModel,
-          selectedEmbeddingModel,
-          selectedTranscriptionModel,
-          temperature,
-          supportsTemperature,
-          thinkingLevel,
-          thinkingBudget,
-          adultContent
+        onSaveAiSettings(
+          AiSettings(
+            chatModel = selectedModel,
+            embeddingModel = selectedEmbeddingModel,
+            transcriptionModel = selectedTranscriptionModel,
+            thinkingLevel = thinkingLevel,
+            thinkingBudget = thinkingBudget,
+            temperature = temperature,
+            supportsTemperature = supportsTemperature,
+            adultContentEnabled = adultContent
+          )
         )
         onSaveGlobalDefaultPrompt(globalPrompt)
         onSaveApiKey(apiKeyInput)

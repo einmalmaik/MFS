@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDatabase
+import com.example.data.model.AiSettings
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
@@ -14,12 +15,14 @@ import com.example.data.model.StoryEntity
 import com.example.data.repository.StoryRepository
 import com.example.domain.model.TurnProgress
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -45,7 +48,9 @@ data class StoryUiState(
   /** false = Modell-Dropdowns zeigen die Fallback-Liste, der Schlüssel ist also unbestätigt. */
   val modelCatalogIsLive: Boolean = false,
   /** Gesetzt, wenn ein nicht mehr erreichbares Modell automatisch ersetzt wurde. */
-  val modelNotice: String? = null
+  val modelNotice: String? = null,
+  /** Modelle, Denkstufe, Kreativität und Adult Content — global, nicht pro Geschichte. */
+  val aiSettings: AiSettings = AiSettings()
 )
 
 class StoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -67,6 +72,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val _isTranscribingAudio = MutableStateFlow(false)
   private val _modelCatalogIsLive = MutableStateFlow(false)
   private val _modelNotice = MutableStateFlow<String?>(null)
+  private val _aiSettings = MutableStateFlow(repository.getAiSettings())
 
   private var activeTurnJob: Job? = null
 
@@ -88,10 +94,38 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
 
   init {
     viewModelScope.launch {
-      val defaultStoryId = repository.ensureInitialData()
-      switchStory(defaultStoryId)
+      // Die erste Emission der Datenbank abwarten. `stories` ist ein stateIn-Flow und liefert
+      // beim Start noch die leere Vorgabeliste — darauf zu prüfen hieße, jede vorhandene
+      // Geschichte zu übersehen.
+      val existing = repository.getAllStories().firstOrNull().orEmpty()
+      seedAiSettingsFromExistingStory(existing)
+      existing.firstOrNull { !it.isArchived }?.let { switchStory(it.id) }
       refreshModelsFromGoogle()
     }
+  }
+
+  /**
+   * Übernimmt die Einstellungen der zuletzt bearbeiteten Geschichte genau einmal in die globalen.
+   *
+   * Vor diesem Umbau standen Modellwahl, Denkstufe und Kreativität in jeder Geschichte einzeln.
+   * Ohne die Übernahme stünde nach dem Update überall wieder der Vorgabewert — und ein
+   * gewechseltes Einbettungsmodell macht das bisherige Gedächtnis unlesbar.
+   */
+  private fun seedAiSettingsFromExistingStory(stories: List<StoryEntity>) {
+    val source = stories.maxByOrNull { it.updatedAt } ?: return
+    val seeded = repository.seedAiSettingsOnce(
+      AiSettings(
+        chatModel = source.selectedModel,
+        embeddingModel = source.selectedEmbeddingModel,
+        transcriptionModel = source.selectedTranscriptionModel,
+        thinkingLevel = source.thinkingLevel,
+        thinkingBudget = source.thinkingBudget,
+        temperature = source.temperature,
+        supportsTemperature = source.supportsTemperature,
+        adultContentEnabled = source.adultContentEnabled
+      )
+    )
+    if (seeded) _aiSettings.value = repository.getAiSettings()
   }
 
   fun refreshModelsFromGoogle() {
@@ -121,48 +155,51 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   /**
-   * Stellt eine Geschichte auf erreichbare Modelle um, wenn ihre gespeicherte Wahl nicht mehr
-   * funktioniert.
+   * Stellt die globale Modellwahl um, wenn sie nicht mehr funktioniert.
    *
    * Nötig, weil Google Modelle abkündigt, ohne sie aus ListModels zu entfernen: `gemini-2.5-flash`
-   * und `text-embedding-004` stehen in bestehenden Spielständen, antworten aber mit HTTP 404.
+   * und `text-embedding-004` stehen in alten Einstellungen, antworten aber mit HTTP 404.
    * Beim Erzählmodell fällt das sofort auf, beim Embedding-Modell nicht — dort verliert die
    * Geschichte still ihr semantisches Gedächtnis. Deshalb wird hier korrigiert statt gewartet.
    *
    * Die Umstellung wird dem Nutzer angezeigt; stillschweigend etwas anderes zu benutzen, als in
    * den Einstellungen steht, wäre genau das unbemerkte Handeln, das MSF vermeiden will.
    */
-  private suspend fun healStoredModelSelection() {
+  private fun healStoredModelSelection() {
     if (!_modelCatalogIsLive.value) return
-    val story = stories.value.firstOrNull { it.id == _activeStoryId.value } ?: return
+    val settings = _aiSettings.value
 
     val chat = GeminiClient.resolveModel(
-      story.selectedModel, _availableChatModels.value, GeminiDefaults.CHAT_MODEL
+      settings.chatModel, _availableChatModels.value, GeminiDefaults.CHAT_MODEL
     )
     val embedding = GeminiClient.resolveModel(
-      story.selectedEmbeddingModel, _availableEmbeddingModels.value, GeminiDefaults.EMBEDDING_MODEL
+      settings.embeddingModel, _availableEmbeddingModels.value, GeminiDefaults.EMBEDDING_MODEL
     )
     val transcription = GeminiClient.resolveModel(
-      story.selectedTranscriptionModel, _availableTranscriptionModels.value, GeminiDefaults.TRANSCRIPTION_MODEL
+      settings.transcriptionModel, _availableTranscriptionModels.value, GeminiDefaults.TRANSCRIPTION_MODEL
     )
 
     val changes = buildList {
-      if (chat != story.selectedModel) add("Erzähler: ${story.selectedModel} → $chat")
-      if (embedding != story.selectedEmbeddingModel) add("Gedächtnis: ${story.selectedEmbeddingModel} → $embedding")
-      if (transcription != story.selectedTranscriptionModel) add("Sprache: ${story.selectedTranscriptionModel} → $transcription")
+      if (chat != settings.chatModel) add("Erzähler: ${settings.chatModel} → $chat")
+      if (embedding != settings.embeddingModel) add("Gedächtnis: ${settings.embeddingModel} → $embedding")
+      if (transcription != settings.transcriptionModel) add("Sprache: ${settings.transcriptionModel} → $transcription")
     }
     if (changes.isEmpty()) return
 
-    repository.updateStory(
-      story.copy(
-        selectedModel = chat,
-        selectedEmbeddingModel = embedding,
-        selectedTranscriptionModel = transcription,
-        updatedAt = System.currentTimeMillis()
+    saveAiSettings(
+      settings.copy(
+        chatModel = chat,
+        embeddingModel = embedding,
+        transcriptionModel = transcription
       )
     )
     _modelNotice.value =
       "Nicht mehr erreichbare Modelle wurden umgestellt:\n" + changes.joinToString("\n")
+  }
+
+  fun saveAiSettings(settings: AiSettings) {
+    repository.setAiSettings(settings)
+    _aiSettings.value = settings
   }
 
   fun dismissModelNotice() {
@@ -193,7 +230,19 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
 
-    viewModelScope.launch { healStoredModelSelection() }
+    healStoredModelSelection()
+    openStoryIfUnopened(storyId)
+  }
+
+  /** Kein aktiver Spielstand — die App zeigt den leeren Zustand. */
+  private fun clearActiveStory() {
+    _activeStoryId.value = null
+    messagesJob?.cancel()
+    checkpointJob?.cancel()
+    allCheckpointsJob?.cancel()
+    _messages.value = emptyList()
+    _latestCheckpoint.value = null
+    _allCheckpoints.value = emptyList()
   }
 
   fun toggleStoryArchived(storyId: Long, isArchived: Boolean) {
@@ -206,7 +255,16 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     val cleanAction = actionText.trim()
     if (cleanAction.isBlank()) return
     val storyId = _activeStoryId.value ?: return
+    runTurn { onChunk -> repository.executeTurn(storyId, cleanAction, onChunk) }
+  }
 
+  /**
+   * Führt einen Zug aus und hält Streaming-Puffer, Fortschritt und Fehlermeldung nach.
+   *
+   * Gemeinsam genutzt von der Spieler-Aktion und dem Eröffnungszug einer neuen Geschichte —
+   * beide unterscheiden sich nur darin, welcher Flow sie liefert.
+   */
+  private fun runTurn(start: (onChunk: (String) -> Unit) -> Flow<TurnProgress>) {
     if (_isGenerating.value) return
 
     _isGenerating.value = true
@@ -217,34 +275,34 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     activeTurnJob?.cancel()
     activeTurnJob = viewModelScope.launch {
       try {
-        repository.executeTurn(
-          storyId = storyId,
-          userAction = cleanAction,
-          onChunk = { chunk ->
-            _streamChunk.value += chunk
-          }
-        ).catch { e ->
-          Log.e("StoryViewModel", "Turn execution failed", e)
-          _errorMessage.value = e.message ?: "Ein unerwarteter Fehler ist aufgetreten."
-          _isGenerating.value = false
-          _streamChunk.value = ""
-          _turnStatus.value = null
-        }.collect { progress ->
-          _turnStatus.value = progress
-          when (progress) {
-            is TurnProgress.Failed -> {
-              _errorMessage.value = progress.error
-              _isGenerating.value = false
-              _streamChunk.value = ""
+        start { chunk -> _streamChunk.value += chunk }
+          .catch { e ->
+            Log.e("StoryViewModel", "Turn execution failed", e)
+            _errorMessage.value = e.message ?: "Ein unerwarteter Fehler ist aufgetreten."
+            _isGenerating.value = false
+            _streamChunk.value = ""
+            _turnStatus.value = null
+          }.collect { progress ->
+            _turnStatus.value = progress
+            when (progress) {
+              is TurnProgress.Failed -> {
+                _errorMessage.value = progress.error
+                _isGenerating.value = false
+                _streamChunk.value = ""
+              }
+              TurnProgress.StateFrozen -> {
+                _modelNotice.value = "Der Spielstand konnte diesen Zug nicht mitschreiben — " +
+                  "Google war nicht erreichbar. Ort, Uhrzeit, Inventar und Erinnerungen stehen " +
+                  "noch auf dem Stand davor."
+              }
+              TurnProgress.Completed -> {
+                _isGenerating.value = false
+                _streamChunk.value = ""
+                _turnStatus.value = null
+              }
+              else -> {}
             }
-            TurnProgress.Completed -> {
-              _isGenerating.value = false
-              _streamChunk.value = ""
-              _turnStatus.value = null
-            }
-            else -> {}
           }
-        }
       } catch (e: Throwable) {
         Log.e("StoryViewModel", "Turn coroutine failed", e)
         _errorMessage.value = e.message ?: "Ein unerwarteter Fehler ist aufgetreten."
@@ -298,6 +356,11 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
               _isGenerating.value = false
               _streamChunk.value = ""
             }
+            TurnProgress.StateFrozen -> {
+              _modelNotice.value = "Der Spielstand konnte diesen Zug nicht mitschreiben — " +
+                "Google war nicht erreichbar. Ort, Uhrzeit, Inventar und Erinnerungen stehen " +
+                "noch auf dem Stand davor."
+            }
             TurnProgress.Completed -> {
               _isGenerating.value = false
               _streamChunk.value = ""
@@ -318,19 +381,12 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
 
   fun transcribeVoiceInput(audioBytes: ByteArray, onTranscribed: (String) -> Unit) {
     if (audioBytes.isEmpty()) return
-    val currentStory = stories.value.firstOrNull { it.id == _activeStoryId.value }
-    val transcriptionModel = GeminiClient.resolveModel(
-      stored = currentStory?.selectedTranscriptionModel.orEmpty(),
-      catalog = _availableTranscriptionModels.value,
-      fallback = GeminiDefaults.TRANSCRIPTION_MODEL
-    )
     viewModelScope.launch {
       _isTranscribingAudio.value = true
       try {
         val transcribedText = repository.transcribeAudio(
           audioBytes = audioBytes,
-          mimeType = "audio/mp4",
-          model = transcriptionModel
+          mimeType = "audio/mp4"
         )
         if (transcribedText.isNotBlank()) {
           onTranscribed(transcribedText)
@@ -357,32 +413,18 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun deleteCurrentStory() {
-    val currentStoryId = _activeStoryId.value ?: return
-    viewModelScope.launch {
-      repository.deleteStoryById(currentStoryId)
-      val allRemaining = repository.getAllStories()
-      val firstRemaining = stories.value.firstOrNull { it.id != currentStoryId }
-      if (firstRemaining != null) {
-        switchStory(firstRemaining.id)
-      } else {
-        val newId = repository.ensureInitialData()
-        switchStory(newId)
-      }
-    }
+    deleteStoryById(_activeStoryId.value ?: return)
   }
 
   fun deleteStoryById(id: Long) {
     viewModelScope.launch {
       repository.deleteStoryById(id)
-      if (_activeStoryId.value == id) {
-        val firstRemaining = stories.value.firstOrNull { it.id != id }
-        if (firstRemaining != null) {
-          switchStory(firstRemaining.id)
-        } else {
-          val newId = repository.ensureInitialData()
-          switchStory(newId)
-        }
-      }
+      if (_activeStoryId.value != id) return@launch
+
+      // War es die letzte, bleibt die App leer. Ungefragt eine Beispielgeschichte anzulegen
+      // wäre genau das unbemerkte Handeln, das MSF vermeiden will.
+      val firstRemaining = stories.value.firstOrNull { it.id != id }
+      if (firstRemaining != null) switchStory(firstRemaining.id) else clearActiveStory()
     }
   }
 
@@ -405,58 +447,14 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     deleteStoryById(id)
   }
 
-  fun updateStorySettings(
-    title: String,
-    systemPrompt: String,
-    model: String,
-    embeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
-    transcriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
-    temperature: Float,
-    supportsTemperature: Boolean,
-    thinkingLevel: String,
-    thinkingBudget: Int,
-    adultContent: Boolean
-  ) {
-    updateStoryConfig(
-      title = title,
-      systemPrompt = systemPrompt,
-      model = model,
-      embeddingModel = embeddingModel,
-      transcriptionModel = transcriptionModel,
-      temperature = temperature,
-      supportsTemperature = supportsTemperature,
-      thinkingLevel = thinkingLevel,
-      thinkingBudget = thinkingBudget,
-      adultContent = adultContent
-    )
-  }
-
-  fun updateStoryConfig(
-    title: String,
-    systemPrompt: String,
-    model: String,
-    embeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
-    transcriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
-    temperature: Float,
-    supportsTemperature: Boolean,
-    thinkingLevel: String,
-    thinkingBudget: Int,
-    adultContent: Boolean
-  ) {
+  /** Alles, was noch zur einzelnen Geschichte gehört: ihr Titel und ihr Prompt. */
+  fun updateStorySettings(title: String, systemPrompt: String) {
     val current = stories.value.firstOrNull { it.id == _activeStoryId.value } ?: return
     viewModelScope.launch {
       repository.updateStory(
         current.copy(
-          title = title,
-          systemPrompt = systemPrompt,
-          selectedModel = model,
-          selectedEmbeddingModel = embeddingModel,
-          selectedTranscriptionModel = transcriptionModel,
-          temperature = temperature,
-          supportsTemperature = supportsTemperature,
-          thinkingLevel = thinkingLevel,
-          thinkingBudget = thinkingBudget,
-          adultContentEnabled = adultContent,
+          title = title.trim(),
+          systemPrompt = systemPrompt.trim(),
           updatedAt = System.currentTimeMillis()
         )
       )
@@ -552,11 +550,10 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   suspend fun testApiKeyConnection(): Pair<Boolean, String> {
-    // Geprüft wird mit dem Modell dieser Geschichte. Ein fest verdrahtetes Testmodell hat genau
-    // den 404 verschwiegen, den der Nutzer beim Spielen zu sehen bekam.
-    val story = stories.value.firstOrNull { it.id == _activeStoryId.value }
+    // Geprüft wird mit dem eingestellten Erzählmodell. Ein fest verdrahtetes Testmodell hat
+    // genau den 404 verschwiegen, den der Nutzer beim Spielen zu sehen bekam.
     val model = GeminiClient.resolveModel(
-      stored = story?.selectedModel.orEmpty(),
+      stored = _aiSettings.value.chatModel,
       catalog = _availableChatModels.value,
       fallback = GeminiDefaults.CHAT_MODEL
     )
@@ -567,50 +564,31 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     return result
   }
 
-  fun createNewStory(
-    title: String,
-    genre: String,
-    perspective: String,
-    systemPrompt: String,
-    selectedModel: String = GeminiDefaults.CHAT_MODEL,
-    selectedEmbeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
-    selectedTranscriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
-    temperature: Float = 0.85f,
-    supportsTemperature: Boolean = true,
-    thinkingLevel: String = "MEDIUM",
-    thinkingBudget: Int = 2048,
-    adultContent: Boolean = true,
-    initialLocation: String,
-    initialOutfit: String,
-    initialInventory: List<String>,
-    initialNpcName: String,
-    initialNpcOutfit: String,
-    initialNpcRelation: String,
-    openingText: String
-  ) {
+  /**
+   * Legt eine Geschichte aus ihrem Prompt an und lässt sie sofort beginnen.
+   *
+   * Es gibt keinen Prolog mehr, den man vorher ausfüllen müsste: Der erste Zug wird hier
+   * gestartet und stellt Ort, Zeit, Ausgangslage und Figuren selbst her.
+   */
+  fun createNewStory(systemPrompt: String) {
+    if (systemPrompt.isBlank()) return
     viewModelScope.launch {
-      val newId = repository.createStory(
-        title = title,
-        genre = genre,
-        perspective = perspective,
-        systemPrompt = systemPrompt,
-        selectedModel = selectedModel,
-        selectedEmbeddingModel = selectedEmbeddingModel,
-        selectedTranscriptionModel = selectedTranscriptionModel,
-        temperature = temperature,
-        supportsTemperature = supportsTemperature,
-        thinkingLevel = thinkingLevel,
-        thinkingBudget = thinkingBudget,
-        adultContent = adultContent,
-        initialLocation = initialLocation,
-        initialOutfit = initialOutfit,
-        initialInventory = initialInventory,
-        initialNpcName = initialNpcName,
-        initialNpcOutfit = initialNpcOutfit,
-        initialNpcRelation = initialNpcRelation,
-        initialPromptOpening = openingText
-      )
-      switchStory(newId)
+      // switchStory stößt den Eröffnungszug selbst an — sonst liefen hier zwei Versuche parallel.
+      switchStory(repository.createStory(systemPrompt))
+    }
+  }
+
+  /**
+   * Holt den Eröffnungszug nach, wenn er noch aussteht.
+   *
+   * Scheitert er beim Anlegen — Ratenlimit, kein Netz, Google überlastet —, bliebe die
+   * Geschichte sonst dauerhaft leer, ohne dass der Spieler sie starten könnte. Beim nächsten
+   * Öffnen wird der Versuch deshalb wiederholt.
+   */
+  fun openStoryIfUnopened(storyId: Long) {
+    viewModelScope.launch {
+      if (!repository.isUnopened(storyId)) return@launch
+      runTurn { onChunk -> repository.openStory(storyId, onChunk) }
     }
   }
 
@@ -642,7 +620,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _isFetchingModels,
     _isTranscribingAudio,
     _modelCatalogIsLive,
-    _modelNotice
+    _modelNotice,
+    _aiSettings
   ) { args: Array<Any?> ->
     @Suppress("UNCHECKED_CAST")
     val storyList = args[0] as List<StoryEntity>
@@ -668,8 +647,10 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     val transcribingAudio = args[15] as Boolean
     val catalogIsLive = args[16] as Boolean
     val notice = args[17] as String?
+    val settings = args[18] as AiSettings
 
-    val activeStory = storyList.firstOrNull { it.id == activeId } ?: storyList.firstOrNull()
+    // Kein Rückfall auf die erste Geschichte: Ist keine aktiv, soll die App das auch zeigen.
+    val activeStory = storyList.firstOrNull { it.id == activeId }
 
     StoryUiState(
       currentStory = activeStory,
@@ -691,7 +672,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       isFetchingModels = fetchingModels,
       isTranscribingAudio = transcribingAudio,
       modelCatalogIsLive = catalogIsLive,
-      modelNotice = notice
+      modelNotice = notice,
+      aiSettings = settings
     )
   }.stateIn(
     viewModelScope,

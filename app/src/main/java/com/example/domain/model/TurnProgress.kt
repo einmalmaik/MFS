@@ -17,6 +17,15 @@ sealed class TurnProgress {
   /** Turn is fully processed and persisted to the local database. */
   data object Completed : TurnProgress()
 
+  /**
+   * Die Erzählung steht, aber der Spielstand konnte nicht fortgeschrieben werden.
+   *
+   * Kein Fehlerzustand: Der Text ist da und der alte Checkpoint unbeschädigt. Nur Ort, Zeit,
+   * Inventar, Verletzungen und Erinnerungen dieses Zuges fehlen — und das muss der Spieler
+   * erfahren, sonst wundert er sich später über eine Welt, die stehen geblieben ist.
+   */
+  data object StateFrozen : TurnProgress()
+
   /** An error occurred during generation or processing. */
   data class Failed(val error: String) : TurnProgress()
 }
