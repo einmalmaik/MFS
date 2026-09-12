@@ -14,9 +14,10 @@ data class StoryEntity(
   val perspective: String = "Zweite Person (Du)",
   val selectedModel: String = "gemini-3.8-flash",
   val selectedEmbeddingModel: String = "text-embedding-004",
+  val selectedTranscriptionModel: String = "gemini-2.5-flash",
   val temperature: Float = 0.85f,
   val supportsTemperature: Boolean = true,
-  val thinkingLevel: String = "MEDIUM", // "MINIMAL", "LOW", "MEDIUM", "HIGH", "OFF"
+  val thinkingLevel: String = "MEDIUM", // "LOW", "MEDIUM", "HIGH", "OFF"
   val thinkingBudget: Int = 2048, // Legacy für 2.5: 0 = Aus, 1024 = Gering, 2048 = Standard, 4096 = Tief, 8192 = Max
   val adultContentEnabled: Boolean = true,
   val isArchived: Boolean = false,
@@ -33,7 +34,15 @@ data class GeminiModelInfo(
   val defaultTemperature: Float = 0.85f,
   val isThinkingModel: Boolean = true,
   val usesThinkingLevel: Boolean = true, // true für Gemini 3+, false für 2.5
-  val supportedThinkingLevels: List<String> = listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
+  val supportedThinkingLevels: List<String> = listOf("LOW", "MEDIUM", "HIGH")
+)
+
+data class GeminiModelCatalog(
+  val chatModels: List<GeminiModelInfo> = emptyList(),
+  val embeddingModels: List<GeminiModelInfo> = emptyList(),
+  val transcriptionModels: List<GeminiModelInfo> = emptyList(),
+  /** true, wenn die Liste live von Google kam. false = hartkodierte Fallback-Liste. */
+  val isLive: Boolean = false
 )
 
 @Entity(tableName = "checkpoints")

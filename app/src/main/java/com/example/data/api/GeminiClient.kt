@@ -11,13 +11,12 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.TimeUnit
 
 class GeminiClient(
@@ -34,7 +33,6 @@ class GeminiClient(
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
     val THINKING_LEVEL_PRESETS = listOf(
-      "MINIMAL" to "Minimal (Höchste Geschwindigkeit, minimale Denkzeit)",
       "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
       "MEDIUM" to "Mittel (Ausgewogene Tiefe & psychologische Konsistenz)",
       "HIGH" to "Hoch (Tiefgründige Konsistenz & maximale Reflexion)"
@@ -48,16 +46,16 @@ class GeminiClient(
       8192 to "Maximum / Episch (8192 Token - Höchste logische Tiefe)"
     )
 
-    val DEFAULT_FALLBACK_MODELS = listOf(
+    val DEFAULT_CHAT_MODELS = listOf(
       GeminiModelInfo(
         id = "gemini-3.8-flash",
         displayName = "Gemini 3.8 Flash (Aktuellstes Flaggschiff)",
-        description = "Googles neuestes Modell mit anpassbaren Denkstufen (Minimal, Low, Medium, High).",
+        description = "Googles neuestes Modell mit anpassbaren Denkstufen (Niedrig, Mittel, Hoch).",
         supportsTemperature = true,
         defaultTemperature = 0.85f,
         isThinkingModel = true,
         usesThinkingLevel = true,
-        supportedThinkingLevels = listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
+        supportedThinkingLevels = listOf("LOW", "MEDIUM", "HIGH")
       ),
       GeminiModelInfo(
         id = "gemini-3.1-pro-preview",
@@ -77,7 +75,7 @@ class GeminiClient(
         defaultTemperature = 0.85f,
         isThinkingModel = true,
         usesThinkingLevel = true,
-        supportedThinkingLevels = listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
+        supportedThinkingLevels = listOf("LOW", "MEDIUM", "HIGH")
       ),
       GeminiModelInfo(
         id = "gemini-3.1-flash-lite-preview",
@@ -87,7 +85,7 @@ class GeminiClient(
         defaultTemperature = 0.85f,
         isThinkingModel = true,
         usesThinkingLevel = true,
-        supportedThinkingLevels = listOf("MINIMAL", "LOW", "MEDIUM")
+        supportedThinkingLevels = listOf("LOW", "MEDIUM", "HIGH")
       ),
       GeminiModelInfo(
         id = "gemini-2.5-flash",
@@ -100,6 +98,68 @@ class GeminiClient(
         supportedThinkingLevels = emptyList()
       )
     )
+
+    val DEFAULT_EMBEDDING_MODELS = listOf(
+      GeminiModelInfo(
+        id = "text-embedding-004",
+        displayName = "Text Embedding 004 (Empfohlen)",
+        description = "Aktuellstes Modell für semantisches episodisches Vektorgedächtnis.",
+        supportsTemperature = false,
+        isThinkingModel = false,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      ),
+      GeminiModelInfo(
+        id = "embedding-001",
+        displayName = "Embedding 001 (Legacy)",
+        description = "Klassisches Embedding-Modell für semantische Vektorsuche.",
+        supportsTemperature = false,
+        isThinkingModel = false,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      )
+    )
+
+    val DEFAULT_TRANSCRIPTION_MODELS = listOf(
+      GeminiModelInfo(
+        id = "gemini-2.5-flash",
+        displayName = "Gemini 2.5 Flash (Empfohlen für Sprache)",
+        description = "Hervorragende Audio- & Sprachtranskription mit minimaler Latenz.",
+        supportsTemperature = false,
+        isThinkingModel = false,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      ),
+      GeminiModelInfo(
+        id = "gemini-3.8-flash",
+        displayName = "Gemini 3.8 Flash (Neueste Generation)",
+        description = "Googles Flaggschiff für multimodale Transkription.",
+        supportsTemperature = false,
+        isThinkingModel = false,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      ),
+      GeminiModelInfo(
+        id = "gemini-3.5-flash",
+        displayName = "Gemini 3.5 Flash",
+        description = "Schnelle multimodale Verarbeitung.",
+        supportsTemperature = false,
+        isThinkingModel = false,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      ),
+      GeminiModelInfo(
+        id = "gemini-3.1-flash-lite-preview",
+        displayName = "Gemini 3.1 Flash-Lite",
+        description = "Extrem geringe Latenz bei kurzen Spracheingaben.",
+        supportsTemperature = false,
+        isThinkingModel = false,
+        usesThinkingLevel = false,
+        supportedThinkingLevels = emptyList()
+      )
+    )
+
+    val DEFAULT_FALLBACK_MODELS = DEFAULT_CHAT_MODELS
 
     val DEFAULT_SYSTEM_PROMPT = """
 # ROLLE & ERZÄHLHALTUNG
@@ -130,126 +190,203 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
 
   fun getEffectiveApiKey(): String {
     val custom = customApiKeyProvider()
-    if (!custom.isNullOrBlank()) return custom.trim()
+    if (!custom.isNullOrBlank()) {
+      return custom.trim().replace("\\s+".toRegex(), "")
+    }
     val buildKey = BuildConfig.GEMINI_API_KEY
     if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY") {
-      return buildKey
+      return buildKey.trim().replace("\\s+".toRegex(), "")
     }
     return ""
   }
 
   /**
-   * Fetches the current live list of models dynamically from Google Gemini API.
-   * Filters out legacy prohibited models, parses temperature and thinking levels.
+   * Builds a request that carries the API key in the `x-goog-api-key` header.
+   *
+   * The key must never end up in the URL: request URLs leak into logcat, crash reports
+   * and proxies (siehe CLAUDE.md §6). Der Header ist zugleich der von Google dokumentierte Weg.
    */
-  suspend fun fetchAvailableModels(): List<GeminiModelInfo> = withContext(Dispatchers.IO) {
+  private fun buildRequest(url: String, apiKey: String, body: RequestBody? = null): Request =
+    Request.Builder()
+      .url(url)
+      .addHeader("x-goog-api-key", apiKey)
+      .apply { if (body != null) post(body) else get() }
+      .build()
+
+  /**
+   * Fetches the current live list of models dynamically from Google Gemini API
+   * and segregates them into Chat, Embedding, and Transcription catalogs.
+   */
+  suspend fun fetchModelCatalog(): com.example.data.model.GeminiModelCatalog = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank()) {
-      return@withContext DEFAULT_FALLBACK_MODELS
+      return@withContext com.example.data.model.GeminiModelCatalog(
+        chatModels = DEFAULT_CHAT_MODELS,
+        embeddingModels = DEFAULT_EMBEDDING_MODELS,
+        transcriptionModels = DEFAULT_TRANSCRIPTION_MODELS
+      )
     }
 
     try {
-      val url = URL("https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey")
-      val conn = (url.openConnection() as HttpURLConnection).apply {
-        requestMethod = "GET"
-        connectTimeout = 8000
-        readTimeout = 8000
-      }
+      val response = client.newCall(buildRequest(BASE_URL, apiKey)).execute()
 
-      if (conn.responseCode == 200) {
-        val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+      if (response.isSuccessful) {
+        val responseText = response.body?.string().orEmpty()
         val root = JSONObject(responseText)
         val modelsArray = root.optJSONArray("models") ?: JSONArray()
-        val parsedList = mutableListOf<GeminiModelInfo>()
+
+        val parsedChatModels = mutableListOf<GeminiModelInfo>()
+        val parsedEmbeddingModels = mutableListOf<GeminiModelInfo>()
+        val parsedTranscriptionModels = mutableListOf<GeminiModelInfo>()
 
         for (i in 0 until modelsArray.length()) {
           val modelObj = modelsArray.getJSONObject(i)
           val rawName = modelObj.optString("name", "")
           val id = rawName.removePrefix("models/")
-          val methods = modelObj.optJSONArray("supportedGenerationMethods") ?: JSONArray()
-          var supportsGenerateContent = false
-          for (j in 0 until methods.length()) {
-            if (methods.getString(j) == "generateContent") {
-              supportsGenerateContent = true
-              break
-            }
-          }
-          if (!supportsGenerateContent) continue
-
-          // Filter out disallowed legacy or non-text models
-          if (id.contains("embedding") || id.contains("tts") || id.contains("veo") || id.contains("aqa")) continue
-          if (id.startsWith("gemini-1.5") || id.startsWith("gemini-1.0") || id.startsWith("gemini-2.0")) continue
-
           val displayName = modelObj.optString("displayName", id)
           val description = modelObj.optString("description", "")
+          val methods = modelObj.optJSONArray("supportedGenerationMethods") ?: JSONArray()
+          val methodsList = mutableListOf<String>()
+          for (j in 0 until methods.length()) {
+            methodsList.add(methods.getString(j))
+          }
+
+          val supportsGenerateContent = methodsList.contains("generateContent")
+          val supportsEmbedContent = methodsList.contains("embedContent") || id.contains("embedding")
 
           // Check temperature support
           val hasExplicitTemp = modelObj.has("temperature")
           val defaultTemp = modelObj.optDouble("temperature", 0.85).toFloat()
-          // Certain reasoning models enforce fixed temperature
           val supportsTemp = hasExplicitTemp || (!id.contains("thinking-only") && !id.contains("o1"))
 
           // Determine thinking level support
-          // Gemini 3.x+ models use thinkingLevel ("MINIMAL", "LOW", "MEDIUM", "HIGH")
           val isGemini3Plus = id.contains("gemini-3") || id.contains("-3.")
           val isGemini25 = id.contains("gemini-2.5")
           val isThinking = isGemini3Plus || isGemini25 || id.contains("thinking")
-
           val thinkingLevels = if (isGemini3Plus) {
-            if (id.contains("pro")) {
-              listOf("LOW", "MEDIUM", "HIGH")
-            } else {
-              listOf("MINIMAL", "LOW", "MEDIUM", "HIGH")
-            }
+            listOf("LOW", "MEDIUM", "HIGH")
           } else emptyList()
 
-          parsedList.add(
-            GeminiModelInfo(
-              id = id,
-              displayName = displayName,
-              description = description,
-              supportsTemperature = supportsTemp,
-              defaultTemperature = defaultTemp,
-              isThinkingModel = isThinking,
-              usesThinkingLevel = isGemini3Plus,
-              supportedThinkingLevels = thinkingLevels
-            )
+          val modelInfo = GeminiModelInfo(
+            id = id,
+            displayName = displayName,
+            description = description,
+            supportsTemperature = supportsTemp,
+            defaultTemperature = defaultTemp,
+            isThinkingModel = isThinking,
+            usesThinkingLevel = isGemini3Plus,
+            supportedThinkingLevels = thinkingLevels
           )
+
+          // 1. Embedding models
+          if (supportsEmbedContent || id.contains("embedding")) {
+            parsedEmbeddingModels.add(
+              modelInfo.copy(
+                supportsTemperature = false,
+                isThinkingModel = false,
+                usesThinkingLevel = false,
+                supportedThinkingLevels = emptyList()
+              )
+            )
+          }
+
+          // Gemma taugt für MSF nicht: kein JSON-Mode (bricht die State-Extraction), kein
+          // thinkingLevel und keine über safetySettings abschaltbaren Sicherheitsfilter.
+          val isGemma = id.contains("gemma")
+
+          // 2. Chat / Story Generation Models
+          if (supportsGenerateContent && !isGemma && !id.contains("embedding") && !id.contains("tts") && !id.contains("veo") && !id.contains("imagen") && !id.contains("aqa")) {
+            // Keep modern 2.5 and 3.x models
+            if (!id.startsWith("gemini-1.0") && !id.startsWith("gemini-1.5") && !id.startsWith("gemini-2.0")) {
+              parsedChatModels.add(modelInfo)
+            }
+          }
+
+          // 3. Audio / Transcription models
+          if (supportsGenerateContent && !isGemma && !id.contains("embedding") && !id.contains("imagen") && !id.contains("veo") && !id.contains("aqa")) {
+            if (!id.startsWith("gemini-1.") && !id.startsWith("gemini-2.0") && (id.contains("flash") || id.contains("transcrib") || id.contains("audio"))) {
+              parsedTranscriptionModels.add(
+                modelInfo.copy(
+                  supportsTemperature = false,
+                  isThinkingModel = false,
+                  usesThinkingLevel = false,
+                  supportedThinkingLevels = emptyList()
+                )
+              )
+            }
+          }
         }
 
-        if (parsedList.isNotEmpty()) {
-          // Sort: Prioritize newest flagship models at the top (3.8 -> 3.1 pro -> 3.5 -> 2.5)
-          parsedList.sortWith(compareByDescending<GeminiModelInfo> { it.id.contains("3.8") }
+        // Sort chat models: 3.8 -> 3.1 pro -> 3.5 -> 3.1 -> 2.5
+        parsedChatModels.sortWith(
+          compareByDescending<GeminiModelInfo> { it.id.contains("3.8") }
             .thenByDescending { it.id.contains("3.1-pro") }
             .thenByDescending { it.id.contains("3.5") }
             .thenByDescending { it.id.contains("3.1") }
-            .thenByDescending { it.id.contains("2.5") })
-          return@withContext parsedList
-        }
+            .thenByDescending { it.id.contains("2.5") }
+        )
+
+        // Sort embedding models: 004 -> 001
+        parsedEmbeddingModels.sortWith(
+          compareByDescending<GeminiModelInfo> { it.id.contains("004") }
+            .thenByDescending { it.id.contains("001") }
+        )
+
+        // Sort transcription models: 2.5-flash (recommended) -> 3.8-flash -> 3.5-flash
+        parsedTranscriptionModels.sortWith(
+          compareByDescending<GeminiModelInfo> { it.id == "gemini-2.5-flash" }
+            .thenByDescending { it.id.contains("3.8") }
+            .thenByDescending { it.id.contains("3.5") }
+            .thenByDescending { it.id.contains("2.5") }
+        )
+
+        return@withContext com.example.data.model.GeminiModelCatalog(
+          chatModels = if (parsedChatModels.isNotEmpty()) parsedChatModels else DEFAULT_CHAT_MODELS,
+          embeddingModels = if (parsedEmbeddingModels.isNotEmpty()) parsedEmbeddingModels else DEFAULT_EMBEDDING_MODELS,
+          transcriptionModels = if (parsedTranscriptionModels.isNotEmpty()) parsedTranscriptionModels else DEFAULT_TRANSCRIPTION_MODELS,
+          isLive = true
+        )
+      } else {
+        // Auth-Fehler hier nicht verschlucken: sonst sehen die Modell-Dropdowns gesund aus,
+        // obwohl der Schlüssel gar nicht funktioniert.
+        Log.e(TAG, "Model catalog request rejected: ${response.code}")
       }
     } catch (e: Exception) {
       Log.e(TAG, "Failed to dynamically query models from Google: ${e.message}")
     }
 
-    DEFAULT_FALLBACK_MODELS
+    com.example.data.model.GeminiModelCatalog(
+      chatModels = DEFAULT_CHAT_MODELS,
+      embeddingModels = DEFAULT_EMBEDDING_MODELS,
+      transcriptionModels = DEFAULT_TRANSCRIPTION_MODELS,
+      isLive = false
+    )
+  }
+
+  suspend fun fetchAvailableModels(): List<GeminiModelInfo> = withContext(Dispatchers.IO) {
+    fetchModelCatalog().chatModels
   }
 
   /**
-   * Builds the safety settings JSON array with BLOCK_NONE across all 5 harm categories
+   * Schaltet die vier einstellbaren Sicherheitsfilter ab.
+   *
+   * Schwelle `OFF` statt `BLOCK_NONE`: OFF deaktiviert den Filter komplett, BLOCK_NONE liefert
+   * weiterhin Bewertungs-Metadaten. `HARM_CATEGORY_CIVIC_INTEGRITY` ist von Google als deprecated
+   * markiert ("the election filter is no longer supported") und darf nicht mehr gesendet werden.
+   * Kindersicherheit bleibt serverseitig immer aktiv und ist nicht abschaltbar.
    */
-  private fun buildFullBlockNoneSafetyArray(): JSONArray {
+  private fun buildSafetyOffArray(): JSONArray {
     val safetyArray = JSONArray()
     val categories = listOf(
       "HARM_CATEGORY_SEXUALLY_EXPLICIT",
       "HARM_CATEGORY_HATE_SPEECH",
       "HARM_CATEGORY_HARASSMENT",
-      "HARM_CATEGORY_DANGEROUS_CONTENT",
-      "HARM_CATEGORY_CIVIC_INTEGRITY"
+      "HARM_CATEGORY_DANGEROUS_CONTENT"
     )
     for (cat in categories) {
       val s = JSONObject()
       s.put("category", cat)
-      s.put("threshold", "BLOCK_NONE")
+      s.put("threshold", "OFF")
       safetyArray.put(s)
     }
     return safetyArray
@@ -278,7 +415,8 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
       throw IllegalStateException("Kein Gemini API-Schlüssel hinterlegt. Bitte öffne die Einstellungen und trage deinen Key ein.")
     }
 
-    val url = "$BASE_URL/$model:streamGenerateContent?alt=sse&key=$apiKey"
+    val cleanModel = model.removePrefix("models/").trim()
+    val url = "$BASE_URL/$cleanModel:streamGenerateContent?alt=sse"
 
     val payload = JSONObject()
 
@@ -332,29 +470,37 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
       }
     }
 
-    val anchorObj = JSONObject()
-    anchorObj.put("role", "user")
-    anchorObj.put("parts", JSONArray().put(JSONObject().put("text", stateAnchorText)))
-    contents.put(anchorObj)
-
-    val anchorAck = JSONObject()
-    anchorAck.put("role", "model")
-    anchorAck.put("parts", JSONArray().put(JSONObject().put("text", "Verstanden. Ich kenne den aktuellen Weltzustand, die Kleidung aller Personen, das Inventar, frühere Meilensteine und halte mich strikt an die Dialogregeln.")))
-    contents.put(anchorAck)
+    val rawTurns = mutableListOf<Pair<String, String>>()
+    rawTurns.add("user" to stateAnchorText)
+    rawTurns.add("model" to "Verstanden. Ich kenne den aktuellen Weltzustand, die Kleidung aller Personen, das Inventar, frühere Meilensteine und halte mich strikt an die Dialogregeln.")
 
     // Recent conversation history (sliding window)
     for ((role, text) in recentHistory) {
-      val msgObj = JSONObject()
-      msgObj.put("role", if (role == "user") "user" else "model")
-      msgObj.put("parts", JSONArray().put(JSONObject().put("text", text)))
-      contents.put(msgObj)
+      if (text.isNotBlank()) {
+        rawTurns.add((if (role == "user") "user" else "model") to text)
+      }
     }
 
     // Latest user action
-    val latestActionObj = JSONObject()
-    latestActionObj.put("role", "user")
-    latestActionObj.put("parts", JSONArray().put(JSONObject().put("text", "[SPIELER-AKTION]:\n$userAction")))
-    contents.put(latestActionObj)
+    rawTurns.add("user" to "[SPIELER-AKTION]:\n$userAction")
+
+    // Normalize: Merge consecutive turns with the same role so it strictly alternates user/model
+    val mergedTurns = mutableListOf<Pair<String, String>>()
+    for (turn in rawTurns) {
+      if (mergedTurns.isNotEmpty() && mergedTurns.last().first == turn.first) {
+        val last = mergedTurns.removeAt(mergedTurns.size - 1)
+        mergedTurns.add(last.first to "${last.second}\n\n${turn.second}")
+      } else {
+        mergedTurns.add(turn)
+      }
+    }
+
+    for ((role, text) in mergedTurns) {
+      val msgObj = JSONObject()
+      msgObj.put("role", role)
+      msgObj.put("parts", JSONArray().put(JSONObject().put("text", text)))
+      contents.put(msgObj)
+    }
 
     payload.put("contents", contents)
 
@@ -366,13 +512,18 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     genConfig.put("topP", 0.95)
 
     // Dynamic Thinking Config:
-    // Gemini 3.x+ models use thinkingLevel ("MINIMAL", "LOW", "MEDIUM", "HIGH")
+    // Gemini 3.x+ models use thinkingLevel ("LOW", "MEDIUM", "HIGH")
     // Gemini 2.5 models use thinkingBudget (Tokens)
     val isGemini3Plus = model.contains("gemini-3") || model.contains("-3.")
     if (isGemini3Plus) {
       if (thinkingLevel != "OFF") {
+        val safeLevel = when (thinkingLevel.trim().uppercase()) {
+          "LOW", "MINIMAL" -> "LOW"
+          "HIGH" -> "HIGH"
+          else -> "MEDIUM"
+        }
         val thinkingObj = JSONObject()
-        thinkingObj.put("thinkingLevel", thinkingLevel)
+        thinkingObj.put("thinkingLevel", safeLevel)
         genConfig.put("thinkingConfig", thinkingObj)
       }
     } else if (model.contains("2.5") || model.contains("thinking")) {
@@ -387,14 +538,11 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
 
     // Full Safety settings across all categories
     if (allowAdultContent) {
-      payload.put("safetySettings", buildFullBlockNoneSafetyArray())
+      payload.put("safetySettings", buildSafetyOffArray())
     }
 
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-    val request = Request.Builder()
-      .url(url)
-      .post(requestBody)
-      .build()
+    val request = buildRequest(url, apiKey, requestBody)
 
     val response = client.newCall(request).execute()
     if (!response.isSuccessful) {
@@ -478,7 +626,8 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     val finalNarrative = storyResponse.ifBlank { modelNarrative }
     val finalMilestones = if (existingMilestones.isNotEmpty()) existingMilestones else previousMilestones
 
-    val url = "$BASE_URL/$model:generateContent?key=$apiKey"
+    val cleanModel = model.removePrefix("models/").trim()
+    val url = "$BASE_URL/$cleanModel:generateContent"
 
     val milestonesBlock = if (finalMilestones.isNotEmpty()) {
       "Bisherige bedeutsame Meilensteine:\n" + finalMilestones.joinToString("\n") { "- $it" }
@@ -555,29 +704,33 @@ $storyResponse
     genConfig.put("responseMimeType", "application/json")
     genConfig.put("temperature", 0.2)
 
-    val isGemini3Plus = model.contains("gemini-3") || model.contains("-3.")
-    val isThinkingModel = isGemini3Plus || model.contains("2.5") || model.contains("thinking")
-    
+    val isGemini3Plus = cleanModel.contains("gemini-3") || cleanModel.contains("-3.")
+    val isThinkingModel = isGemini3Plus || cleanModel.contains("2.5") || cleanModel.contains("thinking")
+
     if (isThinkingModel) {
-      if (thinkingLevel != "OFF" && thinkingBudget > 0) {
-        val thinkingObj = JSONObject()
-        if (isGemini3Plus) {
-          thinkingObj.put("thinkingLevel", thinkingLevel)
-        } else {
-          thinkingObj.put("thinkingBudget", thinkingBudget)
+      if (isGemini3Plus && thinkingLevel != "OFF") {
+        val safeLevel = when (thinkingLevel.trim().uppercase()) {
+          "LOW", "MINIMAL" -> "LOW"
+          "HIGH" -> "HIGH"
+          else -> "MEDIUM"
+        }
+        val thinkingObj = JSONObject().apply {
+          put("thinkingLevel", safeLevel)
+        }
+        genConfig.put("thinkingConfig", thinkingObj)
+      } else if (!isGemini3Plus && thinkingBudget > 0) {
+        val thinkingObj = JSONObject().apply {
+          put("thinkingBudget", thinkingBudget)
         }
         genConfig.put("thinkingConfig", thinkingObj)
       }
     }
 
     payload.put("generationConfig", genConfig)
-    payload.put("safetySettings", buildFullBlockNoneSafetyArray())
+    payload.put("safetySettings", buildSafetyOffArray())
 
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-    val request = Request.Builder()
-      .url(url)
-      .post(requestBody)
-      .build()
+    val request = buildRequest(url, apiKey, requestBody)
 
     try {
       val response = client.newCall(request).execute()
@@ -615,47 +768,118 @@ $storyResponse
    * Lightweight connection test.
    */
   suspend fun testConnection(apiKey: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-    if (apiKey.isBlank()) {
+    val cleanKey = apiKey.trim().replace("\\s+".toRegex(), "")
+    if (cleanKey.isBlank()) {
       return@withContext false to "API-Schlüssel darf nicht leer sein."
     }
 
-    // Try testing with latest model or flash
-    val url = "$BASE_URL/gemini-3.8-flash:generateContent?key=${apiKey.trim()}"
+    // Ein Modell genügt: Ein Authentifizierungsfehler wird durch einen Modellwechsel nicht besser.
+    val url = "$BASE_URL/gemini-2.5-flash:generateContent"
     val payload = JSONObject()
     val contents = JSONArray()
     val msg = JSONObject()
     msg.put("role", "user")
-    msg.put("parts", JSONArray().put(JSONObject().put("text", "Ping. Antworte mit einem Wort: Pong")))
+    msg.put("parts", JSONArray().put(JSONObject().put("text", "Ping. Antworte mit: Pong")))
     contents.put(msg)
     payload.put("contents", contents)
-
-    val genConfig = JSONObject()
-    genConfig.put("thinkingConfig", JSONObject().put("thinkingLevel", "MINIMAL"))
-    payload.put("generationConfig", genConfig)
+    payload.put("generationConfig", JSONObject())
 
     val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-    val request = Request.Builder().url(url).post(body).build()
 
     try {
-      val response = client.newCall(request).execute()
+      val response = client.newCall(buildRequest(url, cleanKey, body)).execute()
       if (response.isSuccessful) {
-        true to "Verbindung erfolgreich! Google Gemini 3.8 Flash hat geantwortet."
-      } else {
-        val err = response.body?.string() ?: ""
-        false to parseErrorMessage(response.code, err)
+        return@withContext true to "Verbindung erfolgreich! Google Gemini hat geantwortet."
       }
+      val err = response.body?.string() ?: ""
+      Log.e(TAG, "Connection test failed: ${response.code}")
+      false to parseErrorMessage(response.code, err)
     } catch (e: Exception) {
       false to "Verbindungsfehler: ${e.localizedMessage ?: e.message}"
     }
+  }
+
+  suspend fun transcribeAudio(
+    audioBytes: ByteArray,
+    mimeType: String = "audio/mp4",
+    model: String = "gemini-2.5-flash"
+  ): String = withContext(Dispatchers.IO) {
+    val apiKey = getEffectiveApiKey()
+    if (apiKey.isBlank()) {
+      throw IllegalStateException("Kein Gemini API-Schlüssel hinterlegt.")
+    }
+
+    val cleanModel = model.removePrefix("models/").trim()
+    val url = "$BASE_URL/$cleanModel:generateContent"
+
+    val base64Audio = android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+
+    val payload = JSONObject().apply {
+      val contentsArr = JSONArray()
+      val userTurn = JSONObject().apply {
+        put("role", "user")
+        val partsArr = JSONArray().apply {
+          put(JSONObject().apply {
+            put("inlineData", JSONObject().apply {
+              put("mimeType", mimeType)
+              put("data", base64Audio)
+            })
+          })
+          put(JSONObject().apply {
+            put("text", "Transkribiere das gesprochene Audio präzise auf Deutsch. Gib ausschließlich den gesprochenen Text ohne Zeitstempel, Formatierungen, Anmerkungen oder Einleitungen zurück.")
+          })
+        }
+        put("parts", partsArr)
+      }
+      contentsArr.put(userTurn)
+      put("contents", contentsArr)
+
+      val isGemini3Plus = cleanModel.contains("gemini-3") || cleanModel.contains("-3.")
+      val isThinkingModel = isGemini3Plus || cleanModel.contains("2.5") || cleanModel.contains("thinking")
+      val genConfig = JSONObject().apply {
+        put("temperature", 0.0)
+        if (isThinkingModel) {
+          val thinkingObj = JSONObject().apply {
+            if (isGemini3Plus) {
+              put("thinkingLevel", "LOW")
+            } else {
+              put("thinkingBudget", 0)
+            }
+          }
+          put("thinkingConfig", thinkingObj)
+        }
+      }
+      put("generationConfig", genConfig)
+    }
+
+    val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+    val request = buildRequest(url, apiKey, requestBody)
+
+    val response = client.newCall(request).execute()
+    if (!response.isSuccessful) {
+      val errBody = response.body?.string() ?: "Unknown error"
+      Log.e(TAG, "Audio transcription error: ${response.code} body: $errBody")
+      val errorMsg = parseErrorMessage(response.code, errBody)
+      throw Exception(errorMsg)
+    }
+
+    val body = response.body?.string() ?: throw Exception("Leere Antwort erhalten.")
+    val json = JSONObject(body)
+    val text = extractTextFromCandidates(json).trim()
+    if (text.isBlank()) {
+      throw Exception("Es konnte keine Sprache erkannt werden.")
+    }
+    text
   }
 
   suspend fun generateEmbedding(text: String, model: String = "text-embedding-004"): String? = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank() || text.isBlank()) return@withContext null
     
-    val url = "$BASE_URL/$model:embedContent?key=$apiKey"
+    val cleanModel = model.removePrefix("models/").trim()
+    val url = "$BASE_URL/$cleanModel:embedContent"
     val payload = JSONObject()
-    payload.put("model", "models/$model")
+    payload.put("model", "models/$cleanModel")
     val content = JSONObject()
     val parts = JSONArray()
     parts.put(JSONObject().put("text", text))
@@ -663,8 +887,8 @@ $storyResponse
     payload.put("content", content)
     
     val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-    val request = Request.Builder().url(url).post(body).build()
-    
+    val request = buildRequest(url, apiKey, body)
+
     try {
       val response = client.newCall(request).execute()
       if (response.isSuccessful) {
@@ -695,11 +919,41 @@ $storyResponse
     return sb.toString()
   }
 
+  /**
+   * Reads Google's machine-readable `error.details[].reason` (google.rpc.ErrorInfo).
+   * Genau dieses Feld unterscheidet „Schlüssel falsch" von „Schlüssel-Typ nicht unterstützt".
+   */
+  private fun extractErrorReason(body: String): String {
+    return try {
+      val details = JSONObject(body).optJSONObject("error")?.optJSONArray("details") ?: return ""
+      for (i in 0 until details.length()) {
+        val reason = details.optJSONObject(i)?.optString("reason", "").orEmpty()
+        if (reason.isNotBlank()) return reason
+      }
+      ""
+    } catch (_: Exception) {
+      ""
+    }
+  }
+
   private fun parseErrorMessage(code: Int, body: String): String {
+    // Auth-Fehler zuerst über den reason-Code auflösen – die HTTP-Codes allein sind mehrdeutig.
+    when (extractErrorReason(body)) {
+      "ACCESS_TOKEN_TYPE_UNSUPPORTED" ->
+        return "Dieser Schlüssel-Typ wird von der Gemini-API nicht akzeptiert. Auth-Keys aus Google AI Studio (beginnen mit 'AQ.') werden derzeit abgelehnt. Erstelle in der Google Cloud Console unter 'Anmeldedaten' einen Standard-API-Schlüssel (beginnt mit 'AIzaSy…') und beschränke ihn auf die 'Generative Language API'."
+      "API_KEY_SERVICE_BLOCKED" ->
+        return "Der Schlüssel ist für die Gemini-API gesperrt. Aktiviere die 'Generative Language API' im zugehörigen Google-Cloud-Projekt und prüfe die API-Einschränkungen des Schlüssels."
+      "API_KEY_INVALID" ->
+        return "Der API-Schlüssel ist ungültig oder wurde unvollständig kopiert. Bitte trage ihn erneut vollständig ein."
+      "SERVICE_DISABLED" ->
+        return "Die 'Generative Language API' ist im zugehörigen Google-Cloud-Projekt nicht aktiviert. Bitte aktiviere sie und versuche es erneut."
+    }
+
     return when (code) {
-      400 -> "Ungültige Anfrage (400). Überprüfe das gewählte Modell oder die Parameter. ($body)"
-      403 -> "Ungültiger API-Schlüssel oder keine Berechtigung (403). Bitte überprüfe deinen Schlüssel in Google AI Studio."
-      404 -> "Modell nicht gefunden (404). Wähle ein unterstütztes Modell wie gemini-3.8-flash."
+      400 -> "Ungültige Anfrage (400). Überprüfe das gewählte Modell oder den API-Key. ($body)"
+      401 -> "Authentifizierung fehlgeschlagen (401). Google hat den hinterlegten Schlüssel nicht akzeptiert. Prüfe ihn in den Einstellungen über 'Testen'."
+      403 -> "Keine Berechtigung (403). Der Schlüssel darf nicht auf die Gemini-API zugreifen. Bitte prüfe seine Einschränkungen."
+      404 -> "Modell nicht gefunden (404). Wähle ein unterstütztes Modell wie gemini-2.5-flash."
       429 -> "Ratenlimit erreicht (429). Bitte warte einen Moment, bevor du weiterspielst."
       500, 503 -> "Google Gemini Server temporär überlastet (500/503). Bitte versuche es in wenigen Sekunden erneut."
       else -> "Fehler beim Aufruf der Gemini API (Code $code): $body"

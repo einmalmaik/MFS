@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.GeminiClient
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -33,8 +35,14 @@ data class StoryUiState(
   val customApiKey: String = "",
   val globalDefaultPrompt: String = "",
   val effectiveApiKeyPresent: Boolean = false,
-  val availableModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_FALLBACK_MODELS,
-  val isFetchingModels: Boolean = false
+  val availableModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_CHAT_MODELS,
+  val availableChatModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_CHAT_MODELS,
+  val availableEmbeddingModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_EMBEDDING_MODELS,
+  val availableTranscriptionModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_TRANSCRIPTION_MODELS,
+  val isFetchingModels: Boolean = false,
+  val isTranscribingAudio: Boolean = false,
+  /** false = Modell-Dropdowns zeigen die Fallback-Liste, der Schlüssel ist also unbestätigt. */
+  val modelCatalogIsLive: Boolean = false
 )
 
 class StoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,8 +56,13 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val _errorMessage = MutableStateFlow<String?>(null)
   private val _customApiKey = MutableStateFlow(repository.getCustomApiKey() ?: "")
   private val _globalDefaultPrompt = MutableStateFlow(repository.getGlobalDefaultSystemPrompt())
-  private val _availableModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_FALLBACK_MODELS)
+  private val _availableModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_CHAT_MODELS)
+  private val _availableChatModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_CHAT_MODELS)
+  private val _availableEmbeddingModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_EMBEDDING_MODELS)
+  private val _availableTranscriptionModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_TRANSCRIPTION_MODELS)
   private val _isFetchingModels = MutableStateFlow(false)
+  private val _isTranscribingAudio = MutableStateFlow(false)
+  private val _modelCatalogIsLive = MutableStateFlow(false)
 
   private var activeTurnJob: Job? = null
 
@@ -81,11 +94,21 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       _isFetchingModels.value = true
       try {
-        val remoteModels = repository.fetchAvailableModels()
-        if (remoteModels.isNotEmpty()) {
-          _availableModels.value = remoteModels
+        val catalog = repository.fetchModelCatalog()
+        _modelCatalogIsLive.value = catalog.isLive
+        if (catalog.chatModels.isNotEmpty()) {
+          _availableModels.value = catalog.chatModels
+          _availableChatModels.value = catalog.chatModels
         }
-      } catch (_: Exception) {
+        if (catalog.embeddingModels.isNotEmpty()) {
+          _availableEmbeddingModels.value = catalog.embeddingModels
+        }
+        if (catalog.transcriptionModels.isNotEmpty()) {
+          _availableTranscriptionModels.value = catalog.transcriptionModels
+        }
+      } catch (e: Exception) {
+        Log.e("StoryViewModel", "Failed to refresh model catalog", e)
+        _modelCatalogIsLive.value = false
       } finally {
         _isFetchingModels.value = false
       }
@@ -137,27 +160,41 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
 
     activeTurnJob?.cancel()
     activeTurnJob = viewModelScope.launch {
-      repository.executeTurn(
-        storyId = storyId,
-        userAction = cleanAction,
-        onChunk = { chunk ->
-          _streamChunk.value += chunk
-        }
-      ).collect { progress ->
-        _turnStatus.value = progress
-        when (progress) {
-          is TurnProgress.Failed -> {
-            _errorMessage.value = progress.error
-            _isGenerating.value = false
-            _streamChunk.value = ""
+      try {
+        repository.executeTurn(
+          storyId = storyId,
+          userAction = cleanAction,
+          onChunk = { chunk ->
+            _streamChunk.value += chunk
           }
-          TurnProgress.Completed -> {
-            _isGenerating.value = false
-            _streamChunk.value = ""
-            _turnStatus.value = null
+        ).catch { e ->
+          Log.e("StoryViewModel", "Turn execution failed", e)
+          _errorMessage.value = e.message ?: "Ein unerwarteter Fehler ist aufgetreten."
+          _isGenerating.value = false
+          _streamChunk.value = ""
+          _turnStatus.value = null
+        }.collect { progress ->
+          _turnStatus.value = progress
+          when (progress) {
+            is TurnProgress.Failed -> {
+              _errorMessage.value = progress.error
+              _isGenerating.value = false
+              _streamChunk.value = ""
+            }
+            TurnProgress.Completed -> {
+              _isGenerating.value = false
+              _streamChunk.value = ""
+              _turnStatus.value = null
+            }
+            else -> {}
           }
-          else -> {}
         }
+      } catch (e: Throwable) {
+        Log.e("StoryViewModel", "Turn coroutine failed", e)
+        _errorMessage.value = e.message ?: "Ein unerwarteter Fehler ist aufgetreten."
+        _isGenerating.value = false
+        _streamChunk.value = ""
+        _turnStatus.value = null
       }
     }
   }
@@ -183,28 +220,66 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
 
     activeTurnJob?.cancel()
     activeTurnJob = viewModelScope.launch {
-      repository.editUserMessageAndRegenerate(
-        storyId = storyId,
-        messageId = messageId,
-        newContent = clean,
-        onChunk = { chunk ->
-          _streamChunk.value += chunk
-        }
-      ).collect { progress ->
-        _turnStatus.value = progress
-        when (progress) {
-          is TurnProgress.Failed -> {
-            _errorMessage.value = progress.error
-            _isGenerating.value = false
-            _streamChunk.value = ""
+      try {
+        repository.editUserMessageAndRegenerate(
+          storyId = storyId,
+          messageId = messageId,
+          newContent = clean,
+          onChunk = { chunk ->
+            _streamChunk.value += chunk
           }
-          TurnProgress.Completed -> {
-            _isGenerating.value = false
-            _streamChunk.value = ""
-            _turnStatus.value = null
+        ).catch { e ->
+          Log.e("StoryViewModel", "Edit message failed in flow", e)
+          _errorMessage.value = e.message ?: "Fehler beim Bearbeiten der Nachricht"
+          _isGenerating.value = false
+          _streamChunk.value = ""
+          _turnStatus.value = null
+        }.collect { progress ->
+          _turnStatus.value = progress
+          when (progress) {
+            is TurnProgress.Failed -> {
+              _errorMessage.value = progress.error
+              _isGenerating.value = false
+              _streamChunk.value = ""
+            }
+            TurnProgress.Completed -> {
+              _isGenerating.value = false
+              _streamChunk.value = ""
+              _turnStatus.value = null
+            }
+            else -> {}
           }
-          else -> {}
         }
+      } catch (e: Throwable) {
+        Log.e("StoryViewModel", "Edit message coroutine failed", e)
+        _errorMessage.value = e.message ?: "Fehler beim Bearbeiten der Nachricht"
+        _isGenerating.value = false
+        _streamChunk.value = ""
+        _turnStatus.value = null
+      }
+    }
+  }
+
+  fun transcribeVoiceInput(audioBytes: ByteArray, onTranscribed: (String) -> Unit) {
+    if (audioBytes.isEmpty()) return
+    val currentStory = stories.value.firstOrNull { it.id == _activeStoryId.value }
+    val transcriptionModel = currentStory?.selectedTranscriptionModel ?: "gemini-2.5-flash"
+    viewModelScope.launch {
+      _isTranscribingAudio.value = true
+      try {
+        val transcribedText = repository.transcribeAudio(
+          audioBytes = audioBytes,
+          mimeType = "audio/mp4",
+          model = transcriptionModel
+        )
+        if (transcribedText.isNotBlank()) {
+          onTranscribed(transcribedText)
+        }
+      } catch (e: Throwable) {
+        Log.e("StoryViewModel", "Voice transcription failed", e)
+        _errorMessage.value = "Sprachtranskription fehlgeschlagen: ${e.message ?: "Unbekannter Fehler"}"
+      } finally {
+        _isTranscribingAudio.value = false
       }
     }
   }
@@ -275,6 +350,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     systemPrompt: String,
     model: String,
     embeddingModel: String = "text-embedding-004",
+    transcriptionModel: String = "gemini-2.5-flash",
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -286,6 +362,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       systemPrompt = systemPrompt,
       model = model,
       embeddingModel = embeddingModel,
+      transcriptionModel = transcriptionModel,
       temperature = temperature,
       supportsTemperature = supportsTemperature,
       thinkingLevel = thinkingLevel,
@@ -299,6 +376,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     systemPrompt: String,
     model: String,
     embeddingModel: String = "text-embedding-004",
+    transcriptionModel: String = "gemini-2.5-flash",
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -313,6 +391,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
           systemPrompt = systemPrompt,
           selectedModel = model,
           selectedEmbeddingModel = embeddingModel,
+          selectedTranscriptionModel = transcriptionModel,
           temperature = temperature,
           supportsTemperature = supportsTemperature,
           thinkingLevel = thinkingLevel,
@@ -406,8 +485,9 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun saveCustomApiKey(key: String) {
-    _customApiKey.value = key.trim()
-    repository.setCustomApiKey(key.trim())
+    val clean = key.trim().replace("\\s+".toRegex(), "")
+    _customApiKey.value = clean
+    repository.setCustomApiKey(if (clean.isBlank()) null else clean)
     refreshModelsFromGoogle()
   }
 
@@ -426,6 +506,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     systemPrompt: String,
     selectedModel: String = "gemini-3.8-flash",
     selectedEmbeddingModel: String = "text-embedding-004",
+    selectedTranscriptionModel: String = "gemini-2.5-flash",
     temperature: Float = 0.85f,
     supportsTemperature: Boolean = true,
     thinkingLevel: String = "MEDIUM",
@@ -447,6 +528,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         systemPrompt = systemPrompt,
         selectedModel = selectedModel,
         selectedEmbeddingModel = selectedEmbeddingModel,
+        selectedTranscriptionModel = selectedTranscriptionModel,
         temperature = temperature,
         supportsTemperature = supportsTemperature,
         thinkingLevel = thinkingLevel,
@@ -486,8 +568,12 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _errorMessage,
     _customApiKey,
     _globalDefaultPrompt,
-    _availableModels,
-    _isFetchingModels
+    _availableChatModels,
+    _availableEmbeddingModels,
+    _availableTranscriptionModels,
+    _isFetchingModels,
+    _isTranscribingAudio,
+    _modelCatalogIsLive
   ) { args: Array<Any?> ->
     @Suppress("UNCHECKED_CAST")
     val storyList = args[0] as List<StoryEntity>
@@ -504,8 +590,14 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     val customKey = args[9] as String
     val globalPrompt = args[10] as String
     @Suppress("UNCHECKED_CAST")
-    val models = args[11] as List<GeminiModelInfo>
-    val fetchingModels = args[12] as Boolean
+    val chatModels = args[11] as List<GeminiModelInfo>
+    @Suppress("UNCHECKED_CAST")
+    val embModels = args[12] as List<GeminiModelInfo>
+    @Suppress("UNCHECKED_CAST")
+    val transModels = args[13] as List<GeminiModelInfo>
+    val fetchingModels = args[14] as Boolean
+    val transcribingAudio = args[15] as Boolean
+    val catalogIsLive = args[16] as Boolean
 
     val activeStory = storyList.firstOrNull { it.id == activeId } ?: storyList.firstOrNull()
 
@@ -522,8 +614,13 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       customApiKey = customKey,
       globalDefaultPrompt = globalPrompt,
       effectiveApiKeyPresent = repository.getEffectiveApiKey().isNotBlank(),
-      availableModels = models,
-      isFetchingModels = fetchingModels
+      availableModels = chatModels,
+      availableChatModels = chatModels,
+      availableEmbeddingModels = embModels,
+      availableTranscriptionModels = transModels,
+      isFetchingModels = fetchingModels,
+      isTranscribingAudio = transcribingAudio,
+      modelCatalogIsLive = catalogIsLive
     )
   }.stateIn(
     viewModelScope,

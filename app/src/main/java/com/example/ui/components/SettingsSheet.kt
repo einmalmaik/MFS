@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.api.GeminiClient
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.StoryEntity
+import com.example.ui.dna.DnaBadge
+import com.example.ui.dna.DnaBadgeTone
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
 import com.example.ui.dna.DnaColors
@@ -85,13 +87,17 @@ fun SettingsSheet(
   globalDefaultPrompt: String,
   customApiKey: String,
   availableModels: List<GeminiModelInfo>,
+  availableEmbeddingModels: List<GeminiModelInfo> = emptyList(),
+  availableTranscriptionModels: List<GeminiModelInfo> = emptyList(),
   isFetchingModels: Boolean,
+  modelCatalogIsLive: Boolean = false,
   onRefreshModels: () -> Unit,
   onSaveStorySettings: (
     title: String,
     systemPrompt: String,
     model: String,
     embeddingModel: String,
+    transcriptionModel: String,
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -114,6 +120,7 @@ fun SettingsSheet(
 
   var selectedModel by remember(story) { mutableStateOf<String>(story.selectedModel) }
   var selectedEmbeddingModel by remember(story) { mutableStateOf<String>(story.selectedEmbeddingModel) }
+  var selectedTranscriptionModel by remember(story) { mutableStateOf<String>(story.selectedTranscriptionModel) }
   val currentModelInfo = remember(selectedModel, availableModels) {
     availableModels.find { it.id == selectedModel } ?: GeminiModelInfo(
       id = selectedModel,
@@ -288,7 +295,7 @@ fun SettingsSheet(
         OutlinedTextField(
           value = apiKeyInput,
           onValueChange = { apiKeyInput = it },
-          placeholder = { Text("AIzaSy...", color = DnaColors.MutedForeground) },
+          placeholder = { Text("AIzaSy…", color = DnaColors.MutedForeground) },
           visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
           trailingIcon = {
             IconButton(onClick = { showApiKey = !showApiKey }) {
@@ -313,6 +320,34 @@ fun SettingsSheet(
           ),
           shape = RoundedCornerShape(10.dp)
         )
+
+        val trimmedKey = apiKeyInput.trim()
+        val keyHint: String? = when {
+          trimmedKey.isBlank() -> null
+          trimmedKey.startsWith("AQ.") ->
+            "Hinweis: Das ist ein Auth-Key aus Google AI Studio. Diese werden von der Gemini-API derzeit häufig abgelehnt (Code 401). Falls der Test fehlschlägt, erstelle in der Google Cloud Console einen Standard-Schlüssel (AIzaSy…) und beschränke ihn auf die 'Generative Language API'."
+          !trimmedKey.startsWith("AIzaSy") ->
+            "Hinweis: Gemini-Schlüssel beginnen mit 'AIzaSy…' (Standard) oder 'AQ.' (Auth-Key). Deine Eingabe passt zu keinem der beiden Formate."
+          else -> null
+        }
+        if (keyHint != null) {
+          Spacer(modifier = Modifier.height(6.dp))
+          Text(
+            text = keyHint,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = DnaTypography.InterFamily,
+            color = DnaColors.StatusWarning,
+            fontSize = 11.sp
+          )
+        }
+
+        if (!modelCatalogIsLive) {
+          Spacer(modifier = Modifier.height(8.dp))
+          DnaBadge(
+            text = "Modellliste offline — Schlüssel nicht verifiziert",
+            tone = DnaBadgeTone.AMBER
+          )
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -452,10 +487,22 @@ fun SettingsSheet(
     )
     Spacer(modifier = Modifier.height(6.dp))
 
-    val embeddingModelOptions = listOf(
-      DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
-      DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
-    )
+    val embeddingModelOptions = remember(availableEmbeddingModels) {
+      if (availableEmbeddingModels.isNotEmpty()) {
+        availableEmbeddingModels.map {
+          DnaDropdownOption(
+            value = it.id,
+            label = it.displayName,
+            hint = it.id
+          )
+        }
+      } else {
+        listOf(
+          DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
+          DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
+        )
+      }
+    }
     DnaDropdown(
       options = embeddingModelOptions,
       selectedValue = selectedEmbeddingModel,
@@ -465,8 +512,84 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(20.dp))
 
+    Text(
+      text = "TRANSKRIPTIONSMODELL (SPRACHEINGABE VIA GEMINI)",
+      style = MaterialTheme.typography.labelSmall,
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.Primary,
+      fontWeight = FontWeight.Bold
+    )
+    Text(
+      text = "Das Gemini-Modell für die serverseitige Audio-Transkription von Sprachnachrichten (Multimodal Audio-to-Text).",
+      style = MaterialTheme.typography.bodySmall,
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.MutedForeground
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+
+    val transcriptionModelOptions = remember(availableTranscriptionModels) {
+      if (availableTranscriptionModels.isNotEmpty()) {
+        availableTranscriptionModels.map {
+          DnaDropdownOption(
+            value = it.id,
+            label = it.displayName,
+            hint = it.id
+          )
+        }
+      } else {
+        listOf(
+          DnaDropdownOption("gemini-2.5-flash", "Gemini 2.5 Flash", "Empfohlen für Audio-Transkription"),
+          DnaDropdownOption("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Schnell & leichtgewichtig")
+        )
+      }
+    }
+    DnaDropdown(
+      options = transcriptionModelOptions,
+      selectedValue = selectedTranscriptionModel,
+      onOptionSelected = { selectedTranscriptionModel = it },
+      modifier = Modifier.fillMaxWidth().testTag("transcription_model_selector")
+    )
+
+    Spacer(modifier = Modifier.height(20.dp))
+
     // 3. Denkstufe (Thinking Level) oder Token-Budget je nach Modelltyp
-    if (currentModelInfo.usesThinkingLevel) {
+    if (!currentModelInfo.isThinkingModel) {
+      Card(
+        colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, DnaColors.Border)
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = DnaColors.Secondary,
+            modifier = Modifier.size(20.dp)
+          )
+          Spacer(modifier = Modifier.width(10.dp))
+          Column {
+            Text(
+              text = "Denkstufen: Nicht unterstützt",
+              style = MaterialTheme.typography.labelMedium,
+              fontFamily = DnaTypography.InterFamily,
+              fontWeight = FontWeight.Bold,
+              color = DnaColors.OnSurface
+            )
+            Text(
+              text = "Das Modell $selectedModel führt keine separaten Denkschritte aus und antwortet direkt.",
+              style = MaterialTheme.typography.bodySmall,
+              fontFamily = DnaTypography.InterFamily,
+              color = DnaColors.OnSurfaceVariant
+            )
+          }
+        }
+      }
+    } else if (currentModelInfo.usesThinkingLevel) {
       Text(
         text = "DENKSTUFE (REASONING EFFORT)",
         style = MaterialTheme.typography.labelSmall,
@@ -482,13 +605,19 @@ fun SettingsSheet(
       )
       Spacer(modifier = Modifier.height(8.dp))
 
-      val thinkingOptions = remember {
-        listOf(
-          DnaDropdownOption("MINIMAL", "Minimal", "Blitzschnell, minimale Denkzeit"),
-          DnaDropdownOption("LOW", "Niedrig", "Schnelle Reflexion, geringe Latenz"),
-          DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie"),
-          DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & maximale Konsistenz")
-        )
+      val thinkingOptions = remember(currentModelInfo.supportedThinkingLevels) {
+        val levels = if (currentModelInfo.supportedThinkingLevels.isNotEmpty()) {
+          currentModelInfo.supportedThinkingLevels
+        } else {
+          listOf("LOW", "MEDIUM", "HIGH")
+        }
+        levels.map { lvl ->
+          when (lvl.uppercase()) {
+            "LOW" -> DnaDropdownOption("LOW", "Niedrig", "Schnelle Reflexion, minimale Latenz")
+            "HIGH" -> DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & Konsistenz")
+            else -> DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie")
+          }
+        } + listOf(DnaDropdownOption("OFF", "Deaktiviert", "Keine Denkphase"))
       }
 
       DnaDropdown(
@@ -502,7 +631,7 @@ fun SettingsSheet(
       DnaNumberStepper(
         value = thinkingBudget,
         onValueChange = { thinkingBudget = it },
-        min = 512,
+        min = 0,
         max = 8192,
         step = 512,
         label = "DENKINTENSITÄT (THINKING BUDGET IN TOKEN)",
@@ -754,6 +883,7 @@ fun SettingsSheet(
           storySystemPrompt,
           selectedModel,
           selectedEmbeddingModel,
+          selectedTranscriptionModel,
           temperature,
           supportsTemperature,
           thinkingLevel,
