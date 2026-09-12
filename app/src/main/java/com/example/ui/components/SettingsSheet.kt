@@ -487,20 +487,11 @@ fun SettingsSheet(
     )
     Spacer(modifier = Modifier.height(6.dp))
 
+    // Ausschließlich die Modelle, die der Schlüssel wirklich erreichen kann. Eine fest
+    // verdrahtete Ersatzliste hätte hier jahrelang tote Ids angeboten.
     val embeddingModelOptions = remember(availableEmbeddingModels) {
-      if (availableEmbeddingModels.isNotEmpty()) {
-        availableEmbeddingModels.map {
-          DnaDropdownOption(
-            value = it.id,
-            label = it.displayName,
-            hint = it.id
-          )
-        }
-      } else {
-        listOf(
-          DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
-          DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
-        )
+      availableEmbeddingModels.map {
+        DnaDropdownOption(value = it.id, label = it.displayName, hint = it.id)
       }
     }
     DnaDropdown(
@@ -528,19 +519,8 @@ fun SettingsSheet(
     Spacer(modifier = Modifier.height(6.dp))
 
     val transcriptionModelOptions = remember(availableTranscriptionModels) {
-      if (availableTranscriptionModels.isNotEmpty()) {
-        availableTranscriptionModels.map {
-          DnaDropdownOption(
-            value = it.id,
-            label = it.displayName,
-            hint = it.id
-          )
-        }
-      } else {
-        listOf(
-          DnaDropdownOption("gemini-2.5-flash", "Gemini 2.5 Flash", "Empfohlen für Audio-Transkription"),
-          DnaDropdownOption("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Schnell & leichtgewichtig")
-        )
+      availableTranscriptionModels.map {
+        DnaDropdownOption(value = it.id, label = it.displayName, hint = it.id)
       }
     }
     DnaDropdown(

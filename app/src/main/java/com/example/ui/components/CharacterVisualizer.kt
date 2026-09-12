@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Healing
 import androidx.compose.material.icons.filled.Male
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.data.model.BodyOrgan
 import com.example.data.model.BodyPart
 import com.example.data.model.CharacterGender
 import com.example.data.model.CharacterInjury
@@ -67,6 +69,52 @@ import com.example.ui.dna.DnaColors
 import com.example.ui.dna.DnaDropdown
 import com.example.ui.dna.DnaDropdownOption
 import com.example.ui.dna.DnaTypography
+
+/** Kennung für "kein Organ betroffen" im Organ-Dropdown. */
+private const val NO_ORGAN = "NONE"
+
+/**
+ * Schlagworte der Zustandsbeschreibung und ihr Abzug auf die Vitalität.
+ *
+ * Bewusst eine Heuristik über Text: Die Extraktion liefert eine freie Beschreibung, keinen
+ * Zahlenwert. Ein zusätzliches Zahlenfeld im Schema wäre mehr Angriffsfläche für Drift als
+ * Nutzen — die Abstufung hier muss nur grob stimmen, damit die Anzeige nicht mehr behauptet,
+ * eine ausgezehrte Figur sei "vollständig einsatzbereit".
+ */
+private val CONDITION_PENALTIES = listOf(
+  "sterbend" to 55,
+  "bewusstlos" to 50,
+  "lebensgefahr" to 50,
+  "zusammenbruch" to 40,
+  "ausgezehrt" to 30,
+  "abgemagert" to 30,
+  "unterernährt" to 30,
+  "verhungert" to 35,
+  "dehydriert" to 25,
+  "verdurstet" to 30,
+  "fieber" to 25,
+  "vergiftet" to 30,
+  "unterkühlt" to 20,
+  "atemnot" to 20,
+  "schwäche" to 20,
+  "entkräftet" to 25,
+  "erschöpft" to 15,
+  "angeschlagen" to 10,
+  "schwindel" to 10
+)
+
+/**
+ * Summiert die Abzüge aller erkannten Schlagworte, gedeckelt auf 70 — der Rest bleibt den
+ * Wunden vorbehalten, damit eine kranke Figur ohne Verletzung nicht als tot dasteht.
+ */
+internal fun conditionPenaltyOf(condition: String): Int {
+  val lower = condition.lowercase()
+  if (lower.isBlank() || lower.contains("unverletzt") && lower.length < 16) return 0
+  val sum = CONDITION_PENALTIES.filter { lower.contains(it.first) }.sumOf { it.second }
+  // Ein "schwer"/"extrem" davor verschärft den Befund spürbar.
+  val verstaerkt = lower.contains("schwer") || lower.contains("extrem") || lower.contains("massiv")
+  return (if (verstaerkt) (sum * 1.3f).toInt() else sum).coerceAtMost(70)
+}
 
 /**
  * Vollstaendiger interaktiver Charakter- und Ausruestungs-Visualisierer.
@@ -104,12 +152,18 @@ fun CharacterVisualizer(
   val displayName = if (isPlayer) "Du (Hauptcharakter)" else (currentNpc?.name ?: "NPC")
 
   val currentGender = characterGenders.getOrPut(characterName) {
-    // Heuristik fuer weibliche Namen
-    val nameLower = characterName.lowercase()
-    if (nameLower.endsWith("a") || nameLower.endsWith("e") || nameLower.contains("frau") || nameLower.contains("elena") || nameLower.contains("sarah")) {
-      CharacterGender.FEMALE
+    // Das Geschlecht kommt aus der Extraktion. Die Namensheuristik bleibt nur als Notbehelf für
+    // Altbestände ohne dieses Feld — geraten wird, wenn die Geschichte es nicht hergibt.
+    val extracted = currentNpc?.gender.orEmpty()
+    if (extracted.isNotBlank()) {
+      CharacterGender.fromString(extracted)
     } else {
-      CharacterGender.MALE
+      val nameLower = characterName.lowercase()
+      if (nameLower.endsWith("a") || nameLower.endsWith("e") || nameLower.contains("frau")) {
+        CharacterGender.FEMALE
+      } else {
+        CharacterGender.MALE
+      }
     }
   }
 
@@ -119,11 +173,16 @@ fun CharacterVisualizer(
     currentNpc?.outfit?.ifBlank { "Passende Zivilkleidung" } ?: "Passende Zivilkleidung"
   }
 
+  // Körperliche Verfassung. Für NPCs stand hier früher die Stimmung — dadurch galt eine Figur
+  // als "fiebrig, verängstigt", während der Spieler daneben "unterernährt" war, obwohl beide
+  // dieselbe Entbehrung teilten.
   val characterCondition = if (isPlayer) {
     checkpoint?.playerCondition?.ifBlank { "Unverletzt" } ?: "Unverletzt"
   } else {
-    currentNpc?.currentMood ?: "Ruhig"
+    currentNpc?.condition?.ifBlank { "Keine Angabe" } ?: "Keine Angabe"
   }
+
+  val characterMood = if (isPlayer) "" else currentNpc?.currentMood.orEmpty()
 
   // Verletzungen fuer den aktuell gewaehlten Charakter
   val characterInjuries = remember(checkpoint?.rawStateJson, checkpoint?.playerCondition, characterName) {
@@ -131,6 +190,8 @@ fun CharacterVisualizer(
   }
 
   var selectedBodyPart by remember { mutableStateOf<BodyPart?>(null) }
+  var selectedOrgan by remember { mutableStateOf<BodyOrgan?>(null) }
+  var mannequinView by remember { mutableStateOf(MannequinView.SCAN) }
   var showAddInjuryDialog by remember { mutableStateOf(false) }
 
   val isAdultOutfit = remember(characterOutfit) {
@@ -271,8 +332,12 @@ fun CharacterVisualizer(
 
       Spacer(modifier = Modifier.height(12.dp))
 
-      // Vitalitätsberechnung anhand aktiver Verletzungen
-      val totalPenalty = characterInjuries.sumOf {
+      // Vitalität aus Wunden UND körperlicher Verfassung.
+      //
+      // Nur Wunden zu zählen ergab einen sichtbaren Widerspruch: Eine Figur mit "schwer
+      // unterernährt, hohes Fieber, extreme Schwäche" stand als "vollständig einsatzbereit" da,
+      // solange sie keine offene Wunde hatte. Hunger und Krankheit schwächen aber genauso.
+      val injuryPenalty = characterInjuries.sumOf {
         when (it.severity) {
           InjurySeverity.LIGHT -> 5
           InjurySeverity.MEDIUM -> 15
@@ -280,7 +345,10 @@ fun CharacterVisualizer(
           InjurySeverity.CRITICAL -> 40
         }
       }
-      val vitalityPercent = (100 - totalPenalty).coerceIn(5, 100)
+      val conditionPenalty = remember(characterCondition) {
+        conditionPenaltyOf(characterCondition)
+      }
+      val vitalityPercent = (100 - injuryPenalty - conditionPenalty).coerceIn(5, 100)
       val vitalityColor = when {
         vitalityPercent >= 80 -> DnaColors.MintAccent
         vitalityPercent >= 50 -> DnaColors.StatusWarning
@@ -289,7 +357,10 @@ fun CharacterVisualizer(
       val conditionTitle = when {
         vitalityPercent == 100 -> "Vollständig einsatzbereit"
         vitalityPercent >= 80 -> "Leicht angeschlagen ($vitalityPercent%)"
-        vitalityPercent >= 50 -> "Verwundet ($vitalityPercent%)"
+        // Getrennte Wortwahl: "Verwundet" wäre falsch, wenn die Schwäche von Hunger und
+        // Krankheit kommt und keine einzige Wunde vorliegt.
+        vitalityPercent >= 50 ->
+          if (characterInjuries.isEmpty()) "Geschwächt ($vitalityPercent%)" else "Verwundet ($vitalityPercent%)"
         else -> "Kritischer Zustand ($vitalityPercent%)"
       }
 
@@ -331,9 +402,9 @@ fun CharacterVisualizer(
               )
             } else {
               DnaBadge(
-                text = "Unverletzt",
-                tone = DnaBadgeTone.MINT,
-                showDot = false
+                text = if (conditionPenalty > 0) "Keine Wunden" else "Unverletzt",
+                tone = if (conditionPenalty > 0) DnaBadgeTone.AMBER else DnaBadgeTone.MINT,
+                showDot = conditionPenalty > 0
               )
             }
           }
@@ -367,24 +438,64 @@ fun CharacterVisualizer(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "KÖRPERREGIONEN",
+          text = if (mannequinView == MannequinView.SCAN) "DURCHLEUCHTUNG" else "KÖRPERREGIONEN",
           fontFamily = DnaTypography.InterFamily,
           fontWeight = FontWeight.SemiBold,
           fontSize = 11.sp,
           color = DnaColors.OnSurfaceVariant
         )
 
-        if (selectedBodyPart != null) {
-          Text(
-            text = "Filter aufheben",
-            fontFamily = DnaTypography.InterFamily,
-            fontSize = 11.sp,
-            color = DnaColors.Primary,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          if (selectedBodyPart != null || selectedOrgan != null) {
+            Text(
+              text = "Filter aufheben",
+              fontFamily = DnaTypography.InterFamily,
+              fontSize = 11.sp,
+              color = DnaColors.Primary,
+              modifier = Modifier
+                .clickable {
+                  selectedBodyPart = null
+                  selectedOrgan = null
+                }
+                .padding(4.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+          }
+
+          // Umschalter Haut / Scan
+          Row(
             modifier = Modifier
-              .clickable { selectedBodyPart = null }
-              .padding(4.dp)
-          )
+              .clip(RoundedCornerShape(8.dp))
+              .background(DnaColors.SurfaceContainerHigh)
+              .border(1.dp, DnaColors.Border, RoundedCornerShape(8.dp))
+              .padding(2.dp)
+          ) {
+            GenderToggleButton(
+              title = "Haut",
+              icon = Icons.Default.Person,
+              isSelected = mannequinView == MannequinView.SURFACE,
+              onClick = {
+                mannequinView = MannequinView.SURFACE
+                selectedOrgan = null
+              }
+            )
+            GenderToggleButton(
+              title = "Scan",
+              icon = Icons.Outlined.MonitorHeart,
+              isSelected = mannequinView == MannequinView.SCAN,
+              onClick = { mannequinView = MannequinView.SCAN }
+            )
+          }
         }
+      }
+
+      if (selectedOrgan != null) {
+        Spacer(modifier = Modifier.height(6.dp))
+        DnaBadge(
+          text = selectedOrgan!!.displayName,
+          tone = if (characterInjuries.any { it.organ == selectedOrgan }) DnaBadgeTone.DANGER else DnaBadgeTone.ICE,
+          showDot = true
+        )
       }
 
       Spacer(modifier = Modifier.height(6.dp))
@@ -403,8 +514,20 @@ fun CharacterVisualizer(
           gender = currentGender,
           injuries = characterInjuries,
           selectedBodyPart = selectedBodyPart,
-          onBodyPartSelected = { part -> 
+          onBodyPartSelected = { part ->
+            selectedOrgan = null
             selectedBodyPart = if (selectedBodyPart == part) null else part
+          },
+          view = mannequinView,
+          selectedOrgan = selectedOrgan,
+          onOrganSelected = { organ ->
+            if (selectedOrgan == organ) {
+              selectedOrgan = null
+              selectedBodyPart = null
+            } else {
+              selectedOrgan = organ
+              selectedBodyPart = organ.region
+            }
           },
           modifier = Modifier.fillMaxHeight().width(250.dp) // Begrenzte Breite um Streckung/Ovale zu vermeiden
         )
@@ -420,10 +543,10 @@ fun CharacterVisualizer(
         modifier = Modifier.fillMaxWidth()
       ) {
         Column(modifier = Modifier.padding(12.dp)) {
-          val displayedInjuries = if (selectedBodyPart != null) {
-            characterInjuries.filter { it.bodyPart == selectedBodyPart }
-          } else {
-            characterInjuries
+          val displayedInjuries = when {
+            selectedOrgan != null -> characterInjuries.filter { it.organ == selectedOrgan }
+            selectedBodyPart != null -> characterInjuries.filter { it.bodyPart == selectedBodyPart }
+            else -> characterInjuries
           }
 
           Row(
@@ -432,10 +555,10 @@ fun CharacterVisualizer(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = if (selectedBodyPart != null) {
-                "WUNDEN: ${selectedBodyPart!!.displayName.uppercase()}"
-              } else {
-                "ALLE VERLETZUNGEN (${characterInjuries.size})"
+              text = when {
+                selectedOrgan != null -> "WUNDEN: ${selectedOrgan!!.displayName.uppercase()}"
+                selectedBodyPart != null -> "WUNDEN: ${selectedBodyPart!!.displayName.uppercase()}"
+                else -> "ALLE VERLETZUNGEN (${characterInjuries.size})"
               },
               fontFamily = DnaTypography.InterFamily,
               fontWeight = FontWeight.SemiBold,
@@ -470,10 +593,12 @@ fun CharacterVisualizer(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                  text = if (selectedBodyPart != null) {
-                    "Keine Verletzungen an ${selectedBodyPart!!.displayName}."
-                  } else {
-                    "Keine aktiven Verletzungen. Vollständig einsatzbereit."
+                  text = when {
+                    selectedOrgan != null -> "Keine Verletzungen an ${selectedOrgan!!.displayName}."
+                    selectedBodyPart != null -> "Keine Verletzungen an ${selectedBodyPart!!.displayName}."
+                    conditionPenalty > 0 ->
+                      "Keine offenen Wunden — die Schwäche kommt aus der körperlichen Verfassung."
+                    else -> "Keine aktiven Verletzungen. Vollständig einsatzbereit."
                   },
                   fontFamily = DnaTypography.InterFamily,
                   fontSize = 12.sp,
@@ -539,7 +664,7 @@ fun CharacterVisualizer(
           Spacer(modifier = Modifier.height(8.dp))
 
           Text(
-            text = "GESAMTZUSTAND",
+            text = "KÖRPERLICHE VERFASSUNG",
             fontFamily = DnaTypography.InterFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 11.sp,
@@ -550,8 +675,28 @@ fun CharacterVisualizer(
             text = characterCondition,
             fontFamily = DnaTypography.InterFamily,
             fontSize = 13.sp,
+            lineHeight = 18.sp,
             color = if (characterInjuries.isNotEmpty()) DnaColors.StatusDestructive else DnaColors.Secondary
           )
+
+          if (characterMood.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+              text = "STIMMUNG",
+              fontFamily = DnaTypography.InterFamily,
+              fontWeight = FontWeight.SemiBold,
+              fontSize = 11.sp,
+              color = DnaColors.OnSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+              text = characterMood,
+              fontFamily = DnaTypography.InterFamily,
+              fontSize = 13.sp,
+              lineHeight = 18.sp,
+              color = DnaColors.OnSurface
+            )
+          }
         }
       }
     }
@@ -561,17 +706,21 @@ fun CharacterVisualizer(
   if (showAddInjuryDialog) {
     AddInjuryDialog(
       initialBodyPart = selectedBodyPart ?: BodyPart.CHEST,
+      initialOrgan = selectedOrgan,
+      gender = currentGender,
       onDismiss = { showAddInjuryDialog = false },
-      onConfirm = { part, description, severity ->
+      onConfirm = { part, organ, description, severity ->
         val newInjury = CharacterInjury(
           characterName = characterName,
           bodyPart = part,
           description = description,
-          severity = severity
+          severity = severity,
+          organ = organ
         )
         val updated = characterInjuries + newInjury
         onUpdateInjuries?.invoke(characterName, updated)
         selectedBodyPart = part
+        selectedOrgan = organ
         showAddInjuryDialog = false
       }
     )
@@ -771,10 +920,13 @@ private fun InjurySummaryRow(
 @Composable
 private fun AddInjuryDialog(
   initialBodyPart: BodyPart,
+  initialOrgan: BodyOrgan?,
+  gender: CharacterGender,
   onDismiss: () -> Unit,
-  onConfirm: (bodyPart: BodyPart, description: String, severity: InjurySeverity) -> Unit
+  onConfirm: (bodyPart: BodyPart, organ: BodyOrgan?, description: String, severity: InjurySeverity) -> Unit
 ) {
   var selectedPart by remember { mutableStateOf(initialBodyPart) }
+  var selectedOrganValue by remember { mutableStateOf(initialOrgan?.id ?: NO_ORGAN) }
   var description by remember { mutableStateOf("") }
   var selectedSeverity by remember { mutableStateOf(InjurySeverity.MEDIUM) }
 
@@ -785,6 +937,20 @@ private fun AddInjuryDialog(
         label = it.displayName
       )
     }
+  }
+
+  // Nur Organe der gewählten Region und des passenden Geschlechts - eine Gebärmutter unter
+  // "Linker Arm" anzubieten wäre schlicht falsch.
+  val organOptions = remember(selectedPart, gender) {
+    listOf(DnaDropdownOption(value = NO_ORGAN, label = "Kein inneres Organ")) +
+      BodyOrgan.forGender(gender)
+        .filter { it.region == selectedPart }
+        .map { DnaDropdownOption(value = it.id, label = it.displayName) }
+  }
+
+  // Wechselt die Region, passt das bisher gewählte Organ meist nicht mehr dazu.
+  if (organOptions.none { it.value == selectedOrganValue }) {
+    selectedOrganValue = NO_ORGAN
   }
 
   val severityOptions = remember {
@@ -837,6 +1003,19 @@ private fun AddInjuryDialog(
         )
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        // Organ Dropdown - nur befüllt, wenn die Region überhaupt Organe enthält
+        if (organOptions.size > 1) {
+          DnaDropdown(
+            label = "INNERES ORGAN",
+            options = organOptions,
+            selectedValue = selectedOrganValue,
+            onOptionSelected = { selectedOrganValue = it },
+            modifier = Modifier.fillMaxWidth().testTag("injury_organ_selector")
+          )
+
+          Spacer(modifier = Modifier.height(10.dp))
+        }
 
         // Schweregrad Dropdown
         DnaDropdown(
@@ -898,8 +1077,11 @@ private fun AddInjuryDialog(
           DnaButton(
             text = "Wunde speichern",
             onClick = {
-              val desc = description.ifBlank { "Wunde an ${selectedPart.displayName}" }
-              onConfirm(selectedPart, desc, selectedSeverity)
+              val organ = BodyOrgan.fromString(selectedOrganValue)
+              val desc = description.ifBlank {
+                "Wunde an ${organ?.displayName ?: selectedPart.displayName}"
+              }
+              onConfirm(selectedPart, organ, desc, selectedSeverity)
             },
             variant = DnaButtonVariant.PRIMARY
           )

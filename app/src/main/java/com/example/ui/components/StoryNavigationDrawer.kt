@@ -260,6 +260,9 @@ fun StoryNavigationDrawer(
 
       // Bottom Bar: Settings & API Configuration
       Surface(
+        // shape gehört an das Surface selbst: Hintergrund und Rahmen werden damit gezeichnet.
+        // Ein reines .clip() am Modifier lässt den Rahmen rechteckig und die Ecken hart.
+        shape = RoundedCornerShape(10.dp),
         modifier = Modifier
           .fillMaxWidth()
           .clip(RoundedCornerShape(10.dp))

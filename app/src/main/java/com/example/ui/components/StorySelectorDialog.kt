@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.api.GeminiClient
+import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.StoryEntity
 import com.example.ui.dna.DnaColors
@@ -195,14 +196,17 @@ fun StorySelectorDialog(
   var customNpcRelation by remember { mutableStateOf("") }
   var customOpening by remember { mutableStateOf("") }
 
-  // Model and thinking configuration
-  val defaultModelId = availableModels.firstOrNull { it.id == "gemini-3.8-flash" }?.id
-    ?: availableModels.firstOrNull()?.id
-    ?: "gemini-3.8-flash"
+  // Vorauswahl immer aus dem Live-Katalog: Er ist bereits nach Version sortiert, das erste
+  // Element ist damit das aktuellste erreichbare Modell.
+  val defaultModelId = availableModels.firstOrNull()?.id ?: GeminiDefaults.CHAT_MODEL
 
   var selectedModelId by remember { mutableStateOf(defaultModelId) }
-  var selectedEmbeddingModel by remember { mutableStateOf("text-embedding-004") }
-  var selectedTranscriptionModel by remember { mutableStateOf("gemini-2.5-flash") }
+  var selectedEmbeddingModel by remember {
+    mutableStateOf(availableEmbeddingModels.firstOrNull()?.id ?: GeminiDefaults.EMBEDDING_MODEL)
+  }
+  var selectedTranscriptionModel by remember {
+    mutableStateOf(availableTranscriptionModels.firstOrNull()?.id ?: GeminiDefaults.TRANSCRIPTION_MODEL)
+  }
   val currentModelInfo = availableModels.firstOrNull { it.id == selectedModelId }
     ?: GeminiModelInfo(
       id = selectedModelId,
@@ -568,20 +572,10 @@ fun StorySelectorDialog(
 
           Spacer(modifier = Modifier.height(16.dp))
 
+          // Ausschließlich Modelle, die der Schlüssel wirklich erreichen kann.
           val embeddingModelOptions = remember(availableEmbeddingModels) {
-            if (availableEmbeddingModels.isNotEmpty()) {
-              availableEmbeddingModels.map {
-                com.example.ui.dna.DnaDropdownOption(
-                  value = it.id,
-                  label = it.displayName,
-                  hint = it.id
-                )
-              }
-            } else {
-              listOf(
-                com.example.ui.dna.DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
-                com.example.ui.dna.DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
-              )
+            availableEmbeddingModels.map {
+              com.example.ui.dna.DnaDropdownOption(value = it.id, label = it.displayName, hint = it.id)
             }
           }
           com.example.ui.dna.DnaDropdown(
@@ -595,19 +589,8 @@ fun StorySelectorDialog(
           Spacer(modifier = Modifier.height(16.dp))
 
           val transcriptionModelOptions = remember(availableTranscriptionModels) {
-            if (availableTranscriptionModels.isNotEmpty()) {
-              availableTranscriptionModels.map {
-                com.example.ui.dna.DnaDropdownOption(
-                  value = it.id,
-                  label = it.displayName,
-                  hint = it.id
-                )
-              }
-            } else {
-              listOf(
-                com.example.ui.dna.DnaDropdownOption("gemini-2.5-flash", "Gemini 2.5 Flash", "Empfohlen für Audio-Transkription"),
-                com.example.ui.dna.DnaDropdownOption("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Schnell & leichtgewichtig")
-              )
+            availableTranscriptionModels.map {
+              com.example.ui.dna.DnaDropdownOption(value = it.id, label = it.displayName, hint = it.id)
             }
           }
           com.example.ui.dna.DnaDropdown(

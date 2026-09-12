@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,7 +42,9 @@ fun DnaBadge(
   modifier: Modifier = Modifier,
   tone: DnaBadgeTone = DnaBadgeTone.ICE,
   icon: ImageVector? = null,
-  showDot: Boolean = true
+  showDot: Boolean = true,
+  /** JetBrains Mono für Zeitstempel, Würfelwürfe und IDs (CLAUDE.md §0.5). */
+  fontFamily: FontFamily = DnaTypography.InterFamily
 ) {
   val (bgColor, borderColor, contentColor, dotColor) = when (tone) {
     DnaBadgeTone.ICE -> Quad(
@@ -108,7 +111,7 @@ fun DnaBadge(
 
       Text(
         text = text,
-        fontFamily = DnaTypography.InterFamily,
+        fontFamily = fontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
         letterSpacing = 0.2.sp,

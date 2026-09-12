@@ -182,16 +182,6 @@ fun StoryScreen(
   val story = uiState.currentStory
   val checkpoint = uiState.latestCheckpoint
 
-  // Dynamic context suggestions based on current story
-  val suggestions = remember(story?.id) {
-    listOf(
-      "Elena leise fragen, was sie vorhat",
-      "Lagerhalle gründlich durchsuchen",
-      "Die schwere Schiebetür genauer prüfen",
-      "Taschenlampe ausschalten und lauschen"
-    )
-  }
-
   ModalNavigationDrawer(
     drawerState = drawerState,
     gesturesEnabled = true, // Enables left edge swipe!
@@ -278,7 +268,6 @@ fun StoryScreen(
             }
           },
           isGenerating = uiState.isGenerating,
-          suggestions = suggestions,
           editingMessage = editingMessage,
           onCancelEdit = {
             editingMessage = null

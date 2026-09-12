@@ -1,6 +1,7 @@
 package com.example.domain.service
 
 import com.example.data.db.StoryDao
+import com.example.data.model.CheckpointEntity
 import com.example.data.model.MessageEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -50,18 +51,55 @@ class StoryBranchingService(
       )
     }
 
-    // Copy latest checkpoint
-    val latestCp = storyDao.getLatestCheckpoint(sourceStoryId)
-    if (latestCp != null) {
+    // Den Checkpoint übernehmen, der zum Verzweigungspunkt gehört - nicht den neuesten.
+    // Andernfalls startet ein Zweig ab einem frühen Zug mit Zeit, Ort und Inventar aus der
+    // Zukunft des Ursprungsstrangs (CLAUDE.md §0.7).
+    val branchCheckpoint = resolveBranchCheckpoint(sourceStoryId, messagesToCopy.lastOrNull())
+    if (branchCheckpoint != null) {
       storyDao.insertCheckpoint(
-        latestCp.copy(
+        branchCheckpoint.copy(
           id = 0,
           storyId = newStoryId
         )
       )
     }
 
+    // Figuren und episodisches Gedächtnis mitnehmen, sonst beginnt der Zweig gedächtnislos.
+    val branchDay = branchCheckpoint?.extractDayNumber() ?: Int.MAX_VALUE
+    val branchTurn = branchCheckpoint?.turnNumber ?: Int.MAX_VALUE
+
+    for (npc in storyDao.getNpcs(sourceStoryId)) {
+      if (npc.firstMetDay <= branchDay) {
+        storyDao.insertNpc(npc.copy(id = 0, storyId = newStoryId))
+      }
+    }
+
+    for (memory in storyDao.getMemories(sourceStoryId)) {
+      if (memory.turnNumber <= branchTurn) {
+        storyDao.insertMemory(memory.copy(id = 0, storyId = newStoryId))
+      }
+    }
+
     newStoryId
+  }
+
+  /**
+   * Findet den Zustand, der am Verzweigungspunkt galt. Bevorzugt den direkt an der Nachricht
+   * hinterlegten Checkpoint; fehlt der (etwa bei Nutzer-Nachrichten), wird der jüngste
+   * Checkpoint verwendet, der nicht nach dieser Nachricht entstanden ist.
+   */
+  private suspend fun resolveBranchCheckpoint(
+    sourceStoryId: Long,
+    lastCopiedMessage: MessageEntity?
+  ): CheckpointEntity? {
+    if (lastCopiedMessage == null) return storyDao.getLatestCheckpoint(sourceStoryId)
+
+    lastCopiedMessage.checkpointId?.let { id ->
+      storyDao.getCheckpointById(id)?.let { return it }
+    }
+
+    return storyDao.getCheckpointAtOrBeforeMessage(sourceStoryId, lastCopiedMessage.id)
+      ?: storyDao.getLatestCheckpoint(sourceStoryId)
   }
 
   /**
@@ -76,6 +114,9 @@ class StoryBranchingService(
     val latestCp = storyDao.getLatestCheckpoint(storyId)
     if (message.checkpointId != null && latestCp != null && message.checkpointId < latestCp.id) {
       storyDao.deleteCheckpointsAfterTurn(storyId, latestCp.turnNumber - 1)
+      // Erinnerungen an zurückgenommene Züge müssen mit verschwinden, sonst erinnert sich die
+      // Welt an Ereignisse, die es in dieser Zeitlinie nicht mehr gibt.
+      storyDao.deleteMemoriesAfterTurn(storyId, latestCp.turnNumber - 1)
     }
   }
 
@@ -92,6 +133,8 @@ class StoryBranchingService(
 
     val allRemaining = storyDao.getMessagesSnapshot(storyId)
     val userTurnIdx = allRemaining.count { it.sender == "user" }
-    storyDao.deleteCheckpointsAfterTurn(storyId, (userTurnIdx - 1).coerceAtLeast(0))
+    val keepUpToTurn = (userTurnIdx - 1).coerceAtLeast(0)
+    storyDao.deleteCheckpointsAfterTurn(storyId, keepUpToTurn)
+    storyDao.deleteMemoriesAfterTurn(storyId, keepUpToTurn)
   }
 }

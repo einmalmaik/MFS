@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.StoryEntity
+import com.example.ui.dna.DnaBadge
+import com.example.ui.dna.DnaBadgeTone
 import com.example.ui.dna.DnaColors
 import com.example.ui.dna.DnaTypography
 
@@ -129,35 +131,24 @@ fun StoryTopBar(
       }
     },
     actions = {
-      // In-Game Time Pill (Stadium Badge style)
-      Surface(
+      // In-Game-Zeit als echte Stadium-Pille.
+      //
+      // Vorher war das ein handgebauter Nachbau von DnaBadge mit einem Surface ohne
+      // shape-Parameter. Surface zeichnet Hintergrund und Rahmen aber mit seinem eigenen shape,
+      // das auf RectangleShape steht — das .clip() am Modifier beschnitt nur, sodass an den
+      // Ecken sichtbar ein gestrecktes Rechteck stehen blieb. DnaBadge setzt CircleShape direkt
+      // am Surface und ist damit unter jedem Zoom rund.
+      DnaBadge(
+        text = checkpoint?.inGameTime ?: "Tag 1, 20:00",
+        tone = DnaBadgeTone.ICE,
+        icon = Icons.Default.AccessTime,
+        showDot = false,
+        fontFamily = DnaTypography.JetBrainsMonoFamily,
         modifier = Modifier
-          .clip(RoundedCornerShape(999.dp))
+          .clip(CircleShape)
           .clickable { onOpenNotebook() }
-          .testTag("in_game_time_pill"),
-        color = DnaColors.PrimaryContainer,
-        border = BorderStroke(1.dp, DnaColors.Primary.copy(alpha = 0.35f))
-      ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Default.AccessTime,
-            contentDescription = null,
-            tint = DnaColors.Primary,
-            modifier = Modifier.size(13.dp)
-          )
-          Spacer(modifier = Modifier.width(4.dp))
-          Text(
-            text = checkpoint?.inGameTime ?: "Tag 1, 20:00",
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = DnaTypography.JetBrainsMonoFamily,
-            color = DnaColors.OnPrimaryContainer,
-            fontWeight = FontWeight.Bold
-          )
-        }
-      }
+          .testTag("in_game_time_pill")
+      )
 
       Spacer(modifier = Modifier.width(6.dp))
 

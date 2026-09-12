@@ -81,7 +81,6 @@ fun StoryActionInputBar(
   onInputTextChange: (String) -> Unit,
   onSendAction: (String) -> Unit,
   isGenerating: Boolean,
-  suggestions: List<String>,
   editingMessage: MessageEntity? = null,
   onCancelEdit: () -> Unit = {},
   isRecordingVoice: Boolean = false,
@@ -306,37 +305,7 @@ fun StoryActionInputBar(
       }
     }
 
-    // 3. Quick Action Suggestion Chips (only when not editing and not recording)
-    if (editingMessage == null && !isRecordingVoice && !isTranscribing) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .horizontalScroll(rememberScrollState())
-          .padding(bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-      ) {
-        suggestions.forEach { suggestion ->
-          Surface(
-            modifier = Modifier
-              .clip(RoundedCornerShape(8.dp))
-              .clickable(enabled = !isGenerating) {
-                onInputTextChange(suggestion)
-              },
-            color = InkPanel,
-            border = BorderStroke(1.dp, IceBorderFaint)
-          ) {
-            Text(
-              text = suggestion,
-              style = MaterialTheme.typography.labelSmall,
-              color = TextMuted,
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-            )
-          }
-        }
-      }
-    }
-
-    // 4. Input field, voice mic button, and send button
+    // 3. Input field, voice mic button, and send button
     Row(
       modifier = Modifier.fillMaxWidth(),
       verticalAlignment = Alignment.CenterVertically

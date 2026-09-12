@@ -4,7 +4,9 @@ import android.util.Log
 import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDao
 import com.example.data.model.CheckpointEntity
+import com.example.data.model.MemoryKind
 import com.example.data.model.StoryEntity
+import com.example.domain.model.TimeAnchor
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -15,7 +17,9 @@ import org.json.JSONObject
  */
 class StateExtractionEngine(
   private val geminiClient: GeminiClient,
-  private val storyDao: StoryDao
+  private val storyDao: StoryDao,
+  private val memoryEngine: MemoryEngine,
+  private val npcEngine: NpcEngine
 ) {
   companion object {
     private const val TAG = "StateExtractionEngine"
@@ -31,8 +35,8 @@ class StateExtractionEngine(
       userAction: String,
       modelResponse: String
     ): String {
-      val previousDay = parseDayNumber(previousTime)
-      val extractedDay = parseDayNumber(extractedTime)
+      val previousDay = TimeAnchor.parseDayNumber(previousTime)
+      val extractedDay = TimeAnchor.parseDayNumber(extractedTime)
 
       // Check if user action requested a specific day jump
       val actionLower = userAction.lowercase()
@@ -55,7 +59,7 @@ class StateExtractionEngine(
         val targetDay = previousDay + daysToAdvance
         if (extractedDay < targetDay) {
           // Model didn't advance enough, correct to target day
-          val timePart = parseTimeOfDay(extractedTime).ifBlank {
+          val timePart = TimeAnchor.parseTimeOfDay(extractedTime).ifBlank {
             if (actionLower.contains("morgen")) "08:00 Uhr" else "20:00 Uhr"
           }
           return "Tag $targetDay, $timePart"
@@ -65,23 +69,109 @@ class StateExtractionEngine(
       return extractedTime
     }
 
-    private fun parseDayNumber(timeStr: String): Int {
-      val regex = Regex("""Tag\s*(\d+)""", RegexOption.IGNORE_CASE)
-      val match = regex.find(timeStr)
-      return match?.groupValues?.get(1)?.toIntOrNull() ?: 1
-    }
+    /**
+     * Tage, nach denen eine unbehandelte Wunde des jeweiligen Schweregrads als verheilt gilt.
+     * CRITICAL fehlt bewusst: lebensbedrohliche Verletzungen heilen niemals von selbst weg.
+     */
+    private val HEALING_DAYS = mapOf(
+      "LIGHT" to 2,
+      "MEDIUM" to 6,
+      "SEVERE" to 16
+    )
 
-    private fun parseTimeOfDay(timeStr: String): String {
-      val regex = Regex("""(\d{1,2}:\d{2}(?:\s*Uhr)?)""", RegexOption.IGNORE_CASE)
-      val match = regex.find(timeStr)
-      val found = match?.groupValues?.get(1) ?: ""
-      return if (found.isNotBlank() && !found.endsWith("Uhr", ignoreCase = true)) {
-        "$found Uhr"
-      } else {
-        found
+    /** Ab diesem Schweregrad bleibt nach der Heilung eine Narbe zurück. */
+    private val SCARRING_SEVERITIES = setOf("SEVERE", "CRITICAL")
+
+    /**
+     * Felder, die eine Figur dauerhaft beschreiben und deshalb nicht verloren gehen dürfen,
+     * wenn eine einzelne Extraktion sie auslässt.
+     */
+    private val NPC_STICKY_FIELDS = listOf("condition", "gender")
+
+    /**
+     * Trägt [NPC_STICKY_FIELDS] aus dem vorherigen Checkpoint nach, wo die neue Extraktion sie
+     * leer gelassen hat. Verändert [npcs] an Ort und Stelle.
+     *
+     * Zuordnung über den Namen: Die Extraktion ist angewiesen, ihn immer gleich zu schreiben,
+     * und Teiltreffer würden hier eher schaden als helfen.
+     */
+    fun carryOverNpcFields(npcs: JSONArray, previousNpcsJson: String?) {
+      if (previousNpcsJson.isNullOrBlank()) return
+
+      val previousByName = mutableMapOf<String, JSONObject>()
+      try {
+        val previous = JSONArray(previousNpcsJson)
+        for (i in 0 until previous.length()) {
+          val obj = previous.optJSONObject(i) ?: continue
+          val name = obj.optString("name").trim()
+          if (name.isNotBlank()) previousByName[name.lowercase()] = obj
+        }
+      } catch (_: Exception) {
+        return
+      }
+
+      for (i in 0 until npcs.length()) {
+        val current = npcs.optJSONObject(i) ?: continue
+        val previous = previousByName[current.optString("name").trim().lowercase()] ?: continue
+        NPC_STICKY_FIELDS.forEach { field ->
+          if (current.optString(field).isBlank()) {
+            val carried = previous.optString(field)
+            if (carried.isNotBlank()) current.put(field, carried)
+          }
+        }
       }
     }
+
+    /**
+     * Lässt Verletzungen über die vergangene Zeit deterministisch abklingen.
+     *
+     * Nötig, weil das Modell Wunden entweder für immer mitschleppt oder willkürlich verschwinden
+     * lässt. Behandelte Wunden heilen doppelt so schnell; CRITICAL bleibt bis zur Behandlung.
+     * Gibt die verbliebenen Verletzungen und die dabei entstandenen Narben zurück.
+     */
+    fun applyHealing(injuries: JSONArray, dayDelta: Int): HealingResult {
+      if (dayDelta <= 0) return HealingResult(injuries, emptyList())
+
+      val remaining = JSONArray()
+      val scars = mutableListOf<Scar>()
+
+      for (i in 0 until injuries.length()) {
+        val injury = injuries.optJSONObject(i) ?: continue
+        val severity = injury.optString("severity", "MEDIUM").uppercase()
+        val treated = injury.optBoolean("is_treated", false)
+
+        val baseDays = HEALING_DAYS[severity]
+        if (baseDays == null) {
+          // CRITICAL oder unbekannter Grad: bleibt bestehen.
+          remaining.put(injury)
+          continue
+        }
+
+        val daysNeeded = if (treated) (baseDays / 2).coerceAtLeast(1) else baseDays
+        val elapsed = injury.optInt("days_elapsed", 0) + dayDelta
+
+        if (elapsed >= daysNeeded) {
+          if (severity in SCARRING_SEVERITIES) {
+            scars.add(
+              Scar(
+                characterName = injury.optString("character", "Du"),
+                description = injury.optString("description", "Verletzung")
+              )
+            )
+          }
+          continue
+        }
+
+        remaining.put(injury.put("days_elapsed", elapsed))
+      }
+
+      return HealingResult(remaining, scars)
+    }
   }
+
+  data class Scar(val characterName: String, val description: String)
+
+  data class HealingResult(val injuries: JSONArray, val scars: List<Scar>)
 
   /**
    * Performs post-turn background state extraction and saves the resulting CheckpointEntity.
@@ -99,6 +189,14 @@ class StateExtractionEngine(
     val milestones = latestCheckpoint?.getMilestonesList() ?: emptyList()
 
     return try {
+      // Bekannte Figuren mitgeben, damit das Modell Namen und Aussehen nicht neu erfindet.
+      val knownNpcs = storyDao.getNpcs(story.id).map { npc ->
+        buildString {
+          append(npc.canonicalName)
+          if (npc.appearance.isNotBlank()) append(" (${npc.appearance})")
+        }
+      }
+
       val updatedStateJsonObj = geminiClient.extractUpdatedState(
         model = story.selectedModel,
         thinkingLevel = story.thinkingLevel,
@@ -106,7 +204,8 @@ class StateExtractionEngine(
         currentStateJson = currentStateJson,
         userAction = userAction,
         storyResponse = modelResponse,
-        existingMilestones = milestones
+        existingMilestones = milestones,
+        knownNpcs = knownNpcs
       )
 
       // Time calculation with deterministic time-skip protection
@@ -158,6 +257,14 @@ class StateExtractionEngine(
 
       val npcsArray = updatedStateJsonObj.optJSONArray("npcs")
         ?: updatedStateJsonObj.optJSONArray("npcs_present")
+
+      // Zustand und Geschlecht aus der Vorrunde übernehmen, wenn das Modell sie diesmal
+      // weggelassen hat. Ohne das fiele eine ausgezehrte Figur bei jedem zweiten Zug auf
+      // "keine Angabe" zurück — genau die Sprunghaftigkeit, die lange Geschichten kaputt macht.
+      if (npcsArray != null) {
+        carryOverNpcFields(npcsArray, latestCheckpoint?.npcsJson)
+      }
+
       val npcsJson = npcsArray?.toString() ?: (latestCheckpoint?.npcsJson ?: "[]")
 
       // Cumulative Milestones: preserve history & add newly discovered ones
@@ -175,16 +282,14 @@ class StateExtractionEngine(
       }
 
       // If time skip happened but model returned no milestone, record the passage of time
-      val dayDelta = parseDayNumber(newInGameTime) - parseDayNumber(latestCheckpoint?.inGameTime ?: "Tag 1")
+      val dayDelta = TimeAnchor.parseDayNumber(newInGameTime) -
+        TimeAnchor.parseDayNumber(latestCheckpoint?.inGameTime ?: "Tag 1")
       if (dayDelta > 0) {
         val timeSkipEntry = "Zeitsprung: $dayDelta Tag(e) sind vergangen ($newInGameTime)"
         if (!cumulativeMilestones.contains(timeSkipEntry)) {
           cumulativeMilestones.add(timeSkipEntry)
         }
       }
-
-      val milestonesJsonArray = JSONArray()
-      cumulativeMilestones.forEach { milestonesJsonArray.put(it) }
 
       val newSummary = updatedStateJsonObj.optString("previous_events_summary", summary)
         .ifBlank { summary }
@@ -199,6 +304,21 @@ class StateExtractionEngine(
           }
         } catch (_: Exception) { }
       }
+
+      // Wunden über die vergangene Zeit abklingen lassen, statt sie ewig mitzuschleppen.
+      val healing = applyHealing(
+        injuries = updatedStateJsonObj.optJSONArray("injuries") ?: JSONArray(),
+        dayDelta = dayDelta
+      )
+      updatedStateJsonObj.put("injuries", healing.injuries)
+      healing.scars.forEach { scar ->
+        val entry = "Narbe: ${scar.characterName} trägt bleibende Spuren (${scar.description})"
+        if (!cumulativeMilestones.contains(entry)) cumulativeMilestones.add(entry)
+      }
+
+      // Erst jetzt serialisieren: Narben aus der Heilung sind Meilensteine.
+      val milestonesJsonArray = JSONArray()
+      cumulativeMilestones.forEach { milestonesJsonArray.put(it) }
 
       val newCheckpoint = CheckpointEntity(
         storyId = story.id,
@@ -215,7 +335,19 @@ class StateExtractionEngine(
         rawStateJson = updatedStateJsonObj.toString()
       )
 
-      storyDao.insertCheckpoint(newCheckpoint)
+      val checkpointId = storyDao.insertCheckpoint(newCheckpoint)
+
+      persistMemories(
+        story = story,
+        updatedState = updatedStateJsonObj,
+        npcsArray = npcsArray,
+        newInGameTime = newInGameTime,
+        previousInGameTime = latestCheckpoint?.inGameTime,
+        turnNumber = turnNumber,
+        newMilestones = cumulativeMilestones - milestones.toSet()
+      )
+
+      checkpointId
     } catch (e: Exception) {
       Log.w(TAG, "State extraction fallback triggered", e)
       if (latestCheckpoint != null) {
@@ -233,64 +365,81 @@ class StateExtractionEngine(
   }
 
   /**
-   * Deterministically calculates time progression when time skips are detected,
-   * guaranteeing that statements like "Es vergehen zwei Tage" advance Day 1 -> Day 3 even if
-   * the model hallucinated the same day.
+   * Schreibt die Erinnerungen dieser Runde in das episodische und das Identitätsgedächtnis.
+   *
+   * Bewusst nach dem Checkpoint: Schlägt eine Einbettung fehl (offline, Ratenlimit), darf das
+   * den Spielstand nicht gefährden.
    */
-  fun computeDeterministicTimeProgression(
-    previousTime: String,
-    extractedTime: String,
-    userAction: String,
-    modelResponse: String
-  ): String {
-    val previousDay = parseDayNumber(previousTime)
-    val extractedDay = parseDayNumber(extractedTime)
+  private suspend fun persistMemories(
+    story: StoryEntity,
+    updatedState: JSONObject,
+    npcsArray: JSONArray?,
+    newInGameTime: String,
+    previousInGameTime: String?,
+    turnNumber: Int,
+    newMilestones: List<String>
+  ) {
+    val day = TimeAnchor.parseDayNumber(newInGameTime)
 
-    // Check if user action requested a specific day jump
-    val actionLower = userAction.lowercase()
-    val daysToAdvance = when {
-      actionLower.contains("zwei tage") || actionLower.contains("2 tage") -> 2
-      actionLower.contains("drei tage") || actionLower.contains("3 tage") -> 3
-      actionLower.contains("vier tage") || actionLower.contains("4 tage") -> 4
-      actionLower.contains("fünf tage") || actionLower.contains("5 tage") -> 5
-      actionLower.contains("eine woche") || actionLower.contains("1 woche") -> 7
-      actionLower.contains("übernachten") || actionLower.contains("nächsten morgen") ||
-        actionLower.contains("nächster morgen") || actionLower.contains("schlafe bis morgen") -> 1
-      else -> {
-        val regex = Regex("""(\d+)\s+tage(?:\s+später|\s+vergehen|\s+rasten|\s+warten)?""", RegexOption.IGNORE_CASE)
-        val match = regex.find(userAction)
-        match?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    try {
+      // 1. Was in dieser Runde geschah - ein Sachverhalt, nicht die ganze Erzählung.
+      val turnMemory = updatedState.optString("turn_memory").trim()
+      if (turnMemory.isNotBlank()) {
+        memoryEngine.recordMemory(
+          storyId = story.id,
+          kind = MemoryKind.EVENT,
+          text = turnMemory,
+          dayNumber = day,
+          inGameTime = newInGameTime,
+          turnNumber = turnNumber,
+          embeddingModel = story.selectedEmbeddingModel
+        )
       }
-    }
 
-    if (daysToAdvance > 0) {
-      val targetDay = previousDay + daysToAdvance
-      if (extractedDay < targetDay) {
-        // Model didn't advance enough, correct to target day
-        val timePart = parseTimeOfDay(extractedTime).ifBlank {
-          if (actionLower.contains("morgen")) "08:00 Uhr" else "20:00 Uhr"
-        }
-        return "Tag $targetDay, $timePart"
+      // 2. Neue Meilensteine einzeln einbetten, damit sie auch nach Monaten auffindbar bleiben.
+      for (milestone in newMilestones) {
+        memoryEngine.recordMemory(
+          storyId = story.id,
+          kind = MemoryKind.MILESTONE,
+          text = milestone,
+          dayNumber = day,
+          inGameTime = newInGameTime,
+          turnNumber = turnNumber,
+          embeddingModel = story.selectedEmbeddingModel
+        )
       }
-    }
 
-    return extractedTime
-  }
+      // 3. Tages-Zusammenfassung, sobald ein Tag abgeschlossen wurde.
+      val daySummary = updatedState.optString("completed_day_summary").trim()
+      val previousDay = TimeAnchor.parseDayNumber(previousInGameTime ?: "Tag 1")
+      if (daySummary.isNotBlank() && day > previousDay) {
+        memoryEngine.recordMemory(
+          storyId = story.id,
+          kind = MemoryKind.DAY_SUMMARY,
+          text = daySummary,
+          dayNumber = previousDay,
+          inGameTime = previousInGameTime ?: "",
+          turnNumber = turnNumber,
+          embeddingModel = story.selectedEmbeddingModel
+        )
+      }
 
-  private fun parseDayNumber(timeStr: String): Int {
-    val regex = Regex("""Tag\s*(\d+)""", RegexOption.IGNORE_CASE)
-    val match = regex.find(timeStr)
-    return match?.groupValues?.get(1)?.toIntOrNull() ?: 1
-  }
-
-  private fun parseTimeOfDay(timeStr: String): String {
-    val regex = Regex("""(\d{1,2}:\d{2}(?:\s*Uhr)?)""", RegexOption.IGNORE_CASE)
-    val match = regex.find(timeStr)
-    val found = match?.groupValues?.get(1) ?: ""
-    return if (found.isNotBlank() && !found.endsWith("Uhr", ignoreCase = true)) {
-      "$found Uhr"
-    } else {
-      found
+      // 4. Figuren abgleichen und festhalten, was jede von ihnen selbst erlebt hat.
+      val knowledge = npcEngine.syncFromExtraction(story.id, npcsArray, day)
+      for (entry in knowledge) {
+        memoryEngine.recordMemory(
+          storyId = story.id,
+          kind = MemoryKind.NPC,
+          text = "${entry.npcName}: ${entry.text}",
+          dayNumber = day,
+          inGameTime = newInGameTime,
+          turnNumber = turnNumber,
+          npcId = entry.npcId,
+          embeddingModel = story.selectedEmbeddingModel
+        )
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "Erinnerungen konnten nicht vollständig gespeichert werden", e)
     }
   }
 }

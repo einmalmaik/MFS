@@ -2,7 +2,9 @@ package com.example.data.api
 
 import android.util.Log
 import com.example.BuildConfig
+import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
+import com.example.domain.model.TimeAnchor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -48,7 +50,7 @@ class GeminiClient(
 
     val DEFAULT_CHAT_MODELS = listOf(
       GeminiModelInfo(
-        id = "gemini-3.8-flash",
+        id = GeminiDefaults.CHAT_MODEL,
         displayName = "Gemini 3.8 Flash (Aktuellstes Flaggschiff)",
         description = "Googles neuestes Modell mit anpassbaren Denkstufen (Niedrig, Mittel, Hoch).",
         supportsTemperature = true,
@@ -76,43 +78,14 @@ class GeminiClient(
         isThinkingModel = true,
         usesThinkingLevel = true,
         supportedThinkingLevels = listOf("LOW", "MEDIUM", "HIGH")
-      ),
-      GeminiModelInfo(
-        id = "gemini-3.1-flash-lite-preview",
-        displayName = "Gemini 3.1 Flash-Lite (Turbo)",
-        description = "Optimiert für blitzschnelle Reaktionen und direkte Dialoge.",
-        supportsTemperature = true,
-        defaultTemperature = 0.85f,
-        isThinkingModel = true,
-        usesThinkingLevel = true,
-        supportedThinkingLevels = listOf("LOW", "MEDIUM", "HIGH")
-      ),
-      GeminiModelInfo(
-        id = "gemini-2.5-flash",
-        displayName = "Gemini 2.5 Flash (Token-Budget Thinking)",
-        description = "Nutzt das klassische tokenbasierte Thinking-Budget.",
-        supportsTemperature = true,
-        defaultTemperature = 0.85f,
-        isThinkingModel = true,
-        usesThinkingLevel = false,
-        supportedThinkingLevels = emptyList()
       )
     )
 
     val DEFAULT_EMBEDDING_MODELS = listOf(
       GeminiModelInfo(
-        id = "text-embedding-004",
-        displayName = "Text Embedding 004 (Empfohlen)",
-        description = "Aktuellstes Modell für semantisches episodisches Vektorgedächtnis.",
-        supportsTemperature = false,
-        isThinkingModel = false,
-        usesThinkingLevel = false,
-        supportedThinkingLevels = emptyList()
-      ),
-      GeminiModelInfo(
-        id = "embedding-001",
-        displayName = "Embedding 001 (Legacy)",
-        description = "Klassisches Embedding-Modell für semantische Vektorsuche.",
+        id = GeminiDefaults.EMBEDDING_MODEL,
+        displayName = "Gemini Embedding 001 (Empfohlen)",
+        description = "Vektorgedächtnis mit 3072 Dimensionen für die semantische Erinnerungssuche.",
         supportsTemperature = false,
         isThinkingModel = false,
         usesThinkingLevel = false,
@@ -122,36 +95,18 @@ class GeminiClient(
 
     val DEFAULT_TRANSCRIPTION_MODELS = listOf(
       GeminiModelInfo(
-        id = "gemini-2.5-flash",
-        displayName = "Gemini 2.5 Flash (Empfohlen für Sprache)",
-        description = "Hervorragende Audio- & Sprachtranskription mit minimaler Latenz.",
+        id = GeminiDefaults.TRANSCRIPTION_MODEL,
+        displayName = "Gemini 3.5 Transcribe (Empfohlen für Sprache)",
+        description = "Googles eigenes Sprachmodell für präzise Transkription.",
         supportsTemperature = false,
         isThinkingModel = false,
         usesThinkingLevel = false,
         supportedThinkingLevels = emptyList()
       ),
       GeminiModelInfo(
-        id = "gemini-3.8-flash",
-        displayName = "Gemini 3.8 Flash (Neueste Generation)",
-        description = "Googles Flaggschiff für multimodale Transkription.",
-        supportsTemperature = false,
-        isThinkingModel = false,
-        usesThinkingLevel = false,
-        supportedThinkingLevels = emptyList()
-      ),
-      GeminiModelInfo(
-        id = "gemini-3.5-flash",
-        displayName = "Gemini 3.5 Flash",
-        description = "Schnelle multimodale Verarbeitung.",
-        supportsTemperature = false,
-        isThinkingModel = false,
-        usesThinkingLevel = false,
-        supportedThinkingLevels = emptyList()
-      ),
-      GeminiModelInfo(
-        id = "gemini-3.1-flash-lite-preview",
-        displayName = "Gemini 3.1 Flash-Lite",
-        description = "Extrem geringe Latenz bei kurzen Spracheingaben.",
+        id = GeminiDefaults.CHAT_MODEL,
+        displayName = "Gemini 3.8 Flash (Multimodal)",
+        description = "Ausweichlösung, falls kein dediziertes Sprachmodell verfügbar ist.",
         supportsTemperature = false,
         isThinkingModel = false,
         usesThinkingLevel = false,
@@ -160,6 +115,43 @@ class GeminiClient(
     )
 
     val DEFAULT_FALLBACK_MODELS = DEFAULT_CHAT_MODELS
+
+    /**
+     * Modelle, die ListModels zwar auflistet, die beim Aufruf aber mit HTTP 404 antworten.
+     *
+     * Googles Katalog trägt für abgekündigte Modelle kein Kennzeichen — `gemini-2.5-flash` sieht
+     * dort aus wie jedes gesunde Modell und liefert dennoch "no longer available to new users".
+     * Nutzbarkeit lässt sich daher nur beim echten Aufruf feststellen; hier wird das Ergebnis
+     * für die Laufzeit der App gemerkt, damit ein totes Modell nicht in den Auswahllisten
+     * stehen bleibt.
+     */
+    private val unusableModels: MutableSet<String> =
+      java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    fun markUnusable(modelId: String) {
+      val clean = modelId.removePrefix("models/").trim()
+      if (clean.isNotBlank() && unusableModels.add(clean)) {
+        Log.w(TAG, "Modell als nicht nutzbar markiert (404): $clean")
+      }
+    }
+
+    fun isUnusable(modelId: String): Boolean =
+      unusableModels.contains(modelId.removePrefix("models/").trim())
+
+    /**
+     * Liefert die Modell-Id, die tatsächlich verwendet werden soll.
+     *
+     * Steht die gespeicherte Wahl nicht mehr im Live-Katalog oder ist sie beim Aufruf schon
+     * einmal mit 404 abgewiesen worden, gewinnt das beste verfügbare Modell. Damit heilen sich
+     * bestehende Spielstände selbst, ohne dass eine Datenbank-Migration nötig wäre.
+     */
+    fun resolveModel(stored: String, catalog: List<GeminiModelInfo>, fallback: String): String {
+      val clean = stored.removePrefix("models/").trim()
+      if (clean.isNotBlank() && !isUnusable(clean) && catalog.any { it.id == clean }) {
+        return clean
+      }
+      return catalog.firstOrNull { !isUnusable(it.id) }?.id ?: fallback
+    }
 
     val DEFAULT_SYSTEM_PROMPT = """
 # ROLLE & ERZÄHLHALTUNG
@@ -251,8 +243,8 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
             methodsList.add(methods.getString(j))
           }
 
-          val supportsGenerateContent = methodsList.contains("generateContent")
-          val supportsEmbedContent = methodsList.contains("embedContent") || id.contains("embedding")
+          // Ein Modell, das beim Aufruf schon einmal 404 geliefert hat, gehört in keine Liste.
+          if (isUnusable(id)) continue
 
           // Check temperature support
           val hasExplicitTemp = modelObj.has("temperature")
@@ -278,72 +270,32 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
             supportedThinkingLevels = thinkingLevels
           )
 
-          // 1. Embedding models
-          if (supportsEmbedContent || id.contains("embedding")) {
-            parsedEmbeddingModels.add(
-              modelInfo.copy(
-                supportsTemperature = false,
-                isThinkingModel = false,
-                usesThinkingLevel = false,
-                supportedThinkingLevels = emptyList()
-              )
-            )
+          val voiceInfo = modelInfo.copy(
+            supportsTemperature = false,
+            isThinkingModel = false,
+            usesThinkingLevel = false,
+            supportedThinkingLevels = emptyList()
+          )
+
+          if (GeminiModelFilter.isEmbeddingModel(id, methodsList)) {
+            parsedEmbeddingModels.add(voiceInfo)
           }
-
-          // Gemma taugt für MSF nicht: kein JSON-Mode (bricht die State-Extraction), kein
-          // thinkingLevel und keine über safetySettings abschaltbaren Sicherheitsfilter.
-          val isGemma = id.contains("gemma")
-
-          // 2. Chat / Story Generation Models
-          if (supportsGenerateContent && !isGemma && !id.contains("embedding") && !id.contains("tts") && !id.contains("veo") && !id.contains("imagen") && !id.contains("aqa")) {
-            // Keep modern 2.5 and 3.x models
-            if (!id.startsWith("gemini-1.0") && !id.startsWith("gemini-1.5") && !id.startsWith("gemini-2.0")) {
-              parsedChatModels.add(modelInfo)
-            }
+          if (GeminiModelFilter.isChatModel(id, methodsList)) {
+            parsedChatModels.add(modelInfo)
           }
-
-          // 3. Audio / Transcription models
-          if (supportsGenerateContent && !isGemma && !id.contains("embedding") && !id.contains("imagen") && !id.contains("veo") && !id.contains("aqa")) {
-            if (!id.startsWith("gemini-1.") && !id.startsWith("gemini-2.0") && (id.contains("flash") || id.contains("transcrib") || id.contains("audio"))) {
-              parsedTranscriptionModels.add(
-                modelInfo.copy(
-                  supportsTemperature = false,
-                  isThinkingModel = false,
-                  usesThinkingLevel = false,
-                  supportedThinkingLevels = emptyList()
-                )
-              )
-            }
+          if (GeminiModelFilter.isTranscriptionModel(id, methodsList)) {
+            parsedTranscriptionModels.add(voiceInfo)
           }
         }
 
-        // Sort chat models: 3.8 -> 3.1 pro -> 3.5 -> 3.1 -> 2.5
-        parsedChatModels.sortWith(
-          compareByDescending<GeminiModelInfo> { it.id.contains("3.8") }
-            .thenByDescending { it.id.contains("3.1-pro") }
-            .thenByDescending { it.id.contains("3.5") }
-            .thenByDescending { it.id.contains("3.1") }
-            .thenByDescending { it.id.contains("2.5") }
-        )
-
-        // Sort embedding models: 004 -> 001
-        parsedEmbeddingModels.sortWith(
-          compareByDescending<GeminiModelInfo> { it.id.contains("004") }
-            .thenByDescending { it.id.contains("001") }
-        )
-
-        // Sort transcription models: 2.5-flash (recommended) -> 3.8-flash -> 3.5-flash
-        parsedTranscriptionModels.sortWith(
-          compareByDescending<GeminiModelInfo> { it.id == "gemini-2.5-flash" }
-            .thenByDescending { it.id.contains("3.8") }
-            .thenByDescending { it.id.contains("3.5") }
-            .thenByDescending { it.id.contains("2.5") }
-        )
+        val sortedChat = GeminiModelFilter.sortByVersion(parsedChatModels) { it.id }
+        val sortedEmbedding = GeminiModelFilter.sortByVersion(parsedEmbeddingModels) { it.id }
+        val sortedTranscription = GeminiModelFilter.sortTranscription(parsedTranscriptionModels) { it.id }
 
         return@withContext com.example.data.model.GeminiModelCatalog(
-          chatModels = if (parsedChatModels.isNotEmpty()) parsedChatModels else DEFAULT_CHAT_MODELS,
-          embeddingModels = if (parsedEmbeddingModels.isNotEmpty()) parsedEmbeddingModels else DEFAULT_EMBEDDING_MODELS,
-          transcriptionModels = if (parsedTranscriptionModels.isNotEmpty()) parsedTranscriptionModels else DEFAULT_TRANSCRIPTION_MODELS,
+          chatModels = sortedChat.ifEmpty { DEFAULT_CHAT_MODELS },
+          embeddingModels = sortedEmbedding.ifEmpty { DEFAULT_EMBEDDING_MODELS },
+          transcriptionModels = sortedTranscription.ifEmpty { DEFAULT_TRANSCRIPTION_MODELS },
           isLive = true
         )
       } else {
@@ -399,7 +351,10 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     model: String,
     systemInstruction: String,
     stateJson: String,
+    currentInGameTime: String = "",
     milestones: List<String> = emptyList(),
+    daySummaries: List<String> = emptyList(),
+    npcProfiles: List<String> = emptyList(),
     semanticMemories: List<String> = emptyList(),
     episodicSummary: String = "",
     recentHistory: List<Pair<String, String>>,
@@ -430,8 +385,13 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     // Contents
     val contents = JSONArray()
 
-    // 1st anchor message: State + Episodic summary + Milestones as context anchor
+    // 1st anchor message: Zeitrechnung, Zustand, Figuren und die vier Gedächtnisschichten
     val stateAnchorText = buildString {
+      if (currentInGameTime.isNotBlank()) {
+        appendLine(TimeAnchor.buildTimeRules(currentInGameTime))
+        appendLine()
+      }
+
       appendLine("[AKTUELLER WELTZUSTAND / CHECKPOINT]:")
       appendLine(stateJson.ifBlank { "{\"in_game_time\": \"Tag 1, 09:00 Uhr\", \"location\": \"Startort\"}" })
 
@@ -455,17 +415,32 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
         }
       } catch (_: Exception) { }
 
+      if (npcProfiles.isNotEmpty()) {
+        appendLine("\n[FIGUREN - KANONISCHES ERSCHEINUNGSBILD UND BEZIEHUNG]:")
+        appendLine("Diese Beschreibungen sind verbindlich und unveränderlich. Erfinde NIEMALS")
+        appendLine("abweichende Haar-, Augen- oder Körpermerkmale. Änderungen geschehen nur,")
+        appendLine("wenn die Handlung sie ausdrücklich herbeiführt (Haarschnitt, Narbe, Verletzung).")
+        npcProfiles.forEach { p -> appendLine(p) }
+      }
+
       if (milestones.isNotEmpty()) {
         appendLine("\n[BEDEUTSAME MEILENSTEINE & LANGZEITERINNERUNGEN]:")
         milestones.forEach { m -> appendLine("- $m") }
       }
+
+      if (daySummaries.isNotEmpty()) {
+        appendLine("\n[DIE LETZTEN TAGE IM ÜBERBLICK]:")
+        daySummaries.forEach { d -> appendLine("- $d") }
+      }
+
       if (episodicSummary.isNotBlank()) {
         appendLine("\n[WAS BISHER GESCHAH (EPISODISCHE ZUSAMMENFASSUNG)]:")
         appendLine(episodicSummary)
       }
 
       if (semanticMemories.isNotEmpty()) {
-        appendLine("\n[SEMANTISCHE ERINNERUNGEN (TIEFES GEDÄCHTNIS)]:")
+        appendLine("\n[ERINNERUNGEN AUS DEM TIEFEN GEDÄCHTNIS]:")
+        appendLine("Jede Zeile trägt ihre Tagesnummer und den Abstand zu heute. Halte dich daran.")
         semanticMemories.forEach { m -> appendLine("- $m") }
       }
     }
@@ -548,6 +523,7 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     if (!response.isSuccessful) {
       val errBody = response.body?.string() ?: "Unknown error"
       Log.e(TAG, "Gemini API error code: ${response.code} body: $errBody")
+      if (response.code == 404) markUnusable(cleanModel)
       val errorMsg = parseErrorMessage(response.code, errBody)
       throw Exception(errorMsg)
     }
@@ -578,7 +554,10 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     model: String,
     systemInstruction: String,
     stateJson: String,
+    currentInGameTime: String = "",
     milestones: List<String> = emptyList(),
+    daySummaries: List<String> = emptyList(),
+    npcProfiles: List<String> = emptyList(),
     semanticMemories: List<String> = emptyList(),
     episodicSummary: String = "",
     recentHistory: List<Pair<String, String>>,
@@ -592,7 +571,10 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     model = model,
     systemInstruction = systemInstruction,
     stateJson = stateJson,
+    currentInGameTime = currentInGameTime,
     milestones = milestones,
+    daySummaries = daySummaries,
+    npcProfiles = npcProfiles,
     semanticMemories = semanticMemories,
     episodicSummary = episodicSummary,
     recentHistory = recentHistory,
@@ -613,6 +595,7 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     thinkingBudget: Int = 2048,
     currentStateJson: String,
     existingMilestones: List<String> = emptyList(),
+    knownNpcs: List<String> = emptyList(),
     userAction: String,
     storyResponse: String = "",
     previousMilestones: List<String> = existingMilestones,
@@ -635,6 +618,15 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
       "Bisher keine Meilensteine verzeichnet."
     }
 
+    // Ohne diese Liste erfindet das Modell bei jedem Zug neue Schreibweisen und Beschreibungen
+    // für längst etablierte Figuren.
+    val knownNpcsBlock = if (knownNpcs.isNotEmpty()) {
+      "Diese Figuren sind bereits etabliert. Verwende exakt diese Namen und beschreibe ihr " +
+        "Aussehen NICHT erneut:\n" + knownNpcs.joinToString("\n") { "- $it" }
+    } else {
+      "Bisher sind keine Figuren etabliert."
+    }
+
     val extractionPrompt = """
 Du bist die State-Tracking-Engine des interaktiven Spiels. Analysiere den bisherigen Zustand, die Spieler-Aktion und die Game-Master-Erzählung dieser Runde.
 Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema erfüllt:
@@ -648,17 +640,26 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema 
   "player_inventory": ["Item 1", "Item 2"],
   "npcs": [
     {
-      "name": "NPC Name",
-      "outfit": "Kleidung/Zustand dieses NPCs",
+      "name": "Vollständiger, IMMER gleich geschriebener Name dieser Figur",
+      "gender": "MALE oder FEMALE",
+      "appearance": "NUR beim ersten Auftreten ausfüllen: Haarfarbe, Frisur, Augenfarbe, Statur, Alter, auffällige Merkmale, Narben",
+      "appearance_changed": false,
+      "appearance_change_reason": "Nur setzen, wenn sich das Aussehen in DIESER Runde nachweislich geändert hat (Haarschnitt, Narbe, Entstellung)",
+      "personality": "Wesenszüge, Sprechweise, Ängste, Sehnsüchte",
+      "outfit": "Kleidung dieses NPCs",
+      "condition": "KÖRPERLICHE Verfassung dieser Figur - dieselbe Skala wie player_condition (z. B. Unverletzt, Ausgezehrt, Dehydriert, Unterkühlt, Fiebrig, Erschöpft, Angeschlagen, Erregt). NICHT die Stimmung.",
       "relationship_to_player": "Aktuelle Beziehung/Haltung zum Spieler",
-      "current_mood": "Stimmung",
-      "status": "Anwesend oder Abwesend"
+      "current_mood": "Seelische Stimmung - getrennt von der körperlichen Verfassung",
+      "status": "Anwesend oder Abwesend",
+      "is_alive": true,
+      "knowledge": "Was diese Figur in DIESER Runde erlebt, erfahren oder empfunden hat - aus ihrer Sicht, in einem Satz. Leer lassen, wenn nichts Relevantes geschah."
     }
   ],
   "injuries": [
     {
-      "character": "Du oder NPC-Name",
-      "body_part": "HEAD, NECK, CHEST, ABDOMEN, LEFT_ARM, RIGHT_ARM, LEFT_HAND, RIGHT_HAND, LEFT_LEG, RIGHT_LEG oder FEET",
+      "character": "Du oder exakter NPC-Name",
+      "body_part": "HEAD, NECK, CHEST, ABDOMEN, GENITALS, LEFT_ARM, RIGHT_ARM, LEFT_HAND, RIGHT_HAND, LEFT_LEG, RIGHT_LEG oder FEET",
+      "organ": "NUR bei inneren Verletzungen: BRAIN, LEFT_EAR, RIGHT_EAR, NOSE, HEART, LEFT_LUNG, RIGHT_LUNG, STOMACH, LIVER, SPLEEN, LEFT_KIDNEY, RIGHT_KIDNEY, INTESTINES, BLADDER, UTERUS, LEFT_OVARY, RIGHT_OVARY, LEFT_TESTICLE oder RIGHT_TESTICLE. Sonst leer lassen.",
       "description": "Exakte Wundbeschreibung z. B. Schnittwunde, Brandblase, Prellung",
       "severity": "LIGHT, MEDIUM, SEVERE oder CRITICAL",
       "is_treated": false
@@ -667,6 +668,8 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema 
   "milestones": [
     "Dauerhafte, prägende Ereignisse, Zeitsprünge, Schwüre, Enthüllungen, intime Momente oder Verluste"
   ],
+  "turn_memory": "1-2 nüchterne, faktische Sätze über das, was in DIESER Runde geschah. Nenne die beteiligten Personen beim Namen und den Ort. Keine Ausschmückung, keine Wertung - das ist ein Gedächtniseintrag, kein Erzähltext.",
+  "completed_day_summary": "NUR ausfüllen, wenn in dieser Runde ein neuer Tag begonnen hat: ein Absatz über den gerade abgeschlossenen Tag. Sonst leer lassen.",
   "previous_events_summary": "1-3 prägnante Sätze über die wichtigsten Ereignisse bisher."
 }
 
@@ -679,11 +682,38 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema 
 4. Meilensteine: Wenn ein Zeitsprung ("Zwei Tage im Lager verbracht") oder ein wichtiges Ereignis (Geheimnis gelüftet, Vertrauen gewonnen, Erotik/Intimität, Kampf) stattfand, MUSS ein neuer Meilenstein der Liste hinzugefügt werden. Behalte bestehende Meilensteine bei!
 5. Adult Content & Erotik: Sei unzensiert und akkurat bei Kleidung und Verfassung.
 
+[REGELN ZU FIGUREN - IDENTITÄT DARF NIEMALS DRIFTEN]:
+6. Schreibe den Namen einer Figur IMMER exakt gleich. Aus "Lena" wird nicht in der nächsten Runde "Lena Vogt" oder "die Blonde".
+7. Das Feld "appearance" füllst du NUR, wenn die Figur zum ersten Mal auftritt. Danach lässt du es leer.
+   Erfinde niemals nachträglich eine andere Haar- oder Augenfarbe. Setze "appearance_changed" nur dann auf true, wenn die Erzählung dieser Runde die Änderung ausdrücklich schildert.
+8. Führe JEDE Figur weiter, die bereits bekannt ist - auch abwesende. Setze bei Abwesenden "status": "Abwesend", statt sie wegzulassen.
+9. "knowledge": Halte fest, was die Figur SELBST erlebt hat. Eine Gerettete erinnert sich an ihre Rettung und kann Tage später davon erzählen. Nur füllen, wenn für diese Figur wirklich etwas geschah.
+
+[REGELN ZU VERLETZUNGEN - GILT FÜR ALLE, NICHT NUR DEN SPIELER]:
+10. Erfasse körperliche Schäden für JEDE betroffene Person, also auch für NPCs. Wer im Kampf getroffen wird, bekommt einen Eintrag mit seinem Namen.
+11. Übernimm bestehende Verletzungen unverändert, solange sie nicht versorgt oder verheilt sind. Entferne einen Eintrag erst, wenn die Wunde erzählerisch abgeheilt oder behandelt ist.
+12. Schwere Wunden hinterlassen Narben. Ist eine SEVERE- oder CRITICAL-Wunde verheilt, vermerke die Narbe über "appearance_changed" im Erscheinungsbild der Figur.
+
+[REGELN ZUM KÖRPERLICHEN ZUSTAND - MANGEL TRIFFT ALLE ANWESENDEN]:
+12a. Hunger, Durst, Kälte, Hitze, schlechte Luft, Schlafmangel, Krankheit, Erschöpfung und Vergiftung entstehen aus der UMGEBUNG. Wer sich in derselben Lage befindet, ist ebenfalls betroffen - ausnahmslos. Trage das in "condition" JEDER anwesenden Figur ein, nicht nur in "player_condition".
+12b. Der GRAD darf sich unterscheiden: Konstitution, Alter, Willenskraft, Vorräte, Vorerkrankungen und bisheriges Verhalten führen zu unterschiedlichen Ausprägungen. Eine zähe Figur ist "ausgezehrt, aber gefasst", eine geschwächte "am Rand des Zusammenbruchs". Das vollständige FEHLEN des Mangels ist niemals zulässig.
+12c. Prüfe vor jeder Antwort: Wie lange dauert dieser Zustand schon an? Zwei Monate ohne Nahrung bedeuten für ALLE Beteiligten schwere Auszehrung. Niemand ist nach Wochen ohne Wasser oder Essen "völlig gesund".
+12d. Der Zustand ist kumulativ und darf sich nicht ohne Grund zurücksetzen. Eine Besserung braucht eine Ursache im Text - gefundene Nahrung, Wasser, Wärme, Schlaf oder Behandlung.
+12e. Halte "condition" (Körper) und "current_mood" (Seele) strikt getrennt. "Verängstigt" ist keine körperliche Verfassung, "unterernährt" keine Stimmung.
+
+[REGELN ZUR NEGATIVEN SEITE - GENAUSO WICHTIG WIE DIE POSITIVE]:
+13. Beziehungen dürfen und sollen sich verschlechtern. Halte Misstrauen, Groll, Angst, Eifersucht, Enttäuschung und Schuld genauso konsequent fest wie Zuneigung und Vertrauen.
+14. Gebrochene Versprechen, Lügen, Verrat und Grausamkeit MÜSSEN als Meilenstein und im "knowledge" der betroffenen Figur landen. Eine Figur, die belogen wurde, vergisst das nicht.
+15. Traumatische Erlebnisse wirken nach: Vermerke sie im Zustand und in der Persönlichkeit der Figur, nicht nur im Moment des Geschehens.
+
 [BISHERIGER ZUSTAND]:
 $currentStateJson
 
 [BISHERIGE MEILENSTEINE]:
 $milestonesBlock
+
+[BEKANNTE FIGUREN]:
+$knownNpcsBlock
 
 [SPIELER-AKTION DIESER RUNDE]:
 $userAction
@@ -737,6 +767,7 @@ $storyResponse
       if (!response.isSuccessful) {
         val err = response.body?.string() ?: ""
         Log.e(TAG, "State extraction failed: ${response.code} $err")
+        if (response.code == 404) markUnusable(cleanModel)
         return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
       }
 
@@ -767,14 +798,19 @@ $storyResponse
   /**
    * Lightweight connection test.
    */
-  suspend fun testConnection(apiKey: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+  suspend fun testConnection(
+    apiKey: String,
+    model: String = GeminiDefaults.CHAT_MODEL
+  ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
     val cleanKey = apiKey.trim().replace("\\s+".toRegex(), "")
     if (cleanKey.isBlank()) {
       return@withContext false to "API-Schlüssel darf nicht leer sein."
     }
 
-    // Ein Modell genügt: Ein Authentifizierungsfehler wird durch einen Modellwechsel nicht besser.
-    val url = "$BASE_URL/gemini-2.5-flash:generateContent"
+    // Geprüft wird mit dem Modell, das die Geschichte wirklich benutzt. Ein fest verdrahtetes
+    // Testmodell hat genau den Fehler erzeugt, den der Test eigentlich finden soll.
+    val cleanModel = model.removePrefix("models/").trim().ifBlank { GeminiDefaults.CHAT_MODEL }
+    val url = "$BASE_URL/$cleanModel:generateContent"
     val payload = JSONObject()
     val contents = JSONArray()
     val msg = JSONObject()
@@ -793,6 +829,7 @@ $storyResponse
       }
       val err = response.body?.string() ?: ""
       Log.e(TAG, "Connection test failed: ${response.code}")
+      if (response.code == 404) markUnusable(cleanModel)
       false to parseErrorMessage(response.code, err)
     } catch (e: Exception) {
       false to "Verbindungsfehler: ${e.localizedMessage ?: e.message}"
@@ -802,7 +839,7 @@ $storyResponse
   suspend fun transcribeAudio(
     audioBytes: ByteArray,
     mimeType: String = "audio/mp4",
-    model: String = "gemini-2.5-flash"
+    model: String = GeminiDefaults.TRANSCRIPTION_MODEL
   ): String = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank()) {
@@ -834,8 +871,14 @@ $storyResponse
       contentsArr.put(userTurn)
       put("contents", contentsArr)
 
+      // Dedizierte Sprachmodelle wie gemini-3.5-transcribe kennen keine thinkingConfig und
+      // weisen die Anfrage damit ab. Sie denken nicht nach, sie hören zu — die Namensprüfung
+      // auf "gemini-3" hätte ihnen trotzdem eine Denkstufe mitgeschickt.
+      val isDedicatedTranscriber = cleanModel.contains("transcribe")
       val isGemini3Plus = cleanModel.contains("gemini-3") || cleanModel.contains("-3.")
-      val isThinkingModel = isGemini3Plus || cleanModel.contains("2.5") || cleanModel.contains("thinking")
+      val isThinkingModel = !isDedicatedTranscriber &&
+        (isGemini3Plus || cleanModel.contains("2.5") || cleanModel.contains("thinking"))
+
       val genConfig = JSONObject().apply {
         put("temperature", 0.0)
         if (isThinkingModel) {
@@ -859,6 +902,7 @@ $storyResponse
     if (!response.isSuccessful) {
       val errBody = response.body?.string() ?: "Unknown error"
       Log.e(TAG, "Audio transcription error: ${response.code} body: $errBody")
+      if (response.code == 404) markUnusable(cleanModel)
       val errorMsg = parseErrorMessage(response.code, errBody)
       throw Exception(errorMsg)
     }
@@ -872,7 +916,16 @@ $storyResponse
     text
   }
 
-  suspend fun generateEmbedding(text: String, model: String = "text-embedding-004"): String? = withContext(Dispatchers.IO) {
+  /**
+   * @param taskType Steuert, wofür der Vektor optimiert wird: "RETRIEVAL_DOCUMENT" beim Ablegen
+   *   einer Erinnerung, "RETRIEVAL_QUERY" beim Suchen. Google bettet beide Seiten dadurch passend
+   *   zueinander ein, was Treffer über lange Zeiträume verlässlicher macht.
+   */
+  suspend fun generateEmbedding(
+    text: String,
+    model: String = GeminiDefaults.EMBEDDING_MODEL,
+    taskType: String? = null
+  ): String? = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank() || text.isBlank()) return@withContext null
     
@@ -880,6 +933,9 @@ $storyResponse
     val url = "$BASE_URL/$cleanModel:embedContent"
     val payload = JSONObject()
     payload.put("model", "models/$cleanModel")
+    if (!taskType.isNullOrBlank()) {
+      payload.put("taskType", taskType)
+    }
     val content = JSONObject()
     val parts = JSONArray()
     parts.put(JSONObject().put("text", text))
@@ -898,6 +954,10 @@ $storyResponse
         val valuesArr = embeddingObj?.optJSONArray("values")
         return@withContext valuesArr?.toString()
       }
+      // Ein stiller Fehlschlag hier kostet die Geschichte ihr semantisches Gedächtnis, ohne dass
+      // es jemandem auffällt. Deshalb protokollieren und das Modell als untauglich merken.
+      if (response.code == 404) markUnusable(cleanModel)
+      Log.e(TAG, "Embedding rejected for model $cleanModel: HTTP ${response.code}")
     } catch (e: Exception) {
       Log.e(TAG, "Embedding failed", e)
     }
@@ -940,7 +1000,7 @@ $storyResponse
     // Auth-Fehler zuerst über den reason-Code auflösen – die HTTP-Codes allein sind mehrdeutig.
     when (extractErrorReason(body)) {
       "ACCESS_TOKEN_TYPE_UNSUPPORTED" ->
-        return "Dieser Schlüssel-Typ wird von der Gemini-API nicht akzeptiert. Auth-Keys aus Google AI Studio (beginnen mit 'AQ.') werden derzeit abgelehnt. Erstelle in der Google Cloud Console unter 'Anmeldedaten' einen Standard-API-Schlüssel (beginnt mit 'AIzaSy…') und beschränke ihn auf die 'Generative Language API'."
+        return "Google hat diesen Schlüssel-Typ für die Gemini-API abgelehnt. Erzeuge in Google AI Studio unter 'Get API key' einen neuen Schlüssel für dasselbe Projekt und trage ihn hier erneut ein."
       "API_KEY_SERVICE_BLOCKED" ->
         return "Der Schlüssel ist für die Gemini-API gesperrt. Aktiviere die 'Generative Language API' im zugehörigen Google-Cloud-Projekt und prüfe die API-Einschränkungen des Schlüssels."
       "API_KEY_INVALID" ->
@@ -953,7 +1013,7 @@ $storyResponse
       400 -> "Ungültige Anfrage (400). Überprüfe das gewählte Modell oder den API-Key. ($body)"
       401 -> "Authentifizierung fehlgeschlagen (401). Google hat den hinterlegten Schlüssel nicht akzeptiert. Prüfe ihn in den Einstellungen über 'Testen'."
       403 -> "Keine Berechtigung (403). Der Schlüssel darf nicht auf die Gemini-API zugreifen. Bitte prüfe seine Einschränkungen."
-      404 -> "Modell nicht gefunden (404). Wähle ein unterstütztes Modell wie gemini-2.5-flash."
+      404 -> "Dieses Modell ist über deinen Schlüssel nicht mehr erreichbar (404). Es wurde aus der Auswahl entfernt — wähle in den Einstellungen ein anderes."
       429 -> "Ratenlimit erreicht (429). Bitte warte einen Moment, bevor du weiterspielst."
       500, 503 -> "Google Gemini Server temporär überlastet (500/503). Bitte versuche es in wenigen Sekunden erneut."
       else -> "Fehler beim Aufruf der Gemini API (Code $code): $body"

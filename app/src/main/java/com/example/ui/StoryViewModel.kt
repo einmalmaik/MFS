@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDatabase
 import com.example.data.model.CheckpointEntity
+import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.MessageEntity
 import com.example.data.model.StoryEntity
@@ -42,7 +43,9 @@ data class StoryUiState(
   val isFetchingModels: Boolean = false,
   val isTranscribingAudio: Boolean = false,
   /** false = Modell-Dropdowns zeigen die Fallback-Liste, der Schlüssel ist also unbestätigt. */
-  val modelCatalogIsLive: Boolean = false
+  val modelCatalogIsLive: Boolean = false,
+  /** Gesetzt, wenn ein nicht mehr erreichbares Modell automatisch ersetzt wurde. */
+  val modelNotice: String? = null
 )
 
 class StoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -63,6 +66,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val _isFetchingModels = MutableStateFlow(false)
   private val _isTranscribingAudio = MutableStateFlow(false)
   private val _modelCatalogIsLive = MutableStateFlow(false)
+  private val _modelNotice = MutableStateFlow<String?>(null)
 
   private var activeTurnJob: Job? = null
 
@@ -112,7 +116,57 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       } finally {
         _isFetchingModels.value = false
       }
+      healStoredModelSelection()
     }
+  }
+
+  /**
+   * Stellt eine Geschichte auf erreichbare Modelle um, wenn ihre gespeicherte Wahl nicht mehr
+   * funktioniert.
+   *
+   * Nötig, weil Google Modelle abkündigt, ohne sie aus ListModels zu entfernen: `gemini-2.5-flash`
+   * und `text-embedding-004` stehen in bestehenden Spielständen, antworten aber mit HTTP 404.
+   * Beim Erzählmodell fällt das sofort auf, beim Embedding-Modell nicht — dort verliert die
+   * Geschichte still ihr semantisches Gedächtnis. Deshalb wird hier korrigiert statt gewartet.
+   *
+   * Die Umstellung wird dem Nutzer angezeigt; stillschweigend etwas anderes zu benutzen, als in
+   * den Einstellungen steht, wäre genau das unbemerkte Handeln, das MSF vermeiden will.
+   */
+  private suspend fun healStoredModelSelection() {
+    if (!_modelCatalogIsLive.value) return
+    val story = stories.value.firstOrNull { it.id == _activeStoryId.value } ?: return
+
+    val chat = GeminiClient.resolveModel(
+      story.selectedModel, _availableChatModels.value, GeminiDefaults.CHAT_MODEL
+    )
+    val embedding = GeminiClient.resolveModel(
+      story.selectedEmbeddingModel, _availableEmbeddingModels.value, GeminiDefaults.EMBEDDING_MODEL
+    )
+    val transcription = GeminiClient.resolveModel(
+      story.selectedTranscriptionModel, _availableTranscriptionModels.value, GeminiDefaults.TRANSCRIPTION_MODEL
+    )
+
+    val changes = buildList {
+      if (chat != story.selectedModel) add("Erzähler: ${story.selectedModel} → $chat")
+      if (embedding != story.selectedEmbeddingModel) add("Gedächtnis: ${story.selectedEmbeddingModel} → $embedding")
+      if (transcription != story.selectedTranscriptionModel) add("Sprache: ${story.selectedTranscriptionModel} → $transcription")
+    }
+    if (changes.isEmpty()) return
+
+    repository.updateStory(
+      story.copy(
+        selectedModel = chat,
+        selectedEmbeddingModel = embedding,
+        selectedTranscriptionModel = transcription,
+        updatedAt = System.currentTimeMillis()
+      )
+    )
+    _modelNotice.value =
+      "Nicht mehr erreichbare Modelle wurden umgestellt:\n" + changes.joinToString("\n")
+  }
+
+  fun dismissModelNotice() {
+    _modelNotice.value = null
   }
 
   fun switchStory(storyId: Long) {
@@ -138,6 +192,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         _allCheckpoints.value = list
       }
     }
+
+    viewModelScope.launch { healStoredModelSelection() }
   }
 
   fun toggleStoryArchived(storyId: Long, isArchived: Boolean) {
@@ -263,7 +319,11 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   fun transcribeVoiceInput(audioBytes: ByteArray, onTranscribed: (String) -> Unit) {
     if (audioBytes.isEmpty()) return
     val currentStory = stories.value.firstOrNull { it.id == _activeStoryId.value }
-    val transcriptionModel = currentStory?.selectedTranscriptionModel ?: "gemini-2.5-flash"
+    val transcriptionModel = GeminiClient.resolveModel(
+      stored = currentStory?.selectedTranscriptionModel.orEmpty(),
+      catalog = _availableTranscriptionModels.value,
+      fallback = GeminiDefaults.TRANSCRIPTION_MODEL
+    )
     viewModelScope.launch {
       _isTranscribingAudio.value = true
       try {
@@ -349,8 +409,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     title: String,
     systemPrompt: String,
     model: String,
-    embeddingModel: String = "text-embedding-004",
-    transcriptionModel: String = "gemini-2.5-flash",
+    embeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
+    transcriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -375,8 +435,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     title: String,
     systemPrompt: String,
     model: String,
-    embeddingModel: String = "text-embedding-004",
-    transcriptionModel: String = "gemini-2.5-flash",
+    embeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
+    transcriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -492,7 +552,15 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   suspend fun testApiKeyConnection(): Pair<Boolean, String> {
-    val result = repository.testApiKey()
+    // Geprüft wird mit dem Modell dieser Geschichte. Ein fest verdrahtetes Testmodell hat genau
+    // den 404 verschwiegen, den der Nutzer beim Spielen zu sehen bekam.
+    val story = stories.value.firstOrNull { it.id == _activeStoryId.value }
+    val model = GeminiClient.resolveModel(
+      stored = story?.selectedModel.orEmpty(),
+      catalog = _availableChatModels.value,
+      fallback = GeminiDefaults.CHAT_MODEL
+    )
+    val result = repository.testApiKey(model)
     if (result.first) {
       refreshModelsFromGoogle()
     }
@@ -504,9 +572,9 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     genre: String,
     perspective: String,
     systemPrompt: String,
-    selectedModel: String = "gemini-3.8-flash",
-    selectedEmbeddingModel: String = "text-embedding-004",
-    selectedTranscriptionModel: String = "gemini-2.5-flash",
+    selectedModel: String = GeminiDefaults.CHAT_MODEL,
+    selectedEmbeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
+    selectedTranscriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
     temperature: Float = 0.85f,
     supportsTemperature: Boolean = true,
     thinkingLevel: String = "MEDIUM",
@@ -573,7 +641,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _availableTranscriptionModels,
     _isFetchingModels,
     _isTranscribingAudio,
-    _modelCatalogIsLive
+    _modelCatalogIsLive,
+    _modelNotice
   ) { args: Array<Any?> ->
     @Suppress("UNCHECKED_CAST")
     val storyList = args[0] as List<StoryEntity>
@@ -598,6 +667,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     val fetchingModels = args[14] as Boolean
     val transcribingAudio = args[15] as Boolean
     val catalogIsLive = args[16] as Boolean
+    val notice = args[17] as String?
 
     val activeStory = storyList.firstOrNull { it.id == activeId } ?: storyList.firstOrNull()
 
@@ -620,7 +690,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       availableTranscriptionModels = transModels,
       isFetchingModels = fetchingModels,
       isTranscribingAudio = transcribingAudio,
-      modelCatalogIsLive = catalogIsLive
+      modelCatalogIsLive = catalogIsLive,
+      modelNotice = notice
     )
   }.stateIn(
     viewModelScope,

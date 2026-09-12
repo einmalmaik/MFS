@@ -4,9 +4,12 @@ import android.content.Context
 import com.example.data.api.GeminiClient
 import com.example.data.db.StoryDao
 import com.example.data.model.CheckpointEntity
+import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.MessageEntity
 import com.example.data.model.StoryEntity
+import com.example.domain.engine.MemoryEngine
+import com.example.domain.engine.NpcEngine
 import com.example.domain.engine.StateExtractionEngine
 import com.example.domain.engine.StoryTurnEngine
 import com.example.domain.model.TurnProgress
@@ -36,15 +39,28 @@ class StoryRepository(
     customApiKeyProvider = { preferences.getCustomApiKey() }
   )
 
-  private val stateExtractionEngine = StateExtractionEngine(
+  private val memoryEngine = MemoryEngine(
     geminiClient = geminiClient,
     storyDao = storyDao
+  )
+
+  private val npcEngine = NpcEngine(
+    storyDao = storyDao
+  )
+
+  private val stateExtractionEngine = StateExtractionEngine(
+    geminiClient = geminiClient,
+    storyDao = storyDao,
+    memoryEngine = memoryEngine,
+    npcEngine = npcEngine
   )
 
   private val turnEngine = StoryTurnEngine(
     geminiClient = geminiClient,
     storyDao = storyDao,
     stateExtractionEngine = stateExtractionEngine,
+    memoryEngine = memoryEngine,
+    npcEngine = npcEngine,
     preferences = preferences
   )
 
@@ -64,7 +80,12 @@ class StoryRepository(
 
   fun getEffectiveApiKey(): String = preferences.getEffectiveApiKey()
 
-  suspend fun testApiKey(): Pair<Boolean, String> = geminiClient.testConnection(getEffectiveApiKey())
+  /**
+   * @param model Das Modell, mit dem die Geschichte tatsächlich erzählt wird. Ein fest
+   *   verdrahtetes Testmodell hätte genau den 404 verschwiegen, den der Test finden soll.
+   */
+  suspend fun testApiKey(model: String = GeminiDefaults.CHAT_MODEL): Pair<Boolean, String> =
+    geminiClient.testConnection(getEffectiveApiKey(), model)
 
   suspend fun fetchAvailableModels(): List<GeminiModelInfo> = geminiClient.fetchAvailableModels()
 
@@ -75,7 +96,8 @@ class StoryRepository(
     mimeType: String = "audio/mp4",
     model: String? = null
   ): String {
-    val effectiveModel = model?.ifBlank { "gemini-2.5-flash" } ?: "gemini-2.5-flash"
+    val effectiveModel = model?.ifBlank { GeminiDefaults.TRANSCRIPTION_MODEL }
+      ?: GeminiDefaults.TRANSCRIPTION_MODEL
     return geminiClient.transcribeAudio(audioBytes, mimeType, effectiveModel)
   }
 
@@ -103,7 +125,10 @@ class StoryRepository(
   suspend fun deleteStoryById(storyId: Long) = withContext(Dispatchers.IO) {
     storyDao.deleteAllMessagesForStory(storyId)
     storyDao.deleteAllCheckpointsForStory(storyId)
+    storyDao.deleteAllMemoriesForStory(storyId)
+    storyDao.deleteAllNpcsForStory(storyId)
     storyDao.deleteStoryById(storyId)
+    memoryEngine.invalidate()
   }
 
   suspend fun ensureInitialData(): Long = withContext(Dispatchers.IO) {
@@ -116,9 +141,9 @@ class StoryRepository(
       genre = "Dark Noir & Mystery",
       perspective = "Zweite Person (Du)",
       systemPrompt = "",
-      selectedModel = "gemini-3.8-flash",
-      selectedEmbeddingModel = "text-embedding-004",
-      selectedTranscriptionModel = "gemini-2.5-flash",
+      selectedModel = GeminiDefaults.CHAT_MODEL,
+      selectedEmbeddingModel = GeminiDefaults.EMBEDDING_MODEL,
+      selectedTranscriptionModel = GeminiDefaults.TRANSCRIPTION_MODEL,
       temperature = 0.85f,
       supportsTemperature = true,
       thinkingLevel = "MEDIUM",
@@ -139,9 +164,9 @@ class StoryRepository(
     genre: String,
     perspective: String = "Zweite Person (Du)",
     systemPrompt: String = "",
-    selectedModel: String = "gemini-3.8-flash",
-    selectedEmbeddingModel: String = "text-embedding-004",
-    selectedTranscriptionModel: String = "gemini-2.5-flash",
+    selectedModel: String = GeminiDefaults.CHAT_MODEL,
+    selectedEmbeddingModel: String = GeminiDefaults.EMBEDDING_MODEL,
+    selectedTranscriptionModel: String = GeminiDefaults.TRANSCRIPTION_MODEL,
     temperature: Float = 0.85f,
     supportsTemperature: Boolean = true,
     thinkingLevel: String = "MEDIUM",
@@ -245,6 +270,8 @@ class StoryRepository(
     onChunk: (String) -> Unit
   ): Flow<TurnProgress> {
     branchingService.truncateAndPrepareEdit(storyId, messageId, newContent)
+    // Der Vektor-Cache zeigt jetzt auf gelöschte Erinnerungen.
+    memoryEngine.invalidate()
     return turnEngine.regenerateTurn(storyId, newContent, onChunk)
   }
 
@@ -254,12 +281,19 @@ class StoryRepository(
     sourceStoryId: Long,
     branchTitle: String,
     upToMessageId: Long? = null
-  ): Long = branchingService.branchStory(sourceStoryId, branchTitle, upToMessageId)
+  ): Long {
+    val newId = branchingService.branchStory(sourceStoryId, branchTitle, upToMessageId)
+    memoryEngine.invalidate()
+    return newId
+  }
 
   suspend fun rewindToMessage(
     storyId: Long,
     message: MessageEntity
-  ) = branchingService.rewindToMessage(storyId, message)
+  ) {
+    branchingService.rewindToMessage(storyId, message)
+    memoryEngine.invalidate()
+  }
 
   // --- MANUAL STATE OVERRIDE ---
 
