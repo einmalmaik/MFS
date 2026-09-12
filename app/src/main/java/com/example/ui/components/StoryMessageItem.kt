@@ -199,7 +199,7 @@ fun StoryMessageItem(
               ) {
                 Icon(
                   imageVector = Icons.Default.Edit,
-                  contentDescription = "Nachricht bearbeiten & Zukunft neu berechnen",
+                  contentDescription = "Bearbeiten",
                   tint = DnaColors.Primary,
                   modifier = Modifier.size(14.dp)
                 )
@@ -303,7 +303,7 @@ fun StoryMessageItem(
             ) {
               Icon(
                 imageVector = Icons.AutoMirrored.Filled.AltRoute,
-                contentDescription = "Zweig von hier erstellen",
+                contentDescription = "Zweig ab hier",
                 tint = DnaColors.StoryAmberCampfire,
                 modifier = Modifier.size(16.dp)
               )
@@ -318,7 +318,7 @@ fun StoryMessageItem(
             ) {
               Icon(
                 imageVector = Icons.Default.History,
-                contentDescription = "Hierhin zurücksetzen",
+                contentDescription = "Hierhin zurück",
                 tint = DnaColors.Primary.copy(alpha = 0.85f),
                 modifier = Modifier.size(18.dp)
               )

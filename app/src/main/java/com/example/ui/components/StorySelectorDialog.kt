@@ -26,12 +26,15 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
+import com.example.ui.dna.DnaStat
+import com.example.ui.dna.formatPlayTime
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -243,7 +246,7 @@ fun StorySelectorDialog(
     val target = storyToDelete!!
     com.example.ui.dna.DnaActionConfirmDialog(
       title = "Geschichte löschen?",
-      description = "Möchtest du '${target.title}' wirklich unwiderruflich aus der lokalen Datenbank entfernen? Alle Nachrichten, Checkpoints und NPCs dieser Geschichte gehen verloren.",
+      description = "'${target.title}' wird endgültig gelöscht — mit allen Nachrichten, Checkpoints und Figuren.",
       confirmButtonText = "Endgültig löschen",
       cancelButtonText = "Abbrechen",
       isDestructive = true,
@@ -264,7 +267,7 @@ fun StorySelectorDialog(
       text = {
         Column {
           Text(
-            "Erstelle eine unabhängige Kopie von '${target.title}', um ab jetzt alternative Entscheidungen zu erkunden:",
+            "Eine unabhängige Kopie von '${target.title}':",
             color = DnaColors.OnSurfaceVariant,
             style = MaterialTheme.typography.bodySmall
           )
@@ -367,7 +370,7 @@ fun StorySelectorDialog(
         if (!isCreatingNew) {
           // List existing stories
           Text(
-            text = "GESPEICHERTE GESCHICHTEN (${stories.size})",
+            text = "GESCHICHTEN (${stories.size})",
             style = MaterialTheme.typography.labelSmall,
             color = DnaColors.Primary,
             fontWeight = FontWeight.Bold
@@ -404,25 +407,19 @@ fun StorySelectorDialog(
                     fontWeight = FontWeight.Bold
                   )
                   Spacer(modifier = Modifier.height(2.dp))
+                  // Modell und Denkstufe standen hier doppelt (auch in den Einstellungen) und
+                  // sagen beim Auswählen einer Geschichte nichts aus.
                   Text(
-                    text = "${story.genre} • ${story.selectedModel} (${story.thinkingLevel})",
+                    text = story.genre,
                     style = MaterialTheme.typography.bodySmall,
                     color = DnaColors.OnSurfaceVariant
                   )
-                  Spacer(modifier = Modifier.height(4.dp))
-                  val hours = story.playTimeSeconds / 3600
-                  val minutes = (story.playTimeSeconds % 3600) / 60
-                  val timeString = if (hours > 0) {
-                    "${hours}h ${minutes}m"
-                  } else if (minutes > 0) {
-                    "${minutes}m"
-                  } else {
-                    "< 1m"
-                  }
-                  Text(
-                    text = "Spielzeit: $timeString",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = DnaColors.OnSurfaceVariant
+                  Spacer(modifier = Modifier.height(8.dp))
+                  DnaStat(
+                    value = formatPlayTime(story.playTimeSeconds),
+                    label = "SPIELZEIT",
+                    icon = Icons.Default.Schedule,
+                    emphasized = isCurrent
                   )
                 }
 
@@ -451,7 +448,7 @@ fun StorySelectorDialog(
           Spacer(modifier = Modifier.height(16.dp))
 
           DnaButton(
-            text = "Völlig neue Geschichte beginnen",
+            text = "Neue Geschichte",
             onClick = {
               loadPreset(STORY_PRESETS.first())
               isCreatingNew = true
@@ -464,7 +461,7 @@ fun StorySelectorDialog(
         } else {
           // --- CREATE NEW STORY VIEW ---
           Text(
-            text = "SCHNELLE VORLAGEN (PRESETS)",
+            text = "VORLAGEN",
             style = MaterialTheme.typography.labelSmall,
             color = DnaColors.Primary,
             fontWeight = FontWeight.Bold
@@ -528,7 +525,7 @@ fun StorySelectorDialog(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "GEMINI-MODELL FÜR DIESE GESCHICHTE",
+              text = "ERZÄHLMODELL",
               style = MaterialTheme.typography.labelSmall,
               color = DnaColors.Primary,
               fontWeight = FontWeight.Bold
@@ -579,7 +576,7 @@ fun StorySelectorDialog(
             }
           }
           com.example.ui.dna.DnaDropdown(
-            label = "EMBEDDING MODELL (VEKTOREN)",
+            label = "GEDÄCHTNIS",
             options = embeddingModelOptions,
             selectedValue = selectedEmbeddingModel,
             onOptionSelected = { selectedEmbeddingModel = it },
@@ -594,7 +591,7 @@ fun StorySelectorDialog(
             }
           }
           com.example.ui.dna.DnaDropdown(
-            label = "TRANSKRIPTIONSMODELL (SPRACHEINGABE)",
+            label = "SPRACHEINGABE",
             options = transcriptionModelOptions,
             selectedValue = selectedTranscriptionModel,
             onOptionSelected = { selectedTranscriptionModel = it },
@@ -613,7 +610,7 @@ fun StorySelectorDialog(
               Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = DnaColors.Secondary, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Denkstufen werden von $selectedModelId nicht unterstützt (antwortet direkt).", style = MaterialTheme.typography.bodySmall, color = DnaColors.OnSurfaceVariant)
+                Text("$selectedModelId antwortet direkt.", style = MaterialTheme.typography.bodySmall, color = DnaColors.OnSurfaceVariant)
               }
             }
           } else if (currentModelInfo.usesThinkingLevel) {
@@ -633,7 +630,7 @@ fun StorySelectorDialog(
             }
 
             com.example.ui.dna.DnaDropdown(
-              label = "DENKSTUFE (REASONING EFFORT)",
+              label = "DENKSTUFE",
               options = thinkingOptions,
               selectedValue = thinkingLevel,
               onOptionSelected = { thinkingLevel = it },
@@ -647,7 +644,7 @@ fun StorySelectorDialog(
               min = 0,
               max = 8192,
               step = 512,
-              label = "DENKINTENSITÄT (TOKEN)",
+              label = "DENKBUDGET",
               unit = "Tokens",
               modifier = Modifier.fillMaxWidth().testTag("story_thinking_budget_stepper")
             )
@@ -663,7 +660,7 @@ fun StorySelectorDialog(
               min = 0.2f,
               max = 1.5f,
               step = 0.1f,
-              label = "KREATIVITÄT (TEMPERATURE)",
+              label = "KREATIVITÄT",
               modifier = Modifier.fillMaxWidth().testTag("story_temperature_stepper")
             )
           } else {
@@ -713,14 +710,14 @@ fun StorySelectorDialog(
           Spacer(modifier = Modifier.height(16.dp))
 
           Text(
-            text = "DETAILS & CHARAKTER-SETTING",
+            text = "DETAILS",
             style = MaterialTheme.typography.labelSmall,
             color = DnaColors.Primary,
             fontWeight = FontWeight.Bold
           )
           Spacer(modifier = Modifier.height(8.dp))
 
-          Text(text = "TITEL DER GESCHICHTE", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+          Text(text = "TITEL", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customTitle,
@@ -738,7 +735,7 @@ fun StorySelectorDialog(
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "GENRE & SETTING", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+          Text(text = "GENRE", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customGenre,
@@ -792,7 +789,7 @@ fun StorySelectorDialog(
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "START-INVENTAR (KOMMAGETRENNT)", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+          Text(text = "START-INVENTAR", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customInventory,
@@ -810,7 +807,7 @@ fun StorySelectorDialog(
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "ERSTER BEGLEITER / NPC NAME (OPTIONAL)", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+          Text(text = "BEGLEITER", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customNpcName,
@@ -848,7 +845,7 @@ fun StorySelectorDialog(
             )
 
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "BEZIEHUNG ZU DIR", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+            Text(text = "BEZIEHUNG", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
               value = customNpcRelation,
@@ -867,7 +864,7 @@ fun StorySelectorDialog(
           }
 
           Spacer(modifier = Modifier.height(10.dp))
-          Text(text = "ERÖFFNUNGSTEXT / PROLOG", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
+          Text(text = "PROLOG", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
           Spacer(modifier = Modifier.height(4.dp))
           OutlinedTextField(
             value = customOpening,

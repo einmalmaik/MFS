@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ForkRight
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.Card
@@ -64,7 +65,9 @@ import com.example.ui.dna.DnaActionConfirmDialog
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
 import com.example.ui.dna.DnaColors
+import com.example.ui.dna.DnaStat
 import com.example.ui.dna.DnaTypography
+import com.example.ui.dna.formatPlayTime
 
 /**
  * Left-side navigation drawer styled after MauntingStudios Design-DNA:
@@ -134,7 +137,7 @@ fun StoryNavigationDrawer(
               color = DnaColors.OnSurface
             )
             Text(
-              text = "Deine Geschichten & Chroniken",
+              text = "Deine Geschichten",
               style = MaterialTheme.typography.labelSmall,
               fontFamily = DnaTypography.InterFamily,
               color = DnaColors.OnSurfaceVariant
@@ -153,9 +156,9 @@ fun StoryNavigationDrawer(
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Button "Neue Geschichte beginnen"
+      // Button "Neue Geschichte"
       DnaButton(
-        text = "Neue Geschichte beginnen",
+        text = "Neue Geschichte",
         onClick = {
           onCloseDrawer()
           onOpenCreateStory()
@@ -217,7 +220,7 @@ fun StoryNavigationDrawer(
           contentAlignment = Alignment.Center
         ) {
           Text(
-            text = if (selectedTab == 0) "Keine aktiven Geschichten vorhanden." else "Keine archivierten Geschichten.",
+            text = if (selectedTab == 0) "Noch keine Geschichte." else "Keine archivierten Geschichten.",
             style = MaterialTheme.typography.bodySmall,
             fontFamily = DnaTypography.InterFamily,
             color = DnaColors.OnSurfaceVariant
@@ -289,14 +292,14 @@ fun StoryNavigationDrawer(
             Spacer(modifier = Modifier.width(10.dp))
             Column {
               Text(
-                text = "Einstellungen & API-Key",
+                text = "Einstellungen",
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = DnaTypography.InterFamily,
                 fontWeight = FontWeight.SemiBold,
                 color = DnaColors.OnSurface
               )
               Text(
-                text = "Modelle, Denkkraft & Prompts",
+                text = "Modell, Denkkraft, Regie",
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = DnaTypography.InterFamily,
                 color = DnaColors.OnSurfaceVariant
@@ -399,81 +402,58 @@ private fun DrawerStoryCard(
 
       Spacer(modifier = Modifier.height(4.dp))
 
+      // Nur das Genre. Die Modell-Id gehört in die Einstellungen, nicht auf jede Karte.
       Text(
-        text = "${story.genre} • ${story.selectedModel}",
+        text = story.genre,
         style = MaterialTheme.typography.labelSmall,
         fontFamily = DnaTypography.InterFamily,
         color = DnaColors.OnSurfaceVariant,
         fontSize = 11.sp
       )
 
-      Spacer(modifier = Modifier.height(2.dp))
-      val hours = story.playTimeSeconds / 3600
-      val minutes = (story.playTimeSeconds % 3600) / 60
-      val timeString = if (hours > 0) {
-        "${hours}h ${minutes}m"
-      } else if (minutes > 0) {
-        "${minutes}m"
-      } else {
-        "< 1m"
-      }
-      Text(
-        text = "Spielzeit: $timeString",
-        style = MaterialTheme.typography.labelSmall,
-        fontFamily = DnaTypography.JetBrainsMonoFamily,
-        color = DnaColors.MutedForeground,
-        fontSize = 10.sp
-      )
-
       Spacer(modifier = Modifier.height(8.dp))
 
-      // Action row: Archive, Branch, Delete
+      // Spielzeit und Aktionen in einer Zeile: Die Zahl bekommt Gewicht, ohne eine eigene
+      // Zeile zu verbrauchen.
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        // Archive / Unarchive
-        IconButton(
-          onClick = onToggleArchive,
-          modifier = Modifier.size(28.dp)
-        ) {
-          Icon(
-            imageVector = if (story.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
-            contentDescription = if (story.isArchived) "Wiederherstellen" else "Archivieren",
-            tint = DnaColors.Secondary,
-            modifier = Modifier.size(16.dp)
-          )
-        }
+        DnaStat(
+          value = formatPlayTime(story.playTimeSeconds),
+          label = "SPIELZEIT",
+          icon = Icons.Default.Schedule,
+          emphasized = isSelected
+        )
 
-        Spacer(modifier = Modifier.width(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(onClick = onToggleArchive, modifier = Modifier.size(30.dp)) {
+            Icon(
+              imageVector = if (story.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+              contentDescription = if (story.isArchived) "Wiederherstellen" else "Archivieren",
+              tint = DnaColors.Secondary,
+              modifier = Modifier.size(16.dp)
+            )
+          }
 
-        // Branch
-        IconButton(
-          onClick = onBranch,
-          modifier = Modifier.size(28.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Default.ForkRight,
-            contentDescription = "Zweig erstellen",
-            tint = DnaColors.OnSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-          )
-        }
+          IconButton(onClick = onBranch, modifier = Modifier.size(30.dp)) {
+            Icon(
+              imageVector = Icons.Default.ForkRight,
+              contentDescription = "Zweig erstellen",
+              tint = DnaColors.OnSurfaceVariant,
+              modifier = Modifier.size(16.dp)
+            )
+          }
 
-        Spacer(modifier = Modifier.width(4.dp))
-
-        // Delete
-        IconButton(
-          onClick = onDelete,
-          modifier = Modifier.size(28.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Default.Delete,
-            contentDescription = "Löschen",
-            tint = DnaColors.StatusDestructive.copy(alpha = 0.85f),
-            modifier = Modifier.size(16.dp)
-          )
+          IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+            Icon(
+              imageVector = Icons.Default.Delete,
+              contentDescription = "Löschen",
+              tint = DnaColors.StatusDestructive.copy(alpha = 0.85f),
+              modifier = Modifier.size(16.dp)
+            )
+          }
         }
       }
     }

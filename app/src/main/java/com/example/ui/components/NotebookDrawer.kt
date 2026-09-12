@@ -121,7 +121,7 @@ fun NotebookDrawer(
             fontFamily = DnaTypography.ManropeFamily
           )
           Text(
-            text = "Aktiver Checkpoint & Langzeitgedächtnis",
+            text = "Chronik dieser Geschichte",
             style = MaterialTheme.typography.labelSmall,
             color = DnaColors.MutedForeground
           )
@@ -135,7 +135,7 @@ fun NotebookDrawer(
         ) {
           Icon(
             imageVector = Icons.Default.Edit,
-            contentDescription = "Zustand manuell bearbeiten",
+            contentDescription = "Bearbeiten",
             tint = DnaColors.Primary
           )
         }
@@ -213,7 +213,7 @@ fun NotebookDrawer(
         0 -> {
           // --- TAB 0: DAY-BY-DAY CHRONICLE (PRO TAG) ---
           Text(
-            text = "CHRONIK DER TAGE",
+            text = "TAGE",
             style = MaterialTheme.typography.labelSmall,
             color = DnaColors.StoryAmberCampfire,
             fontWeight = FontWeight.Bold
@@ -227,7 +227,7 @@ fun NotebookDrawer(
             ) {
               Box(modifier = Modifier.padding(16.dp)) {
                 Text(
-                  text = "Die Geschichte hat gerade erst begonnen. Tage und Erlebnisse werden hier chronologisch archiviert.",
+                  text = "Hier sammeln sich deine Tage, sobald die Geschichte läuft.",
                   style = MaterialTheme.typography.bodySmall,
                   color = DnaColors.OnSurfaceVariant
                 )
@@ -351,7 +351,7 @@ fun NotebookDrawer(
           Spacer(modifier = Modifier.height(16.dp))
 
           // Detailed NPC list
-          SectionHeader(title = "Bekannte NPCs (${npcs.size})", icon = Icons.Default.Face)
+          SectionHeader(title = "Figuren (${npcs.size})", icon = Icons.Default.Face)
 
           if (npcs.isEmpty()) {
             Card(
@@ -361,7 +361,7 @@ fun NotebookDrawer(
             ) {
               Box(modifier = Modifier.padding(14.dp)) {
                 Text(
-                  text = "Noch keine NPCs erfasst. Die KI ergänzt automatisch Charaktere, wenn sie auftauchen.",
+                  text = "Figuren erscheinen hier, sobald sie auftauchen.",
                   style = MaterialTheme.typography.bodySmall,
                   color = DnaColors.OnSurfaceVariant
                 )
@@ -404,13 +404,13 @@ fun NotebookDrawer(
 
                   Spacer(modifier = Modifier.height(4.dp))
                   Text(
-                    text = "Kleidung: ${npc.outfit}",
+                    text = "${npc.outfit}",
                     style = MaterialTheme.typography.bodySmall,
                     color = DnaColors.OnSurface
                   )
                   Spacer(modifier = Modifier.height(2.dp))
                   Text(
-                    text = "Beziehung: ${npc.relationshipToPlayer}",
+                    text = "${npc.relationshipToPlayer}",
                     style = MaterialTheme.typography.bodySmall,
                     color = DnaColors.OnSurfaceVariant
                   )
@@ -422,7 +422,7 @@ fun NotebookDrawer(
 
         2 -> {
           // --- TAB 2: WORLD & INVENTORY ---
-          SectionHeader(title = "Aktueller Aufenthaltsort", icon = Icons.Default.LocationOn)
+          SectionHeader(title = "Ort", icon = Icons.Default.LocationOn)
 
           Card(
             colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
@@ -445,7 +445,7 @@ fun NotebookDrawer(
               Spacer(modifier = Modifier.height(8.dp))
               InfoRow(
                 icon = Icons.Default.WbCloudy,
-                label = "Wetter / Atmosphäre",
+                label = "Wetter",
                 value = checkpoint?.weather ?: "Ruhig"
               )
             }

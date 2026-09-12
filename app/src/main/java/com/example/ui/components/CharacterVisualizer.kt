@@ -149,7 +149,7 @@ fun CharacterVisualizer(
   } else null
 
   val characterName = if (isPlayer) "Du" else (currentNpc?.name ?: "NPC")
-  val displayName = if (isPlayer) "Du (Hauptcharakter)" else (currentNpc?.name ?: "NPC")
+  val displayName = if (isPlayer) "Du" else (currentNpc?.name ?: "NPC")
 
   val currentGender = characterGenders.getOrPut(characterName) {
     // Das Geschlecht kommt aus der Extraktion. Die Namensheuristik bleibt nur als Notbehelf für
@@ -168,9 +168,9 @@ fun CharacterVisualizer(
   }
 
   val characterOutfit = if (isPlayer) {
-    checkpoint?.playerOutfit?.ifBlank { "Standard-Reisekleidung" } ?: "Standard-Reisekleidung"
+    checkpoint?.playerOutfit?.ifBlank { "Reisekleidung" } ?: "Reisekleidung"
   } else {
-    currentNpc?.outfit?.ifBlank { "Passende Zivilkleidung" } ?: "Passende Zivilkleidung"
+    currentNpc?.outfit?.ifBlank { "Zivilkleidung" } ?: "Zivilkleidung"
   }
 
   // Körperliche Verfassung. Für NPCs stand hier früher die Stimmung — dadurch galt eine Figur
@@ -222,7 +222,7 @@ fun CharacterVisualizer(
           )
           Spacer(modifier = Modifier.width(8.dp))
           Text(
-            text = "Charakter & Anatomie",
+            text = "Anatomie",
             fontFamily = DnaTypography.ManropeFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp,
@@ -232,7 +232,7 @@ fun CharacterVisualizer(
 
         if (adultContentEnabled && isAdultOutfit) {
           DnaBadge(
-            text = "Adult / Freizügig",
+            text = "Freizügig",
             tone = DnaBadgeTone.DANGER,
             showDot = true
           )
@@ -249,7 +249,7 @@ fun CharacterVisualizer(
 
       // Charakter-Auswahlleiste (Horizontal scrollbar fuer beliebig viele Charaktere)
       Text(
-        text = "AKTIVER CHARAKTER",
+        text = "FIGUR",
         fontFamily = DnaTypography.InterFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
@@ -448,7 +448,7 @@ fun CharacterVisualizer(
         Row(verticalAlignment = Alignment.CenterVertically) {
           if (selectedBodyPart != null || selectedOrgan != null) {
             Text(
-              text = "Filter aufheben",
+              text = "Zurücksetzen",
               fontFamily = DnaTypography.InterFamily,
               fontSize = 11.sp,
               color = DnaColors.Primary,
@@ -558,7 +558,7 @@ fun CharacterVisualizer(
               text = when {
                 selectedOrgan != null -> "WUNDEN: ${selectedOrgan!!.displayName.uppercase()}"
                 selectedBodyPart != null -> "WUNDEN: ${selectedBodyPart!!.displayName.uppercase()}"
-                else -> "ALLE VERLETZUNGEN (${characterInjuries.size})"
+                else -> "VERLETZUNGEN (${characterInjuries.size})"
               },
               fontFamily = DnaTypography.InterFamily,
               fontWeight = FontWeight.SemiBold,
@@ -597,8 +597,8 @@ fun CharacterVisualizer(
                     selectedOrgan != null -> "Keine Verletzungen an ${selectedOrgan!!.displayName}."
                     selectedBodyPart != null -> "Keine Verletzungen an ${selectedBodyPart!!.displayName}."
                     conditionPenalty > 0 ->
-                      "Keine offenen Wunden — die Schwäche kommt aus der körperlichen Verfassung."
-                    else -> "Keine aktiven Verletzungen. Vollständig einsatzbereit."
+                      "Keine Wunden — die Schwäche kommt von der Verfassung."
+                    else -> "Keine Verletzungen."
                   },
                   fontFamily = DnaTypography.InterFamily,
                   fontSize = 12.sp,
@@ -624,9 +624,9 @@ fun CharacterVisualizer(
 
           DnaButton(
             text = if (selectedBodyPart != null) {
-              "+ Wunde an ${selectedBodyPart!!.displayName} melden"
+              "Wunde an ${selectedBodyPart!!.displayName}"
             } else {
-              "+ Verletzung eintragen"
+              "Verletzung eintragen"
             },
             onClick = { showAddInjuryDialog = true },
             variant = DnaButtonVariant.PRIMARY,
@@ -646,7 +646,7 @@ fun CharacterVisualizer(
       ) {
         Column(modifier = Modifier.padding(12.dp)) {
           Text(
-            text = "AKTUELLES OUTFIT / RÜSTUNG",
+            text = "OUTFIT",
             fontFamily = DnaTypography.InterFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 11.sp,
@@ -664,7 +664,7 @@ fun CharacterVisualizer(
           Spacer(modifier = Modifier.height(8.dp))
 
           Text(
-            text = "KÖRPERLICHE VERFASSUNG",
+            text = "VERFASSUNG",
             fontFamily = DnaTypography.InterFamily,
             fontWeight = FontWeight.SemiBold,
             fontSize = 11.sp,
@@ -942,7 +942,7 @@ private fun AddInjuryDialog(
   // Nur Organe der gewählten Region und des passenden Geschlechts - eine Gebärmutter unter
   // "Linker Arm" anzubieten wäre schlicht falsch.
   val organOptions = remember(selectedPart, gender) {
-    listOf(DnaDropdownOption(value = NO_ORGAN, label = "Kein inneres Organ")) +
+    listOf(DnaDropdownOption(value = NO_ORGAN, label = "Keines")) +
       BodyOrgan.forGender(gender)
         .filter { it.region == selectedPart }
         .map { DnaDropdownOption(value = it.id, label = it.displayName) }
@@ -983,7 +983,7 @@ private fun AddInjuryDialog(
           )
           Spacer(modifier = Modifier.width(8.dp))
           Text(
-            text = "Neue Verletzung eintragen",
+            text = "Neue Verletzung",
             fontFamily = DnaTypography.ManropeFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
@@ -995,7 +995,7 @@ private fun AddInjuryDialog(
 
         // Koerperteil Dropdown
         DnaDropdown(
-          label = "KÖRPERREGION",
+          label = "REGION",
           options = bodyPartOptions,
           selectedValue = selectedPart,
           onOptionSelected = { selectedPart = it },
@@ -1007,7 +1007,7 @@ private fun AddInjuryDialog(
         // Organ Dropdown - nur befüllt, wenn die Region überhaupt Organe enthält
         if (organOptions.size > 1) {
           DnaDropdown(
-            label = "INNERES ORGAN",
+            label = "ORGAN",
             options = organOptions,
             selectedValue = selectedOrganValue,
             onOptionSelected = { selectedOrganValue = it },
@@ -1030,7 +1030,7 @@ private fun AddInjuryDialog(
 
         // Beschreibung Textfeld
         Text(
-          text = "BESCHREIBUNG DER WUNDE",
+          text = "BESCHREIBUNG",
           fontFamily = DnaTypography.InterFamily,
           fontWeight = FontWeight.Medium,
           fontSize = 12.sp,
@@ -1043,7 +1043,7 @@ private fun AddInjuryDialog(
           onValueChange = { description = it },
           placeholder = {
             Text(
-              text = "z. B. Tiefe Schnittwunde, Brandblasen, Pfeilspitze...",
+              text = "z. B. tiefe Schnittwunde",
               fontFamily = DnaTypography.InterFamily,
               fontSize = 13.sp,
               color = DnaColors.OnSurfaceVariant
@@ -1075,7 +1075,7 @@ private fun AddInjuryDialog(
           )
 
           DnaButton(
-            text = "Wunde speichern",
+            text = "Speichern",
             onClick = {
               val organ = BodyOrgan.fromString(selectedOrganValue)
               val desc = description.ifBlank {

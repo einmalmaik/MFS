@@ -37,11 +37,11 @@ fun EditMessageDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Nachricht bearbeiten & Zukunft neu berechnen", color = DnaColors.OnSurface) },
+    title = { Text("Nachricht bearbeiten", color = DnaColors.OnSurface) },
     text = {
       Column {
         Text(
-          text = "Alle nachfolgenden Nachrichten und Antworten werden aus der Datenbank gelöscht. Die Geschichte wird ab diesem Punkt mit deinen neuen Worten fortgesetzt.",
+          text = "Alles danach wird gelöscht und ab hier neu erzählt.",
           style = MaterialTheme.typography.bodySmall,
           color = DnaColors.StatusDestructive
         )
@@ -66,7 +66,7 @@ fun EditMessageDialog(
     },
     confirmButton = {
       DnaButton(
-        text = "Neu berechnen & absenden",
+        text = "Neu erzählen",
         onClick = {
           val edited = editInput.trim()
           if (edited.isNotBlank()) {

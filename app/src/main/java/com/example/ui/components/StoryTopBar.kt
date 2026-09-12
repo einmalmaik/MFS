@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.StoryEntity
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.ui.dna.DnaBadge
 import com.example.ui.dna.DnaBadgeTone
 import com.example.ui.dna.DnaColors
@@ -121,11 +122,15 @@ fun StoryTopBar(
               modifier = Modifier.size(16.dp)
             )
           }
+          // Ohne die Modell-Id: Zusammen mit ihr brach die Zeile dreifach um und schob den
+          // Titel aus der Leiste. Welches Modell läuft, steht in den Einstellungen.
           Text(
-            text = "${story?.genre ?: "Interaktives RPG"} • ${story?.selectedModel ?: "Gemini"}",
+            text = story?.genre ?: "Interaktives RPG",
             style = MaterialTheme.typography.labelSmall,
             fontFamily = DnaTypography.InterFamily,
-            color = DnaColors.OnSurfaceVariant
+            color = DnaColors.OnSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
         }
       }

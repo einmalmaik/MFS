@@ -185,7 +185,7 @@ fun SettingsSheet(
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-          text = "Spieleinstellungen & KI-Regeln",
+          text = "Einstellungen",
           style = MaterialTheme.typography.titleMedium,
           fontFamily = DnaTypography.ManropeFamily,
           fontWeight = FontWeight.Bold,
@@ -206,7 +206,7 @@ fun SettingsSheet(
     }
 
     Text(
-      text = "Passe das Google Gemini Modell, die Denkstufen und die Regieanweisungen für dieses Abenteuer an.",
+      text = "Modell, Denkkraft und Regie für diese Geschichte.",
       style = MaterialTheme.typography.bodySmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.OnSurfaceVariant
@@ -216,7 +216,7 @@ fun SettingsSheet(
 
     // Story Title
     Text(
-      text = "TITEL DER GESCHICHTE",
+      text = "TITEL",
       style = MaterialTheme.typography.labelSmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.Primary,
@@ -263,7 +263,7 @@ fun SettingsSheet(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "Google Gemini API-Key",
+              text = "API-Key",
               style = MaterialTheme.typography.labelLarge,
               fontFamily = DnaTypography.ManropeFamily,
               fontWeight = FontWeight.Bold,
@@ -284,7 +284,7 @@ fun SettingsSheet(
         }
 
         Text(
-          text = "Direkter Zugriff auf die offiziellen Google Gemini Modelle. Dein Key verbleibt sicher lokal auf diesem Gerät.",
+          text = "Bleibt lokal auf diesem Gerät.",
           style = MaterialTheme.typography.bodySmall,
           fontFamily = DnaTypography.InterFamily,
           color = DnaColors.OnSurfaceVariant
@@ -321,14 +321,14 @@ fun SettingsSheet(
           shape = RoundedCornerShape(10.dp)
         )
 
+        // Nur warnen, wenn das Format wirklich zu keinem bekannten Schlüssel passt.
+        // Der frühere Absatz zu 'AQ.'-Schlüsseln stand bei jedem Öffnen da, obwohl diese
+        // Schlüssel funktionieren — eine Dauerwarnung, die man irgendwann überliest.
         val trimmedKey = apiKeyInput.trim()
         val keyHint: String? = when {
           trimmedKey.isBlank() -> null
-          trimmedKey.startsWith("AQ.") ->
-            "Hinweis: Das ist ein Auth-Key aus Google AI Studio. Diese werden von der Gemini-API derzeit häufig abgelehnt (Code 401). Falls der Test fehlschlägt, erstelle in der Google Cloud Console einen Standard-Schlüssel (AIzaSy…) und beschränke ihn auf die 'Generative Language API'."
-          !trimmedKey.startsWith("AIzaSy") ->
-            "Hinweis: Gemini-Schlüssel beginnen mit 'AIzaSy…' (Standard) oder 'AQ.' (Auth-Key). Deine Eingabe passt zu keinem der beiden Formate."
-          else -> null
+          trimmedKey.startsWith("AQ.") || trimmedKey.startsWith("AIzaSy") -> null
+          else -> "Unbekanntes Schlüsselformat. Erwartet wird 'AIzaSy…' oder 'AQ.…'."
         }
         if (keyHint != null) {
           Spacer(modifier = Modifier.height(6.dp))
@@ -344,7 +344,7 @@ fun SettingsSheet(
         if (!modelCatalogIsLive) {
           Spacer(modifier = Modifier.height(8.dp))
           DnaBadge(
-            text = "Modellliste offline — Schlüssel nicht verifiziert",
+            text = "Modellliste offline",
             tone = DnaBadgeTone.AMBER
           )
         }
@@ -416,7 +416,7 @@ fun SettingsSheet(
       verticalAlignment = Alignment.CenterVertically
     ) {
       Text(
-        text = "AKTUELLES GOOGLE GEMINI MODELL",
+        text = "ERZÄHLMODELL",
         style = MaterialTheme.typography.labelSmall,
         fontFamily = DnaTypography.InterFamily,
         color = DnaColors.Primary,
@@ -438,7 +438,7 @@ fun SettingsSheet(
       }
     }
     Text(
-      text = "Aktuelle Modelle werden live aus der Google Gemini API geladen. Neue Modelle wie Gemini 3.8 Flash stehen sofort bereit.",
+      text = "Live aus deinem Schlüssel geladen.",
       style = MaterialTheme.typography.bodySmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.MutedForeground
@@ -473,14 +473,14 @@ fun SettingsSheet(
     Spacer(modifier = Modifier.height(20.dp))
 
     Text(
-      text = "EMBEDDING MODELL (VEKTOREN)",
+      text = "GEDÄCHTNIS",
       style = MaterialTheme.typography.labelSmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.Primary,
       fontWeight = FontWeight.Bold
     )
     Text(
-      text = "Das Modell für das semantische Langzeitgedächtnis. Achtung: Ein Wechsel bricht die Kompatibilität zu bestehenden Erinnerungen in dieser Story.",
+      text = "Ein Wechsel macht bisherige Erinnerungen unlesbar.",
       style = MaterialTheme.typography.bodySmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.MutedForeground
@@ -504,14 +504,14 @@ fun SettingsSheet(
     Spacer(modifier = Modifier.height(20.dp))
 
     Text(
-      text = "TRANSKRIPTIONSMODELL (SPRACHEINGABE VIA GEMINI)",
+      text = "SPRACHEINGABE",
       style = MaterialTheme.typography.labelSmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.Primary,
       fontWeight = FontWeight.Bold
     )
     Text(
-      text = "Das Gemini-Modell für die serverseitige Audio-Transkription von Sprachnachrichten (Multimodal Audio-to-Text).",
+      text = "Wandelt deine Sprachaufnahmen in Text um.",
       style = MaterialTheme.typography.bodySmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.MutedForeground
@@ -561,7 +561,7 @@ fun SettingsSheet(
               color = DnaColors.OnSurface
             )
             Text(
-              text = "Das Modell $selectedModel führt keine separaten Denkschritte aus und antwortet direkt.",
+              text = "$selectedModel antwortet direkt, ohne Denkschritte.",
               style = MaterialTheme.typography.bodySmall,
               fontFamily = DnaTypography.InterFamily,
               color = DnaColors.OnSurfaceVariant
@@ -571,14 +571,14 @@ fun SettingsSheet(
       }
     } else if (currentModelInfo.usesThinkingLevel) {
       Text(
-        text = "DENKSTUFE (REASONING EFFORT)",
+        text = "DENKSTUFE",
         style = MaterialTheme.typography.labelSmall,
         fontFamily = DnaTypography.InterFamily,
         color = DnaColors.Primary,
         fontWeight = FontWeight.Bold
       )
       Text(
-        text = "Moderne Modelle (wie Gemini 3.8 Flash) nutzen abgestufte Denkstufen statt starrer Token-Budgets für NPC-Logik & Konsistenzprüfung.",
+        text = "Wie gründlich das Modell vor der Antwort nachdenkt.",
         style = MaterialTheme.typography.bodySmall,
         fontFamily = DnaTypography.InterFamily,
         color = DnaColors.MutedForeground
@@ -614,7 +614,7 @@ fun SettingsSheet(
         min = 0,
         max = 8192,
         step = 512,
-        label = "DENKINTENSITÄT (THINKING BUDGET IN TOKEN)",
+        label = "DENKBUDGET",
         unit = "Tokens",
         modifier = Modifier.fillMaxWidth().testTag("thinking_budget_stepper")
       )
@@ -630,7 +630,7 @@ fun SettingsSheet(
         min = 0.2f,
         max = 1.5f,
         step = 0.1f,
-        label = "KREATIVITÄT (TEMPERATURE)",
+        label = "KREATIVITÄT",
         modifier = Modifier.fillMaxWidth().testTag("temperature_stepper")
       )
       Spacer(modifier = Modifier.height(4.dp))
@@ -669,7 +669,7 @@ fun SettingsSheet(
               color = DnaColors.OnSurface
             )
             Text(
-              text = "Das Modell $selectedModel arbeitet mit fest verankerten Sampling-Parametern. Manuelle Temperatur-Steuerung wird nicht unterstützt.",
+              text = "$selectedModel hat eine feste Kreativität.",
               style = MaterialTheme.typography.bodySmall,
               fontFamily = DnaTypography.InterFamily,
               color = DnaColors.OnSurfaceVariant
@@ -704,7 +704,7 @@ fun SettingsSheet(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-              text = "Mature / Adult Content Filter",
+              text = "Adult Content",
               style = MaterialTheme.typography.labelLarge,
               fontFamily = DnaTypography.ManropeFamily,
               fontWeight = FontWeight.Bold,
@@ -714,9 +714,9 @@ fun SettingsSheet(
           Spacer(modifier = Modifier.height(4.dp))
           Text(
             text = if (adultContent) {
-              "BLOCK_NONE aktiv (Sexuelle Inhalte, Gewalt, dunkle Szenen werden nicht ausgeblendet)."
+              "Nichts wird ausgeblendet."
             } else {
-              "Standard-Sicherheitsfilter von Google aktiv."
+              "Googles Standardfilter sind aktiv."
             },
             style = MaterialTheme.typography.bodySmall,
             fontFamily = DnaTypography.InterFamily,
@@ -742,7 +742,7 @@ fun SettingsSheet(
 
     // 6. System-Prompt Regieanweisungen
     Text(
-      text = "REGIEANWEISUNG / SYSTEM-PROMPT",
+      text = "REGIEANWEISUNG",
       style = MaterialTheme.typography.labelSmall,
       fontFamily = DnaTypography.InterFamily,
       color = DnaColors.Primary,

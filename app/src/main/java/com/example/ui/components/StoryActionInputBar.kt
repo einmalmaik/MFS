@@ -267,7 +267,7 @@ fun StoryActionInputBar(
             ) {
               Icon(
                 imageVector = Icons.Default.Check,
-                contentDescription = "Aufnahme beenden & transkribieren",
+                contentDescription = "Aufnahme beenden",
                 tint = TextOnPrimary,
                 modifier = Modifier.size(20.dp)
               )
@@ -296,7 +296,7 @@ fun StoryActionInputBar(
           )
           Spacer(modifier = Modifier.width(12.dp))
           Text(
-            text = "Gemini transkribiert Spracheingabe …",
+            text = "Wird transkribiert …",
             style = MaterialTheme.typography.bodySmall,
             fontFamily = DnaTypography.InterFamily,
             color = DnaColors.Primary
@@ -315,7 +315,7 @@ fun StoryActionInputBar(
         onValueChange = onInputTextChange,
         placeholder = {
           Text(
-            text = if (editingMessage != null) "Nachricht bearbeiten …" else "Was tut dein Charakter? (z. B. Ich spreche Elena an...)",
+            text = if (editingMessage != null) "Nachricht bearbeiten …" else "Was tust du?",
             style = MaterialTheme.typography.bodyMedium,
             color = TextFaint
           )
@@ -351,7 +351,7 @@ fun StoryActionInputBar(
       ) {
         Icon(
           imageVector = Icons.Default.Mic,
-          contentDescription = "Sprachnachricht mit Gemini transkribieren",
+          contentDescription = "Sprachaufnahme",
           tint = if (!isGenerating && !isRecordingVoice && !isTranscribing) IceCyanLight else TextFaint,
           modifier = Modifier.size(20.dp)
         )
@@ -392,7 +392,7 @@ fun StoryActionInputBar(
         ) {
           Icon(
             imageVector = Icons.AutoMirrored.Filled.Send,
-            contentDescription = if (editingMessage != null) "Bearbeitung speichern & Zukunft neu berechnen" else "Aktion ausführen",
+            contentDescription = if (editingMessage != null) "Speichern und neu erzählen" else "Aktion ausführen",
             tint = if (canSend) TextOnPrimary else TextFaint
           )
         }

@@ -103,7 +103,7 @@ fun ManualStateEditDialog(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "Zustand manuell anpassen",
+              text = "Zustand anpassen",
               style = MaterialTheme.typography.titleMedium,
               color = DnaColors.OnSurface,
               fontFamily = FontFamily.Serif
@@ -116,7 +116,7 @@ fun ManualStateEditDialog(
         }
 
         Text(
-          text = "Korrigiere Details wie Kleidung, Inventar oder Zeit direkt. Gemini übernimmt diese Werte sofort als Fakten-Anker.",
+          text = "Deine Werte gelten ab sofort als Fakt.",
           style = MaterialTheme.typography.bodySmall,
           color = DnaColors.OnSurfaceVariant
         )
@@ -126,16 +126,16 @@ fun ManualStateEditDialog(
         Spacer(modifier = Modifier.height(14.dp))
 
         // In-game time & Location
-        EditField(label = "In-Game Zeit (z. B. Tag 2, 08:30 Uhr)", value = inGameTime, onValueChange = { inGameTime = it }, testTag = "edit_time_input")
+        EditField(label = "Zeit", value = inGameTime, onValueChange = { inGameTime = it }, testTag = "edit_time_input")
         Spacer(modifier = Modifier.height(10.dp))
         EditField(label = "Aufenthaltsort", value = location, onValueChange = { location = it }, testTag = "edit_location_input")
         Spacer(modifier = Modifier.height(10.dp))
-        EditField(label = "Wetter & Atmosphäre", value = weather, onValueChange = { weather = it }, testTag = "edit_weather_input")
+        EditField(label = "Wetter", value = weather, onValueChange = { weather = it }, testTag = "edit_weather_input")
         Spacer(modifier = Modifier.height(10.dp))
 
         // Outfit (highlighted)
         EditField(
-          label = "Charakter-Outfit (z. B. Lederjacke abgelegt, T-Shirt)",
+          label = "Outfit",
           value = playerOutfit,
           onValueChange = { playerOutfit = it },
           multiline = true,
@@ -143,11 +143,11 @@ fun ManualStateEditDialog(
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        EditField(label = "Körperlicher Zustand / Wunden", value = playerCondition, onValueChange = { playerCondition = it }, testTag = "edit_condition_input")
+        EditField(label = "Verfassung", value = playerCondition, onValueChange = { playerCondition = it }, testTag = "edit_condition_input")
         Spacer(modifier = Modifier.height(10.dp))
 
         EditField(
-          label = "Inventar (Komma-getrennt)",
+          label = "Inventar",
           value = inventoryText,
           onValueChange = { inventoryText = it },
           testTag = "edit_inventory_input"
@@ -155,7 +155,7 @@ fun ManualStateEditDialog(
         Spacer(modifier = Modifier.height(10.dp))
 
         EditField(
-          label = "Was bisher geschah (Zusammenfassung)",
+          label = "Was bisher geschah",
           value = summary,
           onValueChange = { summary = it },
           multiline = true,
@@ -177,7 +177,7 @@ fun ManualStateEditDialog(
           )
           Spacer(modifier = Modifier.width(10.dp))
           DnaButton(
-            text = "Speichern & Aktualisieren",
+            text = "Speichern",
             onClick = {
               val invList = inventoryText.split(",")
                 .map { it.trim() }

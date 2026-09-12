@@ -85,13 +85,13 @@ fun StoryChatArea(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Gemini API-Schlüssel hinterlegen",
+                text = "API-Schlüssel fehlt",
                 style = MaterialTheme.typography.titleSmall,
                 color = DnaColors.StoryAmberCampfire,
                 fontWeight = FontWeight.Bold
               )
               Text(
-                text = "Trage deinen Google AI Studio Key in den Einstellungen ein, um interaktiv zu spielen.",
+                text = "Trage ihn in den Einstellungen ein, um zu spielen.",
                 style = MaterialTheme.typography.bodySmall,
                 color = DnaColors.OnSurface
               )
@@ -178,10 +178,10 @@ fun StoryChatArea(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                   text = when (uiState.turnStatus) {
-                    is TurnProgress.Thinking -> "Game Master denkt nach..."
-                    is TurnProgress.Streaming -> "Geschichte wird fortgesetzt..."
-                    is TurnProgress.ExtractingState -> "Hintergrund: Aktualisiere Weltzustand & Notizbuch..."
-                    else -> "Antwort wird generiert..."
+                    is TurnProgress.Thinking -> "Denkt nach …"
+                    is TurnProgress.Streaming -> "Erzählt weiter …"
+                    is TurnProgress.ExtractingState -> "Notizbuch wird aktualisiert …"
+                    else -> "Schreibt …"
                   },
                   style = MaterialTheme.typography.labelMedium,
                   color = DnaColors.Primary
