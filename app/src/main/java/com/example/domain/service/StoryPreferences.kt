@@ -26,6 +26,44 @@ class StoryPreferences(context: Context) {
     private const val PREF_SUPPORTS_TEMPERATURE = "ai_supports_temperature"
     private const val PREF_ADULT_CONTENT = "ai_adult_content"
     private const val PREF_AI_SETTINGS_SEEDED = "ai_settings_seeded"
+
+    private const val PREF_UPDATE_CHECK_ENABLED = "update_check_enabled"
+    private const val PREF_UPDATE_CONSENT_ASKED = "update_consent_asked"
+    private const val PREF_UPDATE_LAST_CHECK_AT = "update_last_check_at"
+    private const val PREF_UPDATE_SKIPPED_VERSION = "update_skipped_version_code"
+  }
+
+  // --- AKTUALISIERUNG ---
+
+  /**
+   * Vorgabe false. Eine Prüfung beim Start fügt GitHub als zweite Gegenstelle neben Google
+   * hinzu und verrät ihr bei jedem Start die IP-Adresse. Das ist wenig, aber es geschieht ohne
+   * Anlass des Nutzers — also erst nach ausdrücklicher Zustimmung.
+   */
+  fun isUpdateCheckEnabled(): Boolean = prefs.getBoolean(PREF_UPDATE_CHECK_ENABLED, false)
+
+  fun setUpdateCheckEnabled(enabled: Boolean) {
+    prefs.edit().putBoolean(PREF_UPDATE_CHECK_ENABLED, enabled).apply()
+  }
+
+  /** Verhindert, dass die einmalige Frage nach der Zustimmung wiedervorgelegt wird. */
+  fun wasUpdateConsentAsked(): Boolean = prefs.getBoolean(PREF_UPDATE_CONSENT_ASKED, false)
+
+  fun markUpdateConsentAsked() {
+    prefs.edit().putBoolean(PREF_UPDATE_CONSENT_ASKED, true).apply()
+  }
+
+  fun getUpdateLastCheckAt(): Long = prefs.getLong(PREF_UPDATE_LAST_CHECK_AT, 0L)
+
+  fun setUpdateLastCheckAt(timestamp: Long) {
+    prefs.edit().putLong(PREF_UPDATE_LAST_CHECK_AT, timestamp).apply()
+  }
+
+  /** Eine übersprungene Fassung wird nie wieder angeboten — eine neuere schon. */
+  fun getUpdateSkippedVersionCode(): Int = prefs.getInt(PREF_UPDATE_SKIPPED_VERSION, 0)
+
+  fun setUpdateSkippedVersionCode(versionCode: Int) {
+    prefs.edit().putInt(PREF_UPDATE_SKIPPED_VERSION, versionCode).apply()
   }
 
   fun getCustomApiKey(): String? {

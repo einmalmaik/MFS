@@ -12,10 +12,27 @@ class AudioRecorder(private val context: Context) {
   private var currentFile: File? = null
   private var isRecording = false
 
+  companion object {
+    private const val FILE_PREFIX = "voice_input_"
+
+    /**
+     * Harte Obergrenze einer Aufnahme.
+     *
+     * Ohne sie läuft das Mikrofon, bis jemand den Haken drückt — und beim Drücken geht die
+     * gesamte Spanne an Google. Fünf Minuten sind mehr, als ein Spielzug je braucht, und
+     * wenig genug, dass ein vergessenes Mikrofon nicht den halben Abend mitschneidet.
+     */
+    const val MAX_RECORDING_SECONDS = 300
+  }
+
   fun startRecording(): Boolean {
     try {
+      // Reste aufräumen, bevor neue entstehen. Stirbt der Prozess während einer Aufnahme,
+      // bliebe die halbfertige Datei mit allem bis dahin Gehörten sonst für immer im Cache.
+      deleteOrphanedRecordings()
+
       val outputDir = context.cacheDir
-      val outputFile = File(outputDir, "voice_input_${System.currentTimeMillis()}.m4a")
+      val outputFile = File(outputDir, "$FILE_PREFIX${System.currentTimeMillis()}.m4a")
       currentFile = outputFile
 
       val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -91,6 +108,21 @@ class AudioRecorder(private val context: Context) {
       currentFile?.delete()
     } catch (_: Exception) {}
     currentFile = null
+  }
+
+  /**
+   * Löscht Aufnahmedateien, die ein abgestürzter oder vom System beendeter Prozess
+   * zurückgelassen hat. Die laufende Aufnahme bleibt unberührt.
+   */
+  private fun deleteOrphanedRecordings() {
+    try {
+      context.cacheDir.listFiles { file -> file.name.startsWith(FILE_PREFIX) }
+        ?.forEach { file ->
+          if (file.absolutePath != currentFile?.absolutePath) file.delete()
+        }
+    } catch (e: Exception) {
+      Log.w("AudioRecorder", "Alte Aufnahmen konnten nicht aufgeräumt werden", e)
+    }
   }
 
   fun getMaxAmplitudeRatio(): Float {

@@ -4,6 +4,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!--
+      Für die Selbstaktualisierung. Ab Android 8 Pflicht, damit der System-Dialog überhaupt
+      erscheint; der Nutzer muss MSF beim ersten Mal zusätzlich in den Systemeinstellungen
+      freigeben. Der Preis, der genannt gehört: Ab hier kann jeder Code-Ausführungsfehler in
+      MSF die Installation einer beliebigen APK anstossen, und der Nutzer sähe einen echten
+      Systemdialog. Deshalb prüft UpdateService Hash, Paketname und Signatur, bevor überhaupt
+      ein Installer geöffnet wird.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       Kein Cloud-Backup. Androids Voreinstellung hätte `shared_prefs/storyforge_prefs.xml`
@@ -33,6 +42,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Reicht die heruntergeladene APK als content://-URI an den System-Installer.
+          exported="false" plus grantUriPermissions="true" heisst: Kein fremder Prozess kommt
+          an den Provider heran, ausser über einen URI, den MSF ihm für genau einen Vorgang
+          mit FLAG_GRANT_READ_URI_PERMISSION gereicht hat.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

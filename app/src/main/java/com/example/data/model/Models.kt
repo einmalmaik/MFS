@@ -378,3 +378,47 @@ data class NpcEntity(
     return canonicalParts.any { part -> needleParts.any { it.equals(part, ignoreCase = true) } }
   }
 }
+
+/**
+ * Eine auf GitHub veröffentlichte Fassung der App.
+ *
+ * [versionCode] entscheidet, [versionName] wird angezeigt. Der Code ist total geordnet und
+ * genau die Grösse, an der auch Android selbst entscheidet, ob es die Installation annimmt —
+ * damit kann die App kein Update anbieten, das das System danach ablehnt.
+ *
+ * [sha256] ist leer, wenn die Angabe nur aus der GitHub-API stammt; dann entfällt die
+ * Hash-Prüfung und es bleibt die Signaturprüfung vor der Installation.
+ */
+data class UpdateRelease(
+  val versionName: String,
+  val versionCode: Int,
+  val apkUrl: String,
+  val sha256: String,
+  val sizeBytes: Long,
+  val notes: String
+)
+
+/**
+ * Wo die Aktualisierung gerade steht. Die Oberfläche zeigt ausschliesslich diesen Zustand —
+ * es gibt keinen Schritt, der ohne sichtbare Entsprechung abläuft (CLAUDE.md: kein unbemerktes
+ * Handeln).
+ */
+sealed class UpdateState {
+  /** Nichts zu tun. Der Normalfall, und der einzige, der stumm bleibt. */
+  data object Idle : UpdateState()
+
+  data object Pruefend : UpdateState()
+
+  /** Eine neuere Fassung liegt vor. Geladen wird erst auf ausdrücklichen Tastendruck. */
+  data class Verfuegbar(val release: UpdateRelease) : UpdateState()
+
+  data class Laedt(val release: UpdateRelease, val fortschritt: Float) : UpdateState()
+
+  /** Geladen und geprüft. Die Installation zeigt danach immer der System-Dialog. */
+  data class Bereit(val release: UpdateRelease) : UpdateState()
+
+  /** Nur nach einer vom Nutzer ausgelösten Prüfung; die automatische schweigt. */
+  data class Meldung(val text: String) : UpdateState()
+
+  data class Fehler(val text: String) : UpdateState()
+}

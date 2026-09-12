@@ -90,6 +90,11 @@ fun SettingsSheet(
   onSaveGlobalDefaultPrompt: (String) -> Unit,
   onSaveApiKey: (String) -> Unit,
   onTestApiKey: suspend () -> Pair<Boolean, String>,
+  updateCheckEnabled: Boolean,
+  installedVersion: String,
+  onSetUpdateCheck: (Boolean) -> Unit,
+  onCheckForUpdate: () -> Unit,
+  onOpenPrivacy: () -> Unit,
   onClose: () -> Unit,
   modifier: Modifier = Modifier
 ) {
@@ -691,6 +696,81 @@ fun SettingsSheet(
 
     Spacer(modifier = Modifier.height(24.dp))
 
+    // 5b. Aktualisierung
+    Text(
+      text = "AKTUALISIERUNG",
+      style = MaterialTheme.typography.labelSmall,
+      fontFamily = DnaTypography.InterFamily,
+      color = DnaColors.Primary,
+      fontWeight = FontWeight.Bold
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Surface(
+      shape = RoundedCornerShape(12.dp),
+      color = DnaColors.SurfaceContainer,
+      border = BorderStroke(1.dp, DnaColors.Border),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column(modifier = Modifier.fillMaxWidth(0.78f)) {
+            Text(
+              text = "Beim Start nach Aktualisierungen suchen",
+              style = MaterialTheme.typography.labelLarge,
+              fontFamily = DnaTypography.ManropeFamily,
+              fontWeight = FontWeight.Bold,
+              color = DnaColors.OnSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+              // Die einzige zweite Gegenstelle neben Google — das gehört benannt, nicht
+              // versteckt. Vorgabe ist aus.
+              text = "Fragt höchstens einmal am Tag bei GitHub nach. GitHub erfährt dabei " +
+                "deine IP-Adresse. Geladen und installiert wird nur auf deinen Tastendruck.",
+              style = MaterialTheme.typography.bodySmall,
+              fontFamily = DnaTypography.InterFamily,
+              color = DnaColors.OnSurfaceVariant
+            )
+          }
+
+          Switch(
+            checked = updateCheckEnabled,
+            onCheckedChange = { onSetUpdateCheck(it) },
+            colors = SwitchDefaults.colors(
+              checkedThumbColor = DnaColors.Primary,
+              checkedTrackColor = DnaColors.PrimaryContainer,
+              uncheckedThumbColor = DnaColors.TextDisabled,
+              uncheckedTrackColor = DnaColors.SurfaceContainerLow
+            ),
+            modifier = Modifier.testTag("update_check_switch")
+          )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(text = "Installiert: $installedVersion", style = DnaTypography.MonoSmall)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Der einzige Weg, bei dem auch das Nicht-Ergebnis gemeldet wird. Die automatische
+        // Prüfung schweigt immer, die ausdrücklich ausgelöste antwortet immer.
+        DnaButton(
+          text = "Jetzt prüfen",
+          onClick = onCheckForUpdate,
+          variant = DnaButtonVariant.SECONDARY,
+          fullWidth = true,
+          testTag = "check_update_button"
+        )
+      }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
     // 6. Standard-Regie
     //
     // Frueher standen hier zwei Reiter: der Prompt dieser Geschichte und ein globaler, von dem
@@ -762,6 +842,19 @@ fun SettingsSheet(
       variant = DnaButtonVariant.PRIMARY,
       fullWidth = true,
       testTag = "save_settings_button"
+    )
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Die Erklärung steht in der App, nicht hinter einem Link. Eine App, die zusagt, dass
+    // nichts unbemerkt hinausgeht, kann ihre eigene Datenschutzerklärung schlecht über einen
+    // Aufruf nachladen, der wieder etwas hinausschickt.
+    DnaButton(
+      text = "Datenschutz",
+      onClick = onOpenPrivacy,
+      variant = DnaButtonVariant.GHOST,
+      fullWidth = true,
+      testTag = "open_privacy_button"
     )
 
     Spacer(modifier = Modifier.height(24.dp))

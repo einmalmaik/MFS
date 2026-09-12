@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nur dieser eine Pfad. Ein weiter gefasster Eintrag (<cache-path path="."/> oder gar
+  <files-path path="."/>) würde den gesamten privaten Speicher der App über den Provider
+  adressierbar machen — einschliesslich der Room-Datenbank mit allen Geschichten.
+-->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

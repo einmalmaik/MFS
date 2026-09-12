@@ -21,22 +21,93 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      # Ohne diesen Schritt bricht der Build bei validateSigningDebug ab: build.gradle.kts
+      # erwartet ${rootDir}/debug.keystore, die Datei steht aber in .gitignore und ist im
+      # CI-Checkout nicht vorhanden. Dass das bisher niemandem auffiel, liegt daran, dass der
+      # Workflow noch nie gelaufen ist.
+      #
+      # Wichtiger noch: Es muss IMMER DERSELBE Schlüssel sein. Erzeugt jeder Lauf ein eigenes
+      # Zertifikat, lehnt Android jede Aktualisierung mit INSTALL_FAILED_UPDATE_INCOMPATIBLE ab
+      # ("App nicht installiert"). Der naheliegende Ausweg wäre, die alte App zu deinstallieren
+      # -- und damit wären alle Geschichten, Checkpoints und das gesamte Gedächtnis weg.
+      #
+      # Einrichtung einmalig:
+      #   base64 -w0 debug.keystore   (Windows: certutil -encode)
+      #   -> als Repository-Secret ANDROID_KEYSTORE_BASE64 hinterlegen
+      - name: Signaturschlüssel wiederherstellen
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_BASE64 fehlt. Ohne festen Signaturschluessel"
+            echo "::error::wuerde jeder Lauf ein anderes Zertifikat erzeugen und jede"
+            echo "::error::Aktualisierung auf den Geraeten der Nutzer scheitern lassen."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > debug.keystore
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # Ohne diese Pruefung laesst sich ein Release v1.0.2 veroeffentlichen, dessen APK intern
+      # noch 1.0.1 traegt. Die App laedt, installiert, stellt fest, dass sie weiterhin 1.0.1
+      # ist -- und bietet dasselbe Update beim naechsten Start erneut an. Eine Schleife, aus
+      # der der Nutzer nur ueber "Version ueberspringen" herauskommt.
+      - name: Tag und versionName abgleichen
+        if: github.event_name == 'release'
+        run: |
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VN" != "$TAG" ]; then
+            echo "::error::Release-Tag $TAG passt nicht zu versionName $VN in app/build.gradle.kts"
+            exit 1
+          fi
+
       - name: Build Debug APK
-        # Wir bauen eine Debug-APK. Eine Release-APK würde manuell konfigurierte Signaturschlüssel erfordern.
-        # Die Debug-APK lässt sich auf jedem Android-Handy per Sideloading installieren.
+        # Debug-Build, weil kein Release-Schluessel existiert. Das ist eine Entscheidung mit
+        # Verfallsdatum: Ein spaeterer Wechsel auf einen Release-Schluessel hat fuer jedes
+        # Geraet, auf dem schon eine Version laeuft, exakt dieselbe Wirkung wie ein zufaelliger
+        # Schluessel -- die Aktualisierung scheitert. Er muss VOR dem ersten Release fallen.
         run: ./gradlew assembleDebug --no-daemon
+
+      # Stabiler Name statt app-debug.apk. Erst damit entsteht die dauerhafte Adresse
+      # https://github.com/einmalmaik/MFS/releases/latest/download/MauntingStoryFable.apk
+      - name: APK benennen und latest.json erzeugen
+        id: paket
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-debug.apk release/MauntingStoryFable.apk
+
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K\d+' app/build.gradle.kts)
+          SHA=$(sha256sum release/MauntingStoryFable.apk | cut -d' ' -f1)
+          SIZE=$(stat -c%s release/MauntingStoryFable.apk)
+          TAG="${GITHUB_REF_NAME:-v$VERSION_NAME}"
+
+          # Flach und Android-only. Der Updater liest versionCode und entscheidet danach;
+          # versionName dient nur der Anzeige.
+          jq -n \
+            --arg versionName "$VERSION_NAME" \
+            --argjson versionCode "$VERSION_CODE" \
+            --arg apk "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/MauntingStoryFable.apk" \
+            --arg sha256 "$SHA" \
+            --argjson sizeBytes "$SIZE" \
+            --arg notes "${{ github.event.release.body }}" \
+            '{versionName: $versionName, versionCode: $versionCode, apk: $apk, sha256: $sha256, sizeBytes: $sizeBytes, notes: $notes}' \
+            > release/latest.json
+
+          cat release/latest.json
 
       - name: Upload APK as Artifact (for Action page)
         uses: actions/upload-artifact@v4
         with:
           name: MauntingStoryFable-App
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: release/MauntingStoryFable.apk
 
       - name: Upload APK to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: |
+            release/MauntingStoryFable.apk
+            release/latest.json

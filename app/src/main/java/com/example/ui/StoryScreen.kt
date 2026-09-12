@@ -41,10 +41,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.data.model.MessageEntity
+import com.example.data.model.UpdateState
 import com.example.data.model.displayTitle
 import com.example.ui.components.ManualStateEditDialog
 import com.example.ui.components.NotebookDrawer
+import com.example.ui.components.PrivacySheet
 import com.example.ui.components.SettingsSheet
+import com.example.ui.components.UpdateDialog
+import com.example.ui.components.UpdateHinweisLeiste
+import com.example.util.ApkInstaller
 import com.example.ui.components.StoryActionInputBar
 import com.example.ui.components.StoryChatArea
 import com.example.ui.components.StoryPromptSheet
@@ -55,6 +60,9 @@ import com.example.ui.components.StoryTopBar
 import com.example.ui.dna.DnaActionConfirmDialog
 import com.example.ui.dna.DnaColors
 import com.example.ui.dna.DnaConfirmVariant
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.util.AudioRecorder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -74,6 +82,24 @@ fun StoryScreen(
   var inputText by remember { mutableStateOf("") }
   var showNotebookSheet by remember { mutableStateOf(false) }
   var showSettingsSheet by remember { mutableStateOf(false) }
+  var showPrivacySheet by remember { mutableStateOf(false) }
+
+  // --- Aktualisierung ---
+  val updateState by viewModel.updateState.collectAsState()
+  var showUpdateConsent by remember { mutableStateOf(false) }
+  var showUpdateDialog by remember { mutableStateOf(false) }
+  var updateBannerDismissed by remember { mutableStateOf(false) }
+  var updateCheckEnabled by remember { mutableStateOf(viewModel.updateService.istPruefungAktiv()) }
+
+  LaunchedEffect(Unit) {
+    // Zuerst die Zustimmung, dann erst die Prüfung. Ohne Zustimmung kehrt pruefe() sofort
+    // zurück — GitHub erfährt in diesem Fall nichts, nicht einmal, dass die App existiert.
+    if (!viewModel.updateService.wurdeZustimmungGefragt()) {
+      showUpdateConsent = true
+    } else {
+      viewModel.pruefeAufUpdate(manuell = false)
+    }
+  }
   var showStoryPromptSheet by remember { mutableStateOf(false) }
   var showStorySelector by remember { mutableStateOf(false) }
   var storySelectorCreateMode by remember { mutableStateOf(false) }
@@ -95,20 +121,6 @@ fun StoryScreen(
   var isRecordingVoice by remember { mutableStateOf(false) }
   var voiceAmplitude by remember { mutableFloatStateOf(0f) }
   var recordingDurationSeconds by remember { mutableIntStateOf(0) }
-
-  LaunchedEffect(isRecordingVoice) {
-    if (isRecordingVoice) {
-      val startTime = System.currentTimeMillis()
-      while (isRecordingVoice) {
-        voiceAmplitude = audioRecorder.getMaxAmplitudeRatio()
-        recordingDurationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
-        delay(100L)
-      }
-    } else {
-      voiceAmplitude = 0f
-      recordingDurationSeconds = 0
-    }
-  }
 
   fun startVoiceRecording() {
     if (isRecordingVoice) return
@@ -161,8 +173,45 @@ fun StoryScreen(
     isRecordingVoice = false
   }
 
+  LaunchedEffect(isRecordingVoice) {
+    if (!isRecordingVoice) {
+      voiceAmplitude = 0f
+      recordingDurationSeconds = 0
+      return@LaunchedEffect
+    }
+
+    val startTime = System.currentTimeMillis()
+    while (isRecordingVoice) {
+      voiceAmplitude = audioRecorder.getMaxAmplitudeRatio()
+      recordingDurationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+      // Harte Obergrenze: Eine vergessene Aufnahme soll nicht den halben Abend mitschneiden
+      // und am Ende vollständig bei Google landen. Das Aufgenommene geht nicht verloren —
+      // es wird wie bei einem Tippen auf den Haken transkribiert.
+      if (recordingDurationSeconds >= AudioRecorder.MAX_RECORDING_SECONDS) {
+        stopVoiceRecording()
+        return@LaunchedEffect
+      }
+      delay(100L)
+    }
+  }
+
+  // Die Aufnahme endet, sobald die App in den Hintergrund geht. Ohne das lief der
+  // MediaRecorder weiter, wenn jemand mitten im Sprechen die Home-Taste drückte — und beim
+  // Zurückkehren ging die gesamte Spanne an Google.
+  val lifecycleOwner = LocalLifecycleOwner.current
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_STOP && isRecordingVoice) {
+        cancelVoiceRecording()
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+
   val notebookSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val privacySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val storyPromptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   var isAppInitializing by remember { mutableStateOf(false) }
 
@@ -237,6 +286,16 @@ fun StoryScreen(
           .padding(top = innerPadding.calculateTopPadding())
           .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
       ) {
+        // Über der Erzählung, nicht darüber gelegt: Wer mitten in einer Szene ist, soll
+        // weiterlesen können. Der Hinweis kommt beim nächsten Start wieder.
+        if (updateState is UpdateState.Verfuegbar && !updateBannerDismissed && !showUpdateDialog) {
+          UpdateHinweisLeiste(
+            versionName = (updateState as UpdateState.Verfuegbar).release.versionName,
+            onAnsehen = { showUpdateDialog = true },
+            onVerwerfen = { updateBannerDismissed = true }
+          )
+        }
+
         Box(
           modifier = Modifier
             .weight(1f)
@@ -318,6 +377,78 @@ fun StoryScreen(
     }
   }
 
+  // 1b. Aktualisierung: Zustimmung, Hinweis und Dialog.
+  //
+  // Drei getrennte Entscheidungen des Spielers, jede an ihrer eigenen Stelle: ob überhaupt
+  // geprüft wird, ob geladen wird, ob installiert wird. Keine davon geschieht von allein.
+  if (showUpdateConsent) {
+    DnaActionConfirmDialog(
+      title = "Nach Aktualisierungen suchen?",
+      message = "MSF kann beim Start bei GitHub nachsehen, ob eine neuere Version vorliegt. " +
+        "GitHub erfährt dabei deine IP-Adresse und den Zeitpunkt — mehr nicht. Heruntergeladen " +
+        "und installiert wird nichts ohne deine ausdrückliche Zustimmung.\n\n" +
+        "Deine Geschichten, Checkpoints und dein API-Schlüssel bleiben davon unberührt und " +
+        "verlassen das Gerät nicht. Du kannst das jederzeit in den Einstellungen ändern.",
+      confirmButtonText = "Ja, suchen",
+      dismissButtonText = "Nein, nicht suchen",
+      variant = DnaConfirmVariant.PRIMARY,
+      testTag = "update_consent_dialog",
+      onConfirm = {
+        showUpdateConsent = false
+        updateCheckEnabled = true
+        viewModel.setzeUpdatePruefung(true)
+      },
+      onDismiss = {
+        showUpdateConsent = false
+        updateCheckEnabled = false
+        viewModel.setzeUpdatePruefung(false)
+      }
+    )
+  }
+
+  // Meldung und Fehler stammen immer aus einer vom Nutzer ausgelösten Prüfung — die
+  // automatische schweigt. Deshalb dürfen sie hier sichtbar werden.
+  LaunchedEffect(updateState) {
+    val text = when (val s = updateState) {
+      is UpdateState.Meldung -> s.text
+      is UpdateState.Fehler -> s.text
+      else -> null
+    }
+    if (text != null) {
+      Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+      viewModel.verwerfeUpdateZustand()
+    }
+  }
+
+  val verfuegbaresRelease = when (val s = updateState) {
+    is UpdateState.Verfuegbar -> s.release
+    is UpdateState.Laedt -> s.release
+    is UpdateState.Bereit -> s.release
+    else -> null
+  }
+
+  if (showUpdateDialog && verfuegbaresRelease != null) {
+    UpdateDialog(
+      release = verfuegbaresRelease,
+      installierteVersion = viewModel.updateService.installierterVersionName,
+      fortschritt = (updateState as? UpdateState.Laedt)?.fortschritt,
+      bereit = updateState is UpdateState.Bereit,
+      darfInstallieren = ApkInstaller.darfInstallieren(context),
+      onLaden = { viewModel.ladeUpdate(verfuegbaresRelease) },
+      onInstallieren = {
+        if (!viewModel.installiereUpdate(verfuegbaresRelease)) {
+          Toast.makeText(context, "Der Installer ließ sich nicht öffnen.", Toast.LENGTH_SHORT).show()
+        }
+      },
+      onFreigabeOeffnen = { ApkInstaller.oeffneFreigabeEinstellung(context) },
+      onUeberspringen = {
+        viewModel.ueberspringeUpdate(verfuegbaresRelease)
+        showUpdateDialog = false
+      },
+      onSpaeter = { showUpdateDialog = false }
+    )
+  }
+
   // 2. Settings Sheet — global, deshalb auch ohne aktive Geschichte erreichbar.
   if (showSettingsSheet) {
     ModalBottomSheet(
@@ -346,10 +477,41 @@ fun StoryScreen(
         onTestApiKey = {
           viewModel.testApiKeyConnection()
         },
+        updateCheckEnabled = updateCheckEnabled,
+        installedVersion = "${viewModel.updateService.installierterVersionName} " +
+          "(${viewModel.updateService.installierterVersionCode})",
+        onSetUpdateCheck = { aktiv ->
+          updateCheckEnabled = aktiv
+          viewModel.setzeUpdatePruefung(aktiv)
+        },
+        onCheckForUpdate = {
+          updateBannerDismissed = false
+          viewModel.pruefeAufUpdate(manuell = true)
+        },
+        onOpenPrivacy = { showPrivacySheet = true },
         onClose = {
           scope.launch {
             settingsSheetState.hide()
             showSettingsSheet = false
+          }
+        }
+      )
+    }
+  }
+
+  // 2a. Datenschutzerklärung — liegt in der App, nicht hinter einem Netz-Aufruf.
+  if (showPrivacySheet) {
+    ModalBottomSheet(
+      onDismissRequest = { showPrivacySheet = false },
+      sheetState = privacySheetState,
+      containerColor = DnaColors.Surface,
+      scrimColor = DnaColors.SurfaceDim.copy(alpha = 0.7f)
+    ) {
+      PrivacySheet(
+        onClose = {
+          scope.launch {
+            privacySheetState.hide()
+            showPrivacySheet = false
           }
         }
       )

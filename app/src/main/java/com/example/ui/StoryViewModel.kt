@@ -12,8 +12,12 @@ import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
 import com.example.data.model.MessageEntity
 import com.example.data.model.StoryEntity
+import com.example.data.model.UpdateRelease
+import com.example.data.model.UpdateState
 import com.example.data.repository.StoryRepository
 import com.example.domain.model.TurnProgress
+import com.example.domain.service.UpdateService
+import com.example.util.ApkInstaller
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +59,15 @@ data class StoryUiState(
 class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val database = StoryDatabase.getInstance(application)
   val repository = StoryRepository(database, application)
+
+  /**
+   * Die Selbstaktualisierung. Bewusst neben dem Repository und nicht darin: Sie hat mit
+   * Geschichten nichts zu tun, spricht eine andere Gegenstelle an und darf sich mit dem
+   * Gemini-Pfad nicht vermischen.
+   */
+  val updateService = UpdateService(application, repository.preferences)
+
+  val updateState: StateFlow<UpdateState> = updateService.state
 
   private val _activeStoryId = MutableStateFlow<Long?>(null)
   private val _isGenerating = MutableStateFlow(false)
@@ -571,6 +584,37 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
 
   fun dismissError() {
     _errorMessage.value = null
+  }
+
+  // --- AKTUALISIERUNG ---
+  //
+  // Nicht im init-Block: Der ist für Datenbank und Modellkatalog da, und die Prüfung darf den
+  // Kaltstart nicht verlängern. Angestossen wird sie von der Oberfläche, nachdem sie steht.
+
+  fun pruefeAufUpdate(manuell: Boolean) {
+    viewModelScope.launch {
+      try {
+        updateService.pruefe(manuell)
+      } catch (e: Exception) {
+        Log.w("StoryViewModel", "Update-Prüfung fehlgeschlagen", e)
+      }
+    }
+  }
+
+  fun ladeUpdate(release: UpdateRelease) {
+    viewModelScope.launch { updateService.lade(release) }
+  }
+
+  fun installiereUpdate(release: UpdateRelease): Boolean =
+    ApkInstaller.installiere(getApplication(), updateService.apkDatei(release))
+
+  fun ueberspringeUpdate(release: UpdateRelease) = updateService.ueberspringe(release)
+
+  fun verwerfeUpdateZustand() = updateService.verwerfeZustand()
+
+  fun setzeUpdatePruefung(aktiv: Boolean) {
+    updateService.setzePruefung(aktiv)
+    if (aktiv) pruefeAufUpdate(manuell = false)
   }
 
   val uiState: StateFlow<StoryUiState> = combine(
