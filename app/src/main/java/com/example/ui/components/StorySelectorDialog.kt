@@ -147,6 +147,8 @@ fun StorySelectorDialog(
   currentStoryId: Long?,
   stories: List<StoryEntity>,
   availableModels: List<GeminiModelInfo>,
+  availableEmbeddingModels: List<GeminiModelInfo> = emptyList(),
+  availableTranscriptionModels: List<GeminiModelInfo> = emptyList(),
   isFetchingModels: Boolean,
   onRefreshModels: () -> Unit,
   onSelectStory: (Long) -> Unit,
@@ -159,6 +161,7 @@ fun StorySelectorDialog(
     systemPrompt: String,
     model: String,
     embeddingModel: String,
+    transcriptionModel: String,
     temperature: Float,
     supportsTemperature: Boolean,
     thinkingLevel: String,
@@ -199,6 +202,7 @@ fun StorySelectorDialog(
 
   var selectedModelId by remember { mutableStateOf(defaultModelId) }
   var selectedEmbeddingModel by remember { mutableStateOf("text-embedding-004") }
+  var selectedTranscriptionModel by remember { mutableStateOf("gemini-2.5-flash") }
   val currentModelInfo = availableModels.firstOrNull { it.id == selectedModelId }
     ?: GeminiModelInfo(
       id = selectedModelId,
@@ -564,29 +568,85 @@ fun StorySelectorDialog(
 
           Spacer(modifier = Modifier.height(16.dp))
 
-          val embeddingModelOptions = listOf(
-            com.example.ui.dna.DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
-            com.example.ui.dna.DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
-          )
+          val embeddingModelOptions = remember(availableEmbeddingModels) {
+            if (availableEmbeddingModels.isNotEmpty()) {
+              availableEmbeddingModels.map {
+                com.example.ui.dna.DnaDropdownOption(
+                  value = it.id,
+                  label = it.displayName,
+                  hint = it.id
+                )
+              }
+            } else {
+              listOf(
+                com.example.ui.dna.DnaDropdownOption("text-embedding-004", "Text Embedding 004", "Neuestes & bestes Modell"),
+                com.example.ui.dna.DnaDropdownOption("embedding-001", "Embedding 001", "Legacy Modell")
+              )
+            }
+          }
           com.example.ui.dna.DnaDropdown(
-            label = "EMBEDDING MODELL",
+            label = "EMBEDDING MODELL (VEKTOREN)",
             options = embeddingModelOptions,
             selectedValue = selectedEmbeddingModel,
             onOptionSelected = { selectedEmbeddingModel = it },
             modifier = Modifier.fillMaxWidth().testTag("story_embedding_model_dropdown")
           )
 
-          Spacer(modifier = Modifier.height(12.dp))
+          Spacer(modifier = Modifier.height(16.dp))
+
+          val transcriptionModelOptions = remember(availableTranscriptionModels) {
+            if (availableTranscriptionModels.isNotEmpty()) {
+              availableTranscriptionModels.map {
+                com.example.ui.dna.DnaDropdownOption(
+                  value = it.id,
+                  label = it.displayName,
+                  hint = it.id
+                )
+              }
+            } else {
+              listOf(
+                com.example.ui.dna.DnaDropdownOption("gemini-2.5-flash", "Gemini 2.5 Flash", "Empfohlen für Audio-Transkription"),
+                com.example.ui.dna.DnaDropdownOption("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Schnell & leichtgewichtig")
+              )
+            }
+          }
+          com.example.ui.dna.DnaDropdown(
+            label = "TRANSKRIPTIONSMODELL (SPRACHEINGABE)",
+            options = transcriptionModelOptions,
+            selectedValue = selectedTranscriptionModel,
+            onOptionSelected = { selectedTranscriptionModel = it },
+            modifier = Modifier.fillMaxWidth().testTag("story_transcription_model_dropdown")
+          )
+
+          Spacer(modifier = Modifier.height(16.dp))
 
           // Thinking level or thinking budget
-          if (currentModelInfo.usesThinkingLevel) {
-            val thinkingOptions = remember {
-              listOf(
-                com.example.ui.dna.DnaDropdownOption("MINIMAL", "Minimal", "Höchste Geschwindigkeit"),
-                com.example.ui.dna.DnaDropdownOption("LOW", "Niedrig", "Schnell"),
-                com.example.ui.dna.DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie"),
-                com.example.ui.dna.DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & Konsistenz")
-              )
+          if (!currentModelInfo.isThinkingModel) {
+            Card(
+              colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer),
+              shape = RoundedCornerShape(8.dp),
+              border = androidx.compose.foundation.BorderStroke(1.dp, DnaColors.SurfaceContainerHigh)
+            ) {
+              Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = DnaColors.Secondary, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Denkstufen werden von $selectedModelId nicht unterstützt (antwortet direkt).", style = MaterialTheme.typography.bodySmall, color = DnaColors.OnSurfaceVariant)
+              }
+            }
+          } else if (currentModelInfo.usesThinkingLevel) {
+            val thinkingOptions = remember(currentModelInfo.supportedThinkingLevels) {
+              val levels = if (currentModelInfo.supportedThinkingLevels.isNotEmpty()) {
+                currentModelInfo.supportedThinkingLevels
+              } else {
+                listOf("LOW", "MEDIUM", "HIGH")
+              }
+              levels.map { lvl ->
+                when (lvl.uppercase()) {
+                  "LOW" -> com.example.ui.dna.DnaDropdownOption("LOW", "Niedrig", "Schnelle Reflexion, minimale Latenz")
+                  "HIGH" -> com.example.ui.dna.DnaDropdownOption("HIGH", "Hoch", "Tiefgründige Reflexion & Konsistenz")
+                  else -> com.example.ui.dna.DnaDropdownOption("MEDIUM", "Mittel (Standard)", "Ausgewogene Psychologie")
+                }
+              } + listOf(com.example.ui.dna.DnaDropdownOption("OFF", "Deaktiviert", "Keine Denkphase"))
             }
 
             com.example.ui.dna.DnaDropdown(
@@ -597,30 +657,31 @@ fun StorySelectorDialog(
               icon = Icons.Default.Psychology,
               modifier = Modifier.fillMaxWidth().testTag("story_thinking_dropdown")
             )
+          } else {
+            DnaNumberStepper(
+              value = thinkingBudget,
+              onValueChange = { thinkingBudget = it },
+              min = 0,
+              max = 8192,
+              step = 512,
+              label = "DENKINTENSITÄT (TOKEN)",
+              unit = "Tokens",
+              modifier = Modifier.fillMaxWidth().testTag("story_thinking_budget_stepper")
+            )
           }
 
-          Spacer(modifier = Modifier.height(12.dp))
+          Spacer(modifier = Modifier.height(16.dp))
 
-          // Temperature slider or notice
+          // Temperature stepper or notice
           if (currentModelInfo.supportsTemperature) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Text(text = "TEMPERATUR (KREATIVITÄT)", style = MaterialTheme.typography.labelSmall, color = DnaColors.Primary, fontWeight = FontWeight.Bold)
-              Text(String.format("%.2f", temperature), style = MaterialTheme.typography.labelMedium, color = DnaColors.OnSurface, fontWeight = FontWeight.Bold)
-            }
-            Slider(
+            DnaFloatNumberStepper(
               value = temperature,
               onValueChange = { temperature = it },
-              valueRange = 0.2f..1.5f,
-              steps = 26,
-              colors = SliderDefaults.colors(
-                thumbColor = DnaColors.Primary,
-                activeTrackColor = DnaColors.Primary,
-                inactiveTrackColor = DnaColors.SurfaceContainerHigh
-              )
+              min = 0.2f,
+              max = 1.5f,
+              step = 0.1f,
+              label = "KREATIVITÄT (TEMPERATURE)",
+              modifier = Modifier.fillMaxWidth().testTag("story_temperature_stepper")
             )
           } else {
             Card(
@@ -859,6 +920,7 @@ fun StorySelectorDialog(
                 "", // Use global default prompt
                 selectedModelId,
                 selectedEmbeddingModel,
+                selectedTranscriptionModel,
                 temperature,
                 currentModelInfo.supportsTemperature,
                 thinkingLevel,

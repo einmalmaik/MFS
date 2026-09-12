@@ -12,7 +12,7 @@ import com.example.data.model.StoryEntity
 
 @Database(
   entities = [StoryEntity::class, CheckpointEntity::class, MessageEntity::class],
-  version = 7,
+  version = 8,
   exportSchema = false
 )
 abstract class StoryDatabase : RoomDatabase() {
@@ -40,6 +40,12 @@ abstract class StoryDatabase : RoomDatabase() {
       }
     }
 
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE stories ADD COLUMN selectedTranscriptionModel TEXT NOT NULL DEFAULT 'gemini-2.5-flash'")
+      }
+    }
+
     fun getInstance(context: Context): StoryDatabase {
       return INSTANCE ?: synchronized(this) {
         val instance = Room.databaseBuilder(
@@ -47,7 +53,7 @@ abstract class StoryDatabase : RoomDatabase() {
           StoryDatabase::class.java,
           "storyforge_database"
         )
-          .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+          .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
           .fallbackToDestructiveMigration(true)
           .build()
         INSTANCE = instance

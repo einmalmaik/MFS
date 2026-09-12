@@ -68,6 +68,17 @@ class StoryRepository(
 
   suspend fun fetchAvailableModels(): List<GeminiModelInfo> = geminiClient.fetchAvailableModels()
 
+  suspend fun fetchModelCatalog(): com.example.data.model.GeminiModelCatalog = geminiClient.fetchModelCatalog()
+
+  suspend fun transcribeAudio(
+    audioBytes: ByteArray,
+    mimeType: String = "audio/mp4",
+    model: String? = null
+  ): String {
+    val effectiveModel = model?.ifBlank { "gemini-2.5-flash" } ?: "gemini-2.5-flash"
+    return geminiClient.transcribeAudio(audioBytes, mimeType, effectiveModel)
+  }
+
   // --- STORY PERSISTENCE (ROOM) ---
 
   fun getAllStories(): Flow<List<StoryEntity>> = storyDao.getAllStories()
@@ -106,6 +117,8 @@ class StoryRepository(
       perspective = "Zweite Person (Du)",
       systemPrompt = "",
       selectedModel = "gemini-3.8-flash",
+      selectedEmbeddingModel = "text-embedding-004",
+      selectedTranscriptionModel = "gemini-2.5-flash",
       temperature = 0.85f,
       supportsTemperature = true,
       thinkingLevel = "MEDIUM",
@@ -128,6 +141,7 @@ class StoryRepository(
     systemPrompt: String = "",
     selectedModel: String = "gemini-3.8-flash",
     selectedEmbeddingModel: String = "text-embedding-004",
+    selectedTranscriptionModel: String = "gemini-2.5-flash",
     temperature: Float = 0.85f,
     supportsTemperature: Boolean = true,
     thinkingLevel: String = "MEDIUM",
@@ -148,6 +162,7 @@ class StoryRepository(
       perspective = perspective,
       selectedModel = selectedModel,
       selectedEmbeddingModel = selectedEmbeddingModel,
+      selectedTranscriptionModel = selectedTranscriptionModel,
       temperature = temperature,
       supportsTemperature = supportsTemperature,
       thinkingLevel = thinkingLevel,

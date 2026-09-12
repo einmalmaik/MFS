@@ -92,6 +92,6 @@ class StoryBranchingService(
 
     val allRemaining = storyDao.getMessagesSnapshot(storyId)
     val userTurnIdx = allRemaining.count { it.sender == "user" }
-    storyDao.deleteCheckpointsAfterTurn(storyId, userTurnIdx)
+    storyDao.deleteCheckpointsAfterTurn(storyId, (userTurnIdx - 1).coerceAtLeast(0))
   }
 }

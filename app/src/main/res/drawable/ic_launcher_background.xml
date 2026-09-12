@@ -13,14 +13,14 @@
                 android:endX="108"
                 android:endY="108"
                 android:type="linear">
-                <item android:color="#261E17" android:offset="0.0" />
-                <item android:color="#1A1512" android:offset="0.5" />
-                <item android:color="#120F0D" android:offset="1.0" />
+                <item android:color="#04090B" android:offset="0.0" />
+                <item android:color="#071013" android:offset="0.5" />
+                <item android:color="#03080A" android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>
-    <!-- Subtle warm glow circle in center -->
+    <!-- Subtle Ice Cyan glow circle in center -->
     <path
-        android:fillColor="#15E5A84B"
-        android:pathData="M54,54m-38,0a38,38 0,1,1 76,0a38,38 0,1,1 -76,0" />
+        android:fillColor="#1500D2FF"
+        android:pathData="M54,54m-42,0a42,42 0,1,1 84,0a42,42 0,1,1 -84,0" />
 </vector>
