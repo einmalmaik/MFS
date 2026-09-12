@@ -203,6 +203,11 @@ internal val PRIVACY_SECTIONS = listOf(
     punkte = listOf(
       "MSF wird außerhalb von Google Play verteilt. Die App wird nicht durch Googles Prüfung " +
         "kontrolliert — vertraue der Quelle, von der du sie geladen hast.",
+      "Die über GitHub verteilte Fassung ist ein Debug-Build und damit als debuggable " +
+        "gekennzeichnet. Das schwächt Abschnitt 6 ab: Wer dein Gerät mit eingeschaltetem " +
+        "USB-Debugging an einen Rechner anschließt, kann über adb auf die Datenbank und den " +
+        "Schlüssel zugreifen, ohne das Gerät zu rooten. Lass USB-Debugging aus, wenn du das " +
+        "nicht brauchst.",
       "Auf einem gerooteten oder mit Schadsoftware versehenen Gerät schützt keine App-Trennung " +
         "mehr; dann sind Datenbank und Schlüssel lesbar.",
       "Diese Erklärung beschreibt den Stand des Programms zum unten genannten Datum."

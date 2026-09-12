@@ -88,6 +88,28 @@ class PrivacyTruthTest {
       alles.contains("kostenlosen Kontingent")
     )
     assertTrue("Dass es kein Backup gibt, fehlt", alles.contains("Cloud-Backup"))
+    assertTrue("Dass der ausgelieferte Build debuggable ist, fehlt", alles.contains("debuggable"))
+  }
+
+  @Test
+  fun `ein debuggable Build muss in der Erklaerung stehen`() {
+    // Ein Debug-Build laesst sich mit eingeschaltetem USB-Debugging ueber `adb run-as`
+    // auslesen -- Datenbank und API-Schluessel inbegriffen, ohne Root. Wird spaeter auf einen
+    // Release-Build umgestellt, faellt diese Einschraenkung weg und der Satz gehoert geloescht;
+    // dieser Test erinnert dann daran.
+    val context = ApplicationProvider.getApplicationContext<android.app.Application>()
+    val debuggable = (context.applicationInfo.flags and
+      android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    val erwaehnt = PRIVACY_SECTIONS
+      .flatMap { it.punkte }
+      .any { it.contains("debuggable") }
+
+    assertEquals(
+      "Die Erklärung und der Build sagen Verschiedenes über debuggable.",
+      debuggable,
+      erwaehnt
+    )
   }
 
   @Test
