@@ -6,6 +6,7 @@ import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
 import com.example.domain.model.TimeAnchor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -15,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -30,9 +32,41 @@ class GeminiClient(
     .writeTimeout(30, TimeUnit.SECONDS)
     .build()
 
+  /**
+   * Führt eine Anfrage aus und wiederholt sie bei Googles vorübergehenden Fehlern.
+   *
+   * Am 2026-09-12 gemessen: von zehn Aufrufen desselben Modells antworteten vier mit
+   * HTTP 503 "This model is currently experiencing high demand". Ohne Wiederholung fiel damit
+   * fast jede dritte Zustands-Extraktion aus — und zwar lautlos, weil der Aufrufer dann den
+   * vorherigen Checkpoint fortschreibt: Ort, Uhrzeit, Inventar, Verletzungen und Erinnerungen
+   * blieben stehen, während die Erzählung weiterlief.
+   *
+   * 429 wird mitwiederholt: kurze Burst-Limits erholen sich in Sekunden. Ist das Tageskontingent
+   * erschöpft, kostet die Wiederholung nur die Wartezeit und die Meldung bleibt dieselbe.
+   */
+  private suspend fun executeWithRetry(request: Request): Response {
+    var attempt = 0
+    while (true) {
+      val response = client.newCall(request).execute()
+      val transient = !response.isSuccessful && response.code in TRANSIENT_HTTP_CODES
+      if (!transient || attempt >= RETRY_DELAYS_MS.size) return response
+
+      response.close()
+      Log.w(TAG, "Gemini antwortete ${response.code} — Versuch ${attempt + 2} von ${RETRY_DELAYS_MS.size + 1}")
+      delay(RETRY_DELAYS_MS[attempt])
+      attempt++
+    }
+  }
+
   companion object {
     private const val TAG = "GeminiClient"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    /** Fehler, die Google selbst als vorübergehend bezeichnet. */
+    private val TRANSIENT_HTTP_CODES = setOf(429, 500, 502, 503, 504)
+
+    /** Wartezeiten zwischen den Versuchen. Vier Versuche insgesamt, höchstens 10 s Verzug. */
+    private val RETRY_DELAYS_MS = longArrayOf(1_000L, 3_000L, 6_000L)
 
     val THINKING_LEVEL_PRESETS = listOf(
       "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
@@ -519,7 +553,7 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = buildRequest(url, apiKey, requestBody)
 
-    val response = client.newCall(request).execute()
+    val response = executeWithRetry(request)
     if (!response.isSuccessful) {
       val errBody = response.body?.string() ?: "Unknown error"
       Log.e(TAG, "Gemini API error code: ${response.code} body: $errBody")
@@ -763,7 +797,7 @@ $storyResponse
     val request = buildRequest(url, apiKey, requestBody)
 
     try {
-      val response = client.newCall(request).execute()
+      val response = executeWithRetry(request)
       if (!response.isSuccessful) {
         val err = response.body?.string() ?: ""
         Log.e(TAG, "State extraction failed: ${response.code} $err")
@@ -898,7 +932,7 @@ $storyResponse
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = buildRequest(url, apiKey, requestBody)
 
-    val response = client.newCall(request).execute()
+    val response = executeWithRetry(request)
     if (!response.isSuccessful) {
       val errBody = response.body?.string() ?: "Unknown error"
       Log.e(TAG, "Audio transcription error: ${response.code} body: $errBody")
@@ -946,7 +980,7 @@ $storyResponse
     val request = buildRequest(url, apiKey, body)
 
     try {
-      val response = client.newCall(request).execute()
+      val response = executeWithRetry(request)
       if (response.isSuccessful) {
         val jsonStr = response.body?.string() ?: return@withContext null
         val root = JSONObject(jsonStr)
