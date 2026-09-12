@@ -29,8 +29,20 @@ interface StoryDao {
   @Update
   suspend fun updateStory(story: StoryEntity)
 
-  @Delete
-  suspend fun deleteStory(story: StoryEntity)
+  /**
+   * Schreibt nur Titel und Genre.
+   *
+   * Die Zustands-Extraktion trägt beides nach dem ersten Zug nach, arbeitet dabei aber auf dem
+   * Schnappschuss vom Zugbeginn. Mit `updateStory` hätte sie die ganze Zeile zurückgeschrieben
+   * und dabei einen währenddessen gespeicherten Prompt, die mitgezählte Spielzeit und den
+   * Archiv-Status auf den alten Stand zurückgedreht. Diese Abfrage kann das strukturell nicht.
+   */
+  @Query("UPDATE stories SET title = :title, genre = :genre, updatedAt = :updatedAt WHERE id = :id")
+  suspend fun updateStoryTitleAndGenre(id: Long, title: String, genre: String, updatedAt: Long)
+
+  /** Was der Prompt-Bogen ändern darf — aus demselben Grund gezielt statt zeilenweise. */
+  @Query("UPDATE stories SET title = :title, systemPrompt = :systemPrompt, updatedAt = :updatedAt WHERE id = :id")
+  suspend fun updateStoryTitleAndPrompt(id: Long, title: String, systemPrompt: String, updatedAt: Long)
 
   @Query("DELETE FROM stories WHERE id = :storyId")
   suspend fun deleteStoryById(storyId: Long)
@@ -51,6 +63,18 @@ interface StoryDao {
 
   @Query("SELECT * FROM messages WHERE storyId = :storyId AND embeddingJson IS NOT NULL ORDER BY id ASC")
   suspend fun getMessagesWithEmbeddings(storyId: Long): List<MessageEntity>
+
+  /**
+   * Gibt die Alt-Embeddings frei, nachdem sie ins episodische Gedächtnis übernommen wurden.
+   *
+   * In `embeddingJson` steht pro Nachricht ein Vektor als JSON-Text, 8 bis 12 KB. Gelesen wird
+   * die Spalte nur ein einziges Mal — beim Übernehmen. Danach zieht die Oberfläche sie bei jeder
+   * neuen Nachricht sinnlos mit: bei einer vor DB-Version 9 begonnenen Geschichte mit 5000
+   * Nachrichten sind das 40 bis 60 MB, die pro Zug neu aus der Datenbank materialisiert werden.
+   * Die Spalte selbst bleibt bestehen — ein Spalten-Drop in SQLite erzwänge einen Tabellen-Rebuild.
+   */
+  @Query("UPDATE messages SET embeddingJson = NULL WHERE storyId = :storyId AND embeddingJson IS NOT NULL")
+  suspend fun clearLegacyEmbeddings(storyId: Long)
 
   @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
   suspend fun getMessageById(messageId: Long): MessageEntity?

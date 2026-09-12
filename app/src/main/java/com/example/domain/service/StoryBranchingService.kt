@@ -1,6 +1,8 @@
 package com.example.domain.service
 
+import androidx.room.withTransaction
 import com.example.data.db.StoryDao
+import com.example.data.db.StoryDatabase
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.MessageEntity
 import kotlinx.coroutines.Dispatchers
@@ -11,18 +13,33 @@ import kotlinx.coroutines.withContext
  * and history rollback/truncation (ensuring data integrity when rewinding or editing turns).
  */
 class StoryBranchingService(
-  private val storyDao: StoryDao
+  private val storyDao: StoryDao,
+  private val database: StoryDatabase
 ) {
 
   /**
    * Creates an isolated branch of an existing story, copying all messages and checkpoints
    * up to [upToMessageId] (or the full history if null).
+   *
+   * Alles in einer Transaktion: Der Zweig kopiert Nachricht für Nachricht und Erinnerung für
+   * Erinnerung. Bei einer langen Geschichte sind das mehrere tausend Schreibvorgänge — einzeln
+   * committet kostet jeder davon eine eigene Runde auf den Geräte-Flash, zusammen zehn bis
+   * vierzig Sekunden. Schlimmer noch: Stirbt der Prozess dazwischen, bleibt ein halber Zweig
+   * liegen, den niemand als unvollständig erkennen kann (CLAUDE.md §0.7, §4).
    */
   suspend fun branchStory(
     sourceStoryId: Long,
     branchTitle: String,
     upToMessageId: Long? = null
   ): Long = withContext(Dispatchers.IO) {
+    database.withTransaction { copyIntoNewStory(sourceStoryId, branchTitle, upToMessageId) }
+  }
+
+  private suspend fun copyIntoNewStory(
+    sourceStoryId: Long,
+    branchTitle: String,
+    upToMessageId: Long?
+  ): Long {
     val sourceStory = storyDao.getStoryById(sourceStoryId)
       ?: throw IllegalArgumentException("Quell-Story $sourceStoryId nicht gefunden.")
 
@@ -80,7 +97,7 @@ class StoryBranchingService(
       }
     }
 
-    newStoryId
+    return newStoryId
   }
 
   /**
@@ -110,13 +127,15 @@ class StoryBranchingService(
     storyId: Long,
     message: MessageEntity
   ) = withContext(Dispatchers.IO) {
-    storyDao.deleteMessagesAfter(storyId, message.id)
-    val latestCp = storyDao.getLatestCheckpoint(storyId)
-    if (message.checkpointId != null && latestCp != null && message.checkpointId < latestCp.id) {
-      storyDao.deleteCheckpointsAfterTurn(storyId, latestCp.turnNumber - 1)
-      // Erinnerungen an zurückgenommene Züge müssen mit verschwinden, sonst erinnert sich die
-      // Welt an Ereignisse, die es in dieser Zeitlinie nicht mehr gibt.
-      storyDao.deleteMemoriesAfterTurn(storyId, latestCp.turnNumber - 1)
+    database.withTransaction {
+      storyDao.deleteMessagesAfter(storyId, message.id)
+      val latestCp = storyDao.getLatestCheckpoint(storyId)
+      if (message.checkpointId != null && latestCp != null && message.checkpointId < latestCp.id) {
+        storyDao.deleteCheckpointsAfterTurn(storyId, latestCp.turnNumber - 1)
+        // Erinnerungen an zurückgenommene Züge müssen mit verschwinden, sonst erinnert sich die
+        // Welt an Ereignisse, die es in dieser Zeitlinie nicht mehr gibt.
+        storyDao.deleteMemoriesAfterTurn(storyId, latestCp.turnNumber - 1)
+      }
     }
   }
 
@@ -128,13 +147,15 @@ class StoryBranchingService(
     messageId: Long,
     newContent: String
   ) = withContext(Dispatchers.IO) {
-    storyDao.deleteMessagesAfter(storyId, messageId)
-    storyDao.updateMessageContent(messageId, newContent)
+    database.withTransaction {
+      storyDao.deleteMessagesAfter(storyId, messageId)
+      storyDao.updateMessageContent(messageId, newContent)
 
-    val allRemaining = storyDao.getMessagesSnapshot(storyId)
-    val userTurnIdx = allRemaining.count { it.sender == "user" }
-    val keepUpToTurn = (userTurnIdx - 1).coerceAtLeast(0)
-    storyDao.deleteCheckpointsAfterTurn(storyId, keepUpToTurn)
-    storyDao.deleteMemoriesAfterTurn(storyId, keepUpToTurn)
+      val allRemaining = storyDao.getMessagesSnapshot(storyId)
+      val userTurnIdx = allRemaining.count { it.sender == "user" }
+      val keepUpToTurn = (userTurnIdx - 1).coerceAtLeast(0)
+      storyDao.deleteCheckpointsAfterTurn(storyId, keepUpToTurn)
+      storyDao.deleteMemoriesAfterTurn(storyId, keepUpToTurn)
+    }
   }
 }

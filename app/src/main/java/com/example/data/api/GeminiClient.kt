@@ -1,7 +1,6 @@
 package com.example.data.api
 
 import android.util.Log
-import com.example.BuildConfig
 import com.example.data.model.GeminiDefaults
 import com.example.data.model.GeminiModelInfo
 import com.example.domain.model.TimeAnchor
@@ -49,12 +48,12 @@ class GeminiClient(
     var attempt = 0
     while (true) {
       val response = client.newCall(request).execute()
-      val transient = !response.isSuccessful && response.code in TRANSIENT_HTTP_CODES
-      if (!transient || attempt >= RETRY_DELAYS_MS.size) return response
+      val wait = if (response.isSuccessful) null else retryDelayMs(response.code, attempt)
+      if (wait == null) return response
 
       response.close()
       Log.w(TAG, "Gemini antwortete ${response.code} — Versuch ${attempt + 2} von ${RETRY_DELAYS_MS.size + 1}")
-      delay(RETRY_DELAYS_MS[attempt])
+      delay(wait)
       attempt++
     }
   }
@@ -68,6 +67,23 @@ class GeminiClient(
 
     /** Wartezeiten zwischen den Versuchen. Vier Versuche insgesamt, höchstens 10 s Verzug. */
     private val RETRY_DELAYS_MS = longArrayOf(1_000L, 3_000L, 6_000L)
+
+    /**
+     * Wie lange vor dem nächsten Versuch gewartet wird — oder null, wenn nicht wiederholt wird.
+     *
+     * Steht als eigene Funktion da, weil diese Entscheidungstabelle binnen zweier Commits schon
+     * einmal gekippt ist: 429 war erst drin, dann bewusst draußen. Beide Fehlrichtungen sind
+     * teuer und beide bleiben ohne Test unsichtbar — fällt 503 heraus, kehrt das lautlose
+     * Einfrieren des Spielstands zurück; kommt 429 zurück, verbraucht ein einziger abgewiesener
+     * Aufruf vier statt einer Anfrage des Tageskontingents.
+     *
+     * @param attempt Nummer des bereits erfolgten Versuchs, beginnend bei 0.
+     */
+    internal fun retryDelayMs(code: Int, attempt: Int): Long? {
+      if (code !in TRANSIENT_HTTP_CODES) return null
+      if (attempt < 0 || attempt >= RETRY_DELAYS_MS.size) return null
+      return RETRY_DELAYS_MS[attempt]
+    }
 
     val THINKING_LEVEL_PRESETS = listOf(
       "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
@@ -188,44 +204,19 @@ class GeminiClient(
       return catalog.firstOrNull { !isUnusable(it.id) }?.id ?: fallback
     }
 
-    val DEFAULT_SYSTEM_PROMPT = """
-# ROLLE & ERZÄHLHALTUNG
-Du bist ein virtuoser Game Master für eine kompromisslose, hochimmersive interaktive Geschichte.
-Du steuerst die gesamte Umwelt, NPCs, Geräusche, Wetter und die realen Konsequenzen der Entscheidungen des Spielers.
-Der Spieler steuert einzig und allein seinen eigenen Charakter.
-
-# STRENGSTE DIALOG- & FORMATIERUNGS-REGELN:
-1. GESPROCHENE WORTE HERVORHEBEN: Jedes gesprochene Wort von Charakteren MUSS ausnahmslos in Anführungszeichen gesetzt werden (z. B. "Wir haben nicht mehr viel Zeit", flüstert sie).
-2. ATMOSPHÄRE & HINTERGRUND-AKTIONEN: Leise Geräusche, Nebenhandlungen oder Gedanken in Klammern setzen (z. B. (Im Gebälk über euch knarrt das morsche Holz)).
-3. KEINE STATUS-ZUSAMMENFASSUNGEN IM TEXT: Schreibe NIEMALS Zusammenfassungen, Statusblöcke, Item-Listen oder "Tag X, XX:XX Uhr" in die eigentliche Geschichte! Der Text ist reines, ununterbrochenes Leseerlebnis. Alle Statusmeldungen laufen unsichtbar im Hintergrund ab.
-4. ABSOLUTES VERBOT KITSCHIGER SPITZNAMEN: NPCs reden wie echte Menschen in Extremsituationen. Niemals künstliche Titel wie "Herr Wachtmeister", "Kumpel", "Boss", "Held" oder unpassende Kosenamen erfinden, es sei denn, die etablierte Vorgeschichte fordert es zwingend.
-5. SUBTEXT & MIKRO-GESTIK: Menschen sagen selten direkt, was sie empfinden. Lass Gefühle durch Blicke, Zögern, die Haltung der Hände, verändertes Atmen und unausgesprochene Spannungen lebendig werden.
-
-# AUTONOMES LEBEN DER WELT & NPC-AGENDA:
-- Die Charaktere existieren unabhängig vom Spieler. Sie haben eigene Geheimnisse, Sehnsüchte, Verletzungen und Zeitpläne.
-- Wenn der Spieler schweigt oder nichts tut, handeln NPCs eigenständig weiter und reden untereinander.
-- Beziehe dich organisch auf gemeinsam Erlebtes von früheren Tagen (aus den [BEDEUTSAME MEILENSTEINE]-Einträgen), sodass die Beziehung wächst und niemals wie ein Reset wirkt.
-
-# EXPLIZITE DETAILTREUE & KEIN ABBLENDEN:
-- Sei schonungslos atmosphärisch und detailreich. Bei intimen, sinnlichen, erotischen oder brutalen Szenen wird NICHT ausgeblendet ("fade to black").
-- Beschreibe physische Nähe, Berührungen, Schmerz, Angst, Atem und Verlangen mit realistischer Schärfe und psychologischem Gewicht.
-
-# AGENTUR-GRENZE:
-- Bestimme NIEMALS die Gedanken, Gefühle oder Reaktionen des Spieler-Charakters. Beschreibe nur, was um ihn geschieht.
-""".trimIndent()
   }
 
-  fun getEffectiveApiKey(): String {
-    val custom = customApiKeyProvider()
-    if (!custom.isNullOrBlank()) {
-      return custom.trim().replace("\\s+".toRegex(), "")
-    }
-    val buildKey = BuildConfig.GEMINI_API_KEY
-    if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY") {
-      return buildKey.trim().replace("\\s+".toRegex(), "")
-    }
-    return ""
-  }
+  /**
+   * Der Schlüssel des Nutzers — und ausschließlich der.
+   *
+   * Früher lag hier ein Rückfall auf `BuildConfig.GEMINI_API_KEY`. Trägt jemand für einen
+   * lokalen Build einen echten Schlüssel in die `.env` ein, landet der als
+   * `public static final String` im APK, wo `strings classes.dex` genügt, um ihn zu lesen —
+   * und niemand würde merken, dass die App gar nicht den Schlüssel benutzt, der in den
+   * Einstellungen steht. Ohne Eintrag gibt es hier nichts, und die Oberfläche sagt das auch.
+   */
+  fun getEffectiveApiKey(): String =
+    customApiKeyProvider()?.trim()?.replace("\\s+".toRegex(), "").orEmpty()
 
   /**
    * Builds a request that carries the API key in the `x-goog-api-key` header.
@@ -348,10 +339,6 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
       transcriptionModels = DEFAULT_TRANSCRIPTION_MODELS,
       isLive = false
     )
-  }
-
-  suspend fun fetchAvailableModels(): List<GeminiModelInfo> = withContext(Dispatchers.IO) {
-    fetchModelCatalog().chatModels
   }
 
   /**
@@ -585,179 +572,32 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     }
   }.flowOn(Dispatchers.IO)
 
-  fun streamGenerateStory(
-    model: String,
-    systemInstruction: String,
-    stateJson: String,
-    currentInGameTime: String = "",
-    milestones: List<String> = emptyList(),
-    daySummaries: List<String> = emptyList(),
-    npcProfiles: List<String> = emptyList(),
-    semanticMemories: List<String> = emptyList(),
-    episodicSummary: String = "",
-    recentHistory: List<Pair<String, String>>,
-    userAction: String,
-    temperature: Float = 0.85f,
-    supportsTemperature: Boolean = true,
-    thinkingLevel: String = "MEDIUM",
-    thinkingBudget: Int = 2048,
-    allowAdultContent: Boolean = true
-  ): Flow<String> = streamGenerateContent(
-    model = model,
-    systemInstruction = systemInstruction,
-    stateJson = stateJson,
-    currentInGameTime = currentInGameTime,
-    milestones = milestones,
-    daySummaries = daySummaries,
-    npcProfiles = npcProfiles,
-    semanticMemories = semanticMemories,
-    episodicSummary = episodicSummary,
-    recentHistory = recentHistory,
-    userAction = userAction,
-    temperature = temperature,
-    supportsTemperature = supportsTemperature,
-    thinkingLevel = thinkingLevel,
-    thinkingBudget = thinkingBudget,
-    allowAdultContent = allowAdultContent
-  )
-
   /**
-   * Fast background call: Extracts updated state after a story turn.
+   * Lässt das Modell den Weltzustand als JSON fortschreiben. [prompt] kommt aus der Domäne
+   * ([com.example.domain.engine.StoryPrompts.stateExtraction]); hier reist er nur.
+   *
+   * Wirft bei jedem Fehlschlag. Früher gab diese Funktion in allen Fehlerfällen den Vorzustand
+   * als gültiges Ergebnis zurück — der Aufrufer speicherte ihn als frischen Checkpoint, und
+   * Ort, Uhrzeit, Inventar und Verletzungen standen still, während die Erzählung weiterlief.
+   * Den Rückfall auf den Vorzustand übernimmt [com.example.domain.engine.StateExtractionEngine];
+   * nur dort ist auch bekannt, dass es einer war, und nur von dort erfährt es der Spieler.
    */
-  suspend fun extractUpdatedState(
+  suspend fun extractStructuredState(
     model: String,
-    thinkingLevel: String = "MEDIUM",
-    thinkingBudget: Int = 2048,
-    currentStateJson: String,
-    existingMilestones: List<String> = emptyList(),
-    knownNpcs: List<String> = emptyList(),
-    userAction: String,
-    storyResponse: String = "",
-    previousMilestones: List<String> = existingMilestones,
-    modelNarrative: String = storyResponse
+    thinkingLevel: String,
+    thinkingBudget: Int,
+    prompt: String
   ): JSONObject = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey()
     if (apiKey.isBlank()) {
-      return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
+      throw IllegalStateException("Kein Gemini API-Schlüssel hinterlegt.")
     }
-
-    val finalNarrative = storyResponse.ifBlank { modelNarrative }
-    val finalMilestones = if (existingMilestones.isNotEmpty()) existingMilestones else previousMilestones
 
     val cleanModel = model.removePrefix("models/").trim()
     val url = "$BASE_URL/$cleanModel:generateContent"
 
-    val milestonesBlock = if (finalMilestones.isNotEmpty()) {
-      "Bisherige bedeutsame Meilensteine:\n" + finalMilestones.joinToString("\n") { "- $it" }
-    } else {
-      "Bisher keine Meilensteine verzeichnet."
-    }
+    val extractionPrompt = prompt
 
-    // Ohne diese Liste erfindet das Modell bei jedem Zug neue Schreibweisen und Beschreibungen
-    // für längst etablierte Figuren.
-    val knownNpcsBlock = if (knownNpcs.isNotEmpty()) {
-      "Diese Figuren sind bereits etabliert. Verwende exakt diese Namen und beschreibe ihr " +
-        "Aussehen NICHT erneut:\n" + knownNpcs.joinToString("\n") { "- $it" }
-    } else {
-      "Bisher sind keine Figuren etabliert."
-    }
-
-    val extractionPrompt = """
-Du bist die State-Tracking-Engine des interaktiven Spiels. Analysiere den bisherigen Zustand, die Spieler-Aktion und die Game-Master-Erzählung dieser Runde.
-Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema erfüllt:
-
-{
-  "story_title": "NUR ausfüllen, solange die Geschichte noch keinen Titel trägt: 3-5 Wörter, atmosphärisch, ohne Untertitel und ohne Anführungszeichen. Sonst leer lassen.",
-  "genre": "NUR ausfüllen, solange kein Genre feststeht: z. B. Dark Fantasy & Horror, Cyberpunk / Dystopie, Sci-Fi Survival. Sonst leer lassen.",
-  "in_game_time": "Format IMMER: Tag X, HH:MM Uhr (z. B. Tag 3, 09:30 Uhr)",
-  "location": "Aktueller Aufenthaltsort des Spielers",
-  "weather": "Aktuelle Wetterlage & Atmosphäre",
-  "player_outfit": "Aktuelle Kleidung/Rüstung (inkl. Adult/NSFW z. B. entblößt, Dessous, zerrissen, voller Schutz)",
-  "player_condition": "Körperlicher/mentaler/erotischer Zustand (z. B. Unverletzt, Erschöpft, Erregt, Angeschlagen)",
-  "player_inventory": ["Item 1", "Item 2"],
-  "npcs": [
-    {
-      "name": "Vollständiger, IMMER gleich geschriebener Name dieser Figur",
-      "gender": "MALE oder FEMALE",
-      "appearance": "NUR beim ersten Auftreten ausfüllen: Haarfarbe, Frisur, Augenfarbe, Statur, Alter, auffällige Merkmale, Narben",
-      "appearance_changed": false,
-      "appearance_change_reason": "Nur setzen, wenn sich das Aussehen in DIESER Runde nachweislich geändert hat (Haarschnitt, Narbe, Entstellung)",
-      "personality": "Wesenszüge, Sprechweise, Ängste, Sehnsüchte",
-      "outfit": "Kleidung dieses NPCs",
-      "condition": "KÖRPERLICHE Verfassung dieser Figur - dieselbe Skala wie player_condition (z. B. Unverletzt, Ausgezehrt, Dehydriert, Unterkühlt, Fiebrig, Erschöpft, Angeschlagen, Erregt). NICHT die Stimmung.",
-      "relationship_to_player": "Aktuelle Beziehung/Haltung zum Spieler",
-      "current_mood": "Seelische Stimmung - getrennt von der körperlichen Verfassung",
-      "status": "Anwesend oder Abwesend",
-      "is_alive": true,
-      "knowledge": "Was diese Figur in DIESER Runde erlebt, erfahren oder empfunden hat - aus ihrer Sicht, in einem Satz. Leer lassen, wenn nichts Relevantes geschah."
-    }
-  ],
-  "injuries": [
-    {
-      "character": "Du oder exakter NPC-Name",
-      "body_part": "HEAD, NECK, CHEST, ABDOMEN, GENITALS, LEFT_ARM, RIGHT_ARM, LEFT_HAND, RIGHT_HAND, LEFT_LEG, RIGHT_LEG oder FEET",
-      "organ": "NUR bei inneren Verletzungen: BRAIN, LEFT_EAR, RIGHT_EAR, NOSE, HEART, LEFT_LUNG, RIGHT_LUNG, STOMACH, LIVER, SPLEEN, LEFT_KIDNEY, RIGHT_KIDNEY, INTESTINES, BLADDER, UTERUS, LEFT_OVARY, RIGHT_OVARY, LEFT_TESTICLE oder RIGHT_TESTICLE. Sonst leer lassen.",
-      "description": "Exakte Wundbeschreibung z. B. Schnittwunde, Brandblase, Prellung",
-      "severity": "LIGHT, MEDIUM, SEVERE oder CRITICAL",
-      "is_treated": false
-    }
-  ],
-  "milestones": [
-    "Dauerhafte, prägende Ereignisse, Zeitsprünge, Schwüre, Enthüllungen, intime Momente oder Verluste"
-  ],
-  "turn_memory": "1-2 nüchterne, faktische Sätze über das, was in DIESER Runde geschah. Nenne die beteiligten Personen beim Namen und den Ort. Keine Ausschmückung, keine Wertung - das ist ein Gedächtniseintrag, kein Erzähltext.",
-  "completed_day_summary": "NUR ausfüllen, wenn in dieser Runde ein neuer Tag begonnen hat: ein Absatz über den gerade abgeschlossenen Tag. Sonst leer lassen.",
-  "previous_events_summary": "1-3 prägnante Sätze über die wichtigsten Ereignisse bisher."
-}
-
-[REGELN ZUR ZEIT- & TAGEBERECHNUNG - EXTREM WICHTIG]:
-1. Lies den bisherigen Zeitstempel genau (z. B. bisher "Tag 1, 20:00 Uhr").
-2. Wenn in der Spieleraktion oder der Erzählung Tage oder Stunden vergehen (z. B. "es vergehen zwei Tage", "3 Tage später", "am nächsten Morgen", "wir schlafen eine Nacht", "zwei Tage Vorbereitung"), addiere diese Tage mathematisch zur bisherigen Tageszahl!
-   - Beispiel: Aus bisher "Tag 1, 20:00 Uhr" wird bei "Es vergehen zwei Tage" zwingend "Tag 3, 08:00 Uhr" (oder 20:00 Uhr je nach Kontext).
-   - Aus "Tag 1" wird nach einer Nacht "Tag 2, 07:30 Uhr".
-3. Wetter & Atmosphäre: Bei Zeitsprüngen über Tage oder bei Ortswechseln MUSS sich das Wetter realistisch weiterentwickeln (z. B. Regen klart auf, Nebel zieht auf, schwüle Hitze, Sturm).
-4. Meilensteine: Wenn ein Zeitsprung ("Zwei Tage im Lager verbracht") oder ein wichtiges Ereignis (Geheimnis gelüftet, Vertrauen gewonnen, Erotik/Intimität, Kampf) stattfand, MUSS ein neuer Meilenstein der Liste hinzugefügt werden. Behalte bestehende Meilensteine bei!
-5. Adult Content & Erotik: Sei unzensiert und akkurat bei Kleidung und Verfassung.
-
-[REGELN ZU FIGUREN - IDENTITÄT DARF NIEMALS DRIFTEN]:
-6. Schreibe den Namen einer Figur IMMER exakt gleich. Aus "Lena" wird nicht in der nächsten Runde "Lena Vogt" oder "die Blonde".
-7. Das Feld "appearance" füllst du NUR, wenn die Figur zum ersten Mal auftritt. Danach lässt du es leer.
-   Erfinde niemals nachträglich eine andere Haar- oder Augenfarbe. Setze "appearance_changed" nur dann auf true, wenn die Erzählung dieser Runde die Änderung ausdrücklich schildert.
-8. Führe JEDE Figur weiter, die bereits bekannt ist - auch abwesende. Setze bei Abwesenden "status": "Abwesend", statt sie wegzulassen.
-9. "knowledge": Halte fest, was die Figur SELBST erlebt hat. Eine Gerettete erinnert sich an ihre Rettung und kann Tage später davon erzählen. Nur füllen, wenn für diese Figur wirklich etwas geschah.
-
-[REGELN ZU VERLETZUNGEN - GILT FÜR ALLE, NICHT NUR DEN SPIELER]:
-10. Erfasse körperliche Schäden für JEDE betroffene Person, also auch für NPCs. Wer im Kampf getroffen wird, bekommt einen Eintrag mit seinem Namen.
-11. Übernimm bestehende Verletzungen unverändert, solange sie nicht versorgt oder verheilt sind. Entferne einen Eintrag erst, wenn die Wunde erzählerisch abgeheilt oder behandelt ist.
-12. Schwere Wunden hinterlassen Narben. Ist eine SEVERE- oder CRITICAL-Wunde verheilt, vermerke die Narbe über "appearance_changed" im Erscheinungsbild der Figur.
-
-[REGELN ZUM KÖRPERLICHEN ZUSTAND - MANGEL TRIFFT ALLE ANWESENDEN]:
-12a. Hunger, Durst, Kälte, Hitze, schlechte Luft, Schlafmangel, Krankheit, Erschöpfung und Vergiftung entstehen aus der UMGEBUNG. Wer sich in derselben Lage befindet, ist ebenfalls betroffen - ausnahmslos. Trage das in "condition" JEDER anwesenden Figur ein, nicht nur in "player_condition".
-12b. Der GRAD darf sich unterscheiden: Konstitution, Alter, Willenskraft, Vorräte, Vorerkrankungen und bisheriges Verhalten führen zu unterschiedlichen Ausprägungen. Eine zähe Figur ist "ausgezehrt, aber gefasst", eine geschwächte "am Rand des Zusammenbruchs". Das vollständige FEHLEN des Mangels ist niemals zulässig.
-12c. Prüfe vor jeder Antwort: Wie lange dauert dieser Zustand schon an? Zwei Monate ohne Nahrung bedeuten für ALLE Beteiligten schwere Auszehrung. Niemand ist nach Wochen ohne Wasser oder Essen "völlig gesund".
-12d. Der Zustand ist kumulativ und darf sich nicht ohne Grund zurücksetzen. Eine Besserung braucht eine Ursache im Text - gefundene Nahrung, Wasser, Wärme, Schlaf oder Behandlung.
-12e. Halte "condition" (Körper) und "current_mood" (Seele) strikt getrennt. "Verängstigt" ist keine körperliche Verfassung, "unterernährt" keine Stimmung.
-
-[REGELN ZUR NEGATIVEN SEITE - GENAUSO WICHTIG WIE DIE POSITIVE]:
-13. Beziehungen dürfen und sollen sich verschlechtern. Halte Misstrauen, Groll, Angst, Eifersucht, Enttäuschung und Schuld genauso konsequent fest wie Zuneigung und Vertrauen.
-14. Gebrochene Versprechen, Lügen, Verrat und Grausamkeit MÜSSEN als Meilenstein und im "knowledge" der betroffenen Figur landen. Eine Figur, die belogen wurde, vergisst das nicht.
-15. Traumatische Erlebnisse wirken nach: Vermerke sie im Zustand und in der Persönlichkeit der Figur, nicht nur im Moment des Geschehens.
-
-[BISHERIGER ZUSTAND]:
-$currentStateJson
-
-[BISHERIGE MEILENSTEINE]:
-$milestonesBlock
-
-[BEKANNTE FIGUREN]:
-$knownNpcsBlock
-
-[SPIELER-AKTION DIESER RUNDE]:
-$userAction
-
-[ANTWORT DES GAME MASTERS DIESER RUNDE]:
-$storyResponse
-""".trimIndent()
 
     val payload = JSONObject()
     val contents = JSONArray()
@@ -799,37 +639,28 @@ $storyResponse
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = buildRequest(url, apiKey, requestBody)
 
-    try {
-      val response = executeWithRetry(request)
-      if (!response.isSuccessful) {
-        val err = response.body?.string() ?: ""
-        Log.e(TAG, "State extraction failed: ${response.code} $err")
-        if (response.code == 404) markUnusable(cleanModel)
-        return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
-      }
-
-      val respStr = response.body?.string() ?: "{}"
-      val rootJson = JSONObject(respStr)
-      val candidates = rootJson.optJSONArray("candidates") ?: return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
-      if (candidates.length() == 0) return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
-
-      val firstCandidate = candidates.getJSONObject(0)
-      val content = firstCandidate.optJSONObject("content") ?: return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
-      val parts = content.optJSONArray("parts") ?: return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
-      if (parts.length() == 0) return@withContext JSONObject(currentStateJson.ifBlank { "{}" })
-
-      val text = parts.getJSONObject(0).optString("text", "{}")
-      val cleanJsonText = text.trim()
-        .removePrefix("```json")
-        .removePrefix("```")
-        .removeSuffix("```")
-        .trim()
-
-      JSONObject(cleanJsonText)
-    } catch (e: Exception) {
-      Log.e(TAG, "Error in extractUpdatedState", e)
-      JSONObject(currentStateJson.ifBlank { "{}" })
+    val response = executeWithRetry(request)
+    if (!response.isSuccessful) {
+      val err = response.body?.string() ?: ""
+      Log.e(TAG, "State extraction failed: ${response.code} $err")
+      if (response.code == 404) markUnusable(cleanModel)
+      throw Exception(parseErrorMessage(response.code, err))
     }
+
+    // Über alle Teile hinweg zusammensetzen, nicht nur parts[0]: Denkende Modelle liefern
+    // die Antwort gern in mehreren Stücken, und das erste allein ist dann kein gültiges JSON.
+    val text = extractTextFromCandidates(JSONObject(response.body?.string() ?: ""))
+    val cleanJsonText = text.trim()
+      .removePrefix("```json")
+      .removePrefix("```")
+      .removeSuffix("```")
+      .trim()
+
+    if (cleanJsonText.isBlank()) {
+      throw IllegalStateException("Gemini lieferte zur Zustands-Extraktion eine leere Antwort.")
+    }
+
+    JSONObject(cleanJsonText)
   }
 
   /**

@@ -40,7 +40,6 @@ data class StoryUiState(
   val globalDefaultPrompt: String = "",
   val effectiveApiKeyPresent: Boolean = false,
   val availableModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_CHAT_MODELS,
-  val availableChatModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_CHAT_MODELS,
   val availableEmbeddingModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_EMBEDDING_MODELS,
   val availableTranscriptionModels: List<GeminiModelInfo> = GeminiClient.DEFAULT_TRANSCRIPTION_MODELS,
   val isFetchingModels: Boolean = false,
@@ -55,7 +54,7 @@ data class StoryUiState(
 
 class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val database = StoryDatabase.getInstance(application)
-  val repository = StoryRepository(database.storyDao(), application)
+  val repository = StoryRepository(database, application)
 
   private val _activeStoryId = MutableStateFlow<Long?>(null)
   private val _isGenerating = MutableStateFlow(false)
@@ -64,7 +63,6 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   private val _errorMessage = MutableStateFlow<String?>(null)
   private val _customApiKey = MutableStateFlow(repository.getCustomApiKey() ?: "")
   private val _globalDefaultPrompt = MutableStateFlow(repository.getGlobalDefaultSystemPrompt())
-  private val _availableModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_CHAT_MODELS)
   private val _availableChatModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_CHAT_MODELS)
   private val _availableEmbeddingModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_EMBEDDING_MODELS)
   private val _availableTranscriptionModels = MutableStateFlow<List<GeminiModelInfo>>(GeminiClient.DEFAULT_TRANSCRIPTION_MODELS)
@@ -135,7 +133,6 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         val catalog = repository.fetchModelCatalog()
         _modelCatalogIsLive.value = catalog.isLive
         if (catalog.chatModels.isNotEmpty()) {
-          _availableModels.value = catalog.chatModels
           _availableChatModels.value = catalog.chatModels
         }
         if (catalog.embeddingModels.isNotEmpty()) {
@@ -206,7 +203,33 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _modelNotice.value = null
   }
 
+  /**
+   * Verweigert einen Eingriff, solange ein Zug läuft, und sagt dem Spieler warum.
+   *
+   * Ein laufender Zug ist über die kopierte storyId fest an seine Geschichte gebunden und
+   * schreibt am Ende Nachricht, Checkpoint und Erinnerungen. Wird währenddessen zurückgespult,
+   * verzweigt, gelöscht oder gewechselt, landet dieses Ergebnis in einer Zeitlinie, die es nicht
+   * mehr gibt: ein Checkpoint aus gelöschter Vergangenheit, Waisen-Datensätze ohne Geschichte
+   * oder — beim Wechseln — der Text der alten Geschichte im Fenster der neuen.
+   *
+   * @return true, wenn abgewiesen wurde.
+   */
+  private fun blockedByRunningTurn(what: String): Boolean {
+    if (!_isGenerating.value) return false
+    _errorMessage.value = "$what geht erst, wenn der laufende Zug zu Ende erzählt ist."
+    return true
+  }
+
   fun switchStory(storyId: Long) {
+    // Dieselbe Geschichte erneut zu öffnen ist kein Wechsel — aber es ist die Gelegenheit, eine
+    // beim Anlegen gescheiterte Eröffnung nachzuholen. Ein früher Ausstieg hier hätte die
+    // Geschichte für immer leer gelassen.
+    if (storyId == _activeStoryId.value) {
+      openStoryIfUnopened(storyId)
+      return
+    }
+    if (blockedByRunningTurn("Die Geschichte zu wechseln")) return
+
     _activeStoryId.value = storyId
     messagesJob?.cancel()
     checkpointJob?.cancel()
@@ -261,10 +284,11 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   /**
    * Führt einen Zug aus und hält Streaming-Puffer, Fortschritt und Fehlermeldung nach.
    *
-   * Gemeinsam genutzt von der Spieler-Aktion und dem Eröffnungszug einer neuen Geschichte —
-   * beide unterscheiden sich nur darin, welcher Flow sie liefert.
+   * Gemeinsam genutzt von der Spieler-Aktion, dem Eröffnungszug einer neuen Geschichte und dem
+   * Neuerzählen nach einer bearbeiteten Nachricht — alle drei unterscheiden sich nur darin,
+   * welchen Flow sie liefern. [start] ist suspend, weil das Neuerzählen erst die Historie kürzt.
    */
-  private fun runTurn(start: (onChunk: (String) -> Unit) -> Flow<TurnProgress>) {
+  private fun runTurn(start: suspend (onChunk: (String) -> Unit) -> Flow<TurnProgress>) {
     if (_isGenerating.value) return
 
     _isGenerating.value = true
@@ -315,68 +339,25 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
 
   fun rewindTo(message: MessageEntity) {
     val storyId = _activeStoryId.value ?: return
+    if (blockedByRunningTurn("Zurückzuspulen")) return
     viewModelScope.launch {
       repository.rewindToMessage(storyId, message)
     }
   }
 
+  /**
+   * Bearbeitet eine Spieler-Nachricht und erzählt den Zug neu.
+   *
+   * Geht durch denselben [runTurn] wie die Spieler-Aktion — beide unterscheiden sich nur darin,
+   * welchen Flow das Repository liefert. Vorher stand der komplette Zug-Lebenszyklus hier ein
+   * zweites Mal, inklusive des Hinweises auf den eingefrorenen Spielstand Wort für Wort.
+   */
   fun editMessageAndRewind(messageId: Long, newContent: String) {
     val clean = newContent.trim()
     if (clean.isBlank()) return
     val storyId = _activeStoryId.value ?: return
 
-    if (_isGenerating.value) return
-
-    _isGenerating.value = true
-    _streamChunk.value = ""
-    _turnStatus.value = TurnProgress.Thinking
-    _errorMessage.value = null
-
-    activeTurnJob?.cancel()
-    activeTurnJob = viewModelScope.launch {
-      try {
-        repository.editUserMessageAndRegenerate(
-          storyId = storyId,
-          messageId = messageId,
-          newContent = clean,
-          onChunk = { chunk ->
-            _streamChunk.value += chunk
-          }
-        ).catch { e ->
-          Log.e("StoryViewModel", "Edit message failed in flow", e)
-          _errorMessage.value = e.message ?: "Fehler beim Bearbeiten der Nachricht"
-          _isGenerating.value = false
-          _streamChunk.value = ""
-          _turnStatus.value = null
-        }.collect { progress ->
-          _turnStatus.value = progress
-          when (progress) {
-            is TurnProgress.Failed -> {
-              _errorMessage.value = progress.error
-              _isGenerating.value = false
-              _streamChunk.value = ""
-            }
-            TurnProgress.StateFrozen -> {
-              _modelNotice.value = "Der Spielstand konnte diesen Zug nicht mitschreiben — " +
-                "Google war nicht erreichbar. Ort, Uhrzeit, Inventar und Erinnerungen stehen " +
-                "noch auf dem Stand davor."
-            }
-            TurnProgress.Completed -> {
-              _isGenerating.value = false
-              _streamChunk.value = ""
-              _turnStatus.value = null
-            }
-            else -> {}
-          }
-        }
-      } catch (e: Throwable) {
-        Log.e("StoryViewModel", "Edit message coroutine failed", e)
-        _errorMessage.value = e.message ?: "Fehler beim Bearbeiten der Nachricht"
-        _isGenerating.value = false
-        _streamChunk.value = ""
-        _turnStatus.value = null
-      }
-    }
+    runTurn { onChunk -> repository.editUserMessageAndRegenerate(storyId, messageId, clean, onChunk) }
   }
 
   fun transcribeVoiceInput(audioBytes: ByteArray, onTranscribed: (String) -> Unit) {
@@ -400,23 +381,8 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun branchStoryFromTurn(targetMessageId: Long, branchTitle: String) {
-    val currentStoryId = _activeStoryId.value ?: return
-    viewModelScope.launch {
-      val newId = repository.branchStory(
-        sourceStoryId = currentStoryId,
-        branchTitle = branchTitle,
-        upToMessageId = targetMessageId
-      )
-      switchStory(newId)
-    }
-  }
-
-  fun deleteCurrentStory() {
-    deleteStoryById(_activeStoryId.value ?: return)
-  }
-
   fun deleteStoryById(id: Long) {
+    if (blockedByRunningTurn("Eine Geschichte zu löschen")) return
     viewModelScope.launch {
       repository.deleteStoryById(id)
       if (_activeStoryId.value != id) return@launch
@@ -433,6 +399,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun branchStory(sourceStoryId: Long, branchTitle: String) {
+    if (blockedByRunningTurn("Einen Handlungszweig anzulegen")) return
     viewModelScope.launch {
       val newId = repository.branchStory(
         sourceStoryId = sourceStoryId,
@@ -447,17 +414,16 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     deleteStoryById(id)
   }
 
-  /** Alles, was noch zur einzelnen Geschichte gehört: ihr Titel und ihr Prompt. */
+  /**
+   * Alles, was noch zur einzelnen Geschichte gehört: ihr Titel und ihr Prompt.
+   *
+   * Gezielt geschrieben statt als ganze Zeile — sonst würde die mitlaufende Spielzeit auf den
+   * Stand zurückgedreht, den die Liste zufällig gerade zwischengespeichert hat.
+   */
   fun updateStorySettings(title: String, systemPrompt: String) {
-    val current = stories.value.firstOrNull { it.id == _activeStoryId.value } ?: return
+    val storyId = _activeStoryId.value ?: return
     viewModelScope.launch {
-      repository.updateStory(
-        current.copy(
-          title = title.trim(),
-          systemPrompt = systemPrompt.trim(),
-          updatedAt = System.currentTimeMillis()
-        )
-      )
+      repository.updateStoryTitleAndPrompt(storyId, title, systemPrompt)
     }
   }
 
@@ -477,6 +443,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     summary: String
   ) {
     val storyId = _activeStoryId.value ?: return
+    if (blockedByRunningTurn("Den Zustand von Hand zu ändern")) return
     viewModelScope.launch {
       repository.updateCurrentState(
         storyId = storyId,
@@ -498,6 +465,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
    */
   fun updateCharacterInjuries(characterName: String, updatedInjuries: List<com.example.data.model.CharacterInjury>) {
     val currentCp = _latestCheckpoint.value ?: return
+    if (blockedByRunningTurn("Verletzungen zu ändern")) return
     viewModelScope.launch {
       val rawObj = try {
         if (currentCp.rawStateJson.isNotBlank()) org.json.JSONObject(currentCp.rawStateJson) else org.json.JSONObject()
@@ -588,6 +556,9 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   fun openStoryIfUnopened(storyId: Long) {
     viewModelScope.launch {
       if (!repository.isUnopened(storyId)) return@launch
+      // Nicht still abbrechen: Eine leere Geschichte ohne Spinner und ohne Meldung sieht für
+      // den Spieler aus wie ein Defekt.
+      if (blockedByRunningTurn("Die Geschichte zu eröffnen")) return@launch
       runTurn { onChunk -> repository.openStory(storyId, onChunk) }
     }
   }
@@ -666,7 +637,6 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
       globalDefaultPrompt = globalPrompt,
       effectiveApiKeyPresent = repository.getEffectiveApiKey().isNotBlank(),
       availableModels = chatModels,
-      availableChatModels = chatModels,
       availableEmbeddingModels = embModels,
       availableTranscriptionModels = transModels,
       isFetchingModels = fetchingModels,

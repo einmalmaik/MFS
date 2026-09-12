@@ -32,14 +32,8 @@ class StoryTurnEngine(
     private const val SLIDING_WINDOW_SIZE = 8
     private const val REGENERATE_WINDOW_SIZE = 6
 
-    /**
-     * Der Auftrag für den ersten Zug. Er steht hier und nicht in der Standard-Regie, weil er
-     * genau einmal gilt — in jedem weiteren Zug wäre er eine Aufforderung, neu anzufangen.
-     */
-    private const val OPENING_INSTRUCTION =
-      "Eröffne die Geschichte. Etabliere Ort, Zeit, Atmosphäre, die Ausgangslage des Spielers " +
-        "und die Figuren, die jetzt wirklich anwesend sind — alles aus dem Prompt dieser " +
-        "Geschichte hergeleitet. Setze mitten in der Szene ein, nicht mit einer Vorrede."
+    /** Der Auftrag für den ersten Zug — er steht bei den übrigen Prompts. */
+    private val OPENING_INSTRUCTION = StoryPrompts.OPENING_INSTRUCTION
 
     /**
      * Setzt die Systemanweisung aus beiden Ebenen zusammen.
@@ -270,7 +264,7 @@ class StoryTurnEngine(
 
     val buffer = StringBuilder()
     try {
-      geminiClient.streamGenerateStory(
+      geminiClient.streamGenerateContent(
         model = settings.chatModel,
         systemInstruction = effectivePrompt,
         stateJson = stateJson,

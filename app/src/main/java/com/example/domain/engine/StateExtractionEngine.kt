@@ -220,15 +220,17 @@ class StateExtractionEngine(
 
       val settings = preferences.getAiSettings()
 
-      val updatedStateJsonObj = geminiClient.extractUpdatedState(
+      val updatedStateJsonObj = geminiClient.extractStructuredState(
         model = settings.chatModel,
         thinkingLevel = settings.thinkingLevel,
         thinkingBudget = settings.thinkingBudget,
-        currentStateJson = currentStateJson,
-        userAction = userAction,
-        storyResponse = modelResponse,
-        existingMilestones = milestones,
-        knownNpcs = knownNpcs
+        prompt = StoryPrompts.stateExtraction(
+          currentStateJson = currentStateJson,
+          existingMilestones = milestones,
+          knownNpcs = knownNpcs,
+          userAction = userAction,
+          storyResponse = modelResponse
+        )
       )
 
       // Time calculation with deterministic time-skip protection
@@ -396,14 +398,21 @@ class StateExtractionEngine(
    * Beim Anlegen wird nichts abgefragt außer dem Prompt — Titel und Genre bleiben leer und
    * werden hier aus dem ersten Zug nachgetragen. Ein bereits vorhandener Wert wird niemals
    * überschrieben: Hat der Spieler selbst einen Titel gesetzt, gehört er ihm.
+   *
+   * Geschrieben wird gezielt, nicht die ganze Zeile: [story] ist der Schnappschuss vom
+   * Zugbeginn. Wer währenddessen den Prompt-Bogen speichert, verlor seine Eingabe wieder,
+   * sobald der Zug diesen Schnappschuss zurückschrieb — zusammen mit Spielzeit und Archiv-Status.
    */
   private suspend fun nameStoryIfUnnamed(story: StoryEntity, updatedState: JSONObject) {
     val newTitle = fillIfBlank(story.title, updatedState.optString("story_title"))
     val newGenre = fillIfBlank(story.genre, updatedState.optString("genre"))
     if (newTitle == story.title && newGenre == story.genre) return
 
-    storyDao.updateStory(
-      story.copy(title = newTitle, genre = newGenre, updatedAt = System.currentTimeMillis())
+    storyDao.updateStoryTitleAndGenre(
+      id = story.id,
+      title = newTitle,
+      genre = newGenre,
+      updatedAt = System.currentTimeMillis()
     )
   }
 

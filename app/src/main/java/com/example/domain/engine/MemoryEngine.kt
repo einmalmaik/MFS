@@ -193,13 +193,20 @@ class MemoryEngine(
         )
       )
     }
+
+    // Die Alt-Spalte hat ihren Zweck erfüllt und wird nie wieder gelesen. Bleibt sie gefüllt,
+    // zieht die Oberfläche bei jeder neuen Nachricht Dutzende Megabyte toter Vektoren mit.
+    storyDao.clearLegacyEmbeddings(storyId)
   }
 
   private suspend fun loadCache(storyId: Long) {
-    cachedMemories = storyDao.getMemories(storyId)
     vectorCache.clear()
-    for (memory in cachedMemories) {
+    // Der Vektor wird in den vectorCache umgezogen und in der Entity verworfen. Bliebe er
+    // stehen, läge jede Zahl doppelt im Speicher — als BLOB und als FloatArray. Bei 2000
+    // Erinnerungen sind das 6 MB zuviel, die bei jedem Geschichtenwechsel neu entstehen.
+    cachedMemories = storyDao.getMemories(storyId).map { memory ->
       memory.embedding?.let { vectorCache[memory.id] = bytesToFloats(it) }
+      memory.copy(embedding = null)
     }
     cachedStoryId = storyId
   }
@@ -248,7 +255,8 @@ class MemoryEngine(
     val id = storyDao.insertMemory(entity)
 
     if (cachedStoryId == storyId) {
-      cachedMemories = cachedMemories + entity.copy(id = id)
+      // Wie in loadCache: der Vektor gehört in den vectorCache, nicht zusätzlich in die Entity.
+      cachedMemories = cachedMemories + entity.copy(id = id, embedding = null)
       vector?.takeIf { it.isNotEmpty() }?.let { vectorCache[id] = it }
     }
     return id

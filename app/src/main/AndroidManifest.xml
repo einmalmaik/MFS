@@ -5,10 +5,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!--
+      Kein Cloud-Backup. Androids Voreinstellung hätte `shared_prefs/storyforge_prefs.xml`
+      mit dem Gemini-Schlüssel im Klartext und die komplette Room-Datenbank mit allen
+      Geschichten, Figuren und Notizen an Google übertragen und auf jedem weiteren Gerät des
+      Kontos wiederhergestellt — auf Android 7 bis 11 zusätzlich ohne clientseitige
+      Verschlüsselung und per `adb backup` ohne Root abgreifbar. Das widerspricht der
+      Datenhoheits-Zusage (CLAUDE.md §4, §6) und kostet den Preis, dass Spielstände beim
+      Gerätewechsel nicht automatisch mitwandern.
+    -->
     <application
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

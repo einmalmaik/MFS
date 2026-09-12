@@ -1,12 +1,12 @@
 package com.example.data.repository
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.example.data.api.GeminiClient
-import com.example.data.db.StoryDao
+import com.example.data.db.StoryDatabase
 import com.example.data.model.AiSettings
 import com.example.data.model.CheckpointEntity
 import com.example.data.model.GeminiDefaults
-import com.example.data.model.GeminiModelInfo
 import com.example.data.model.MessageEntity
 import com.example.data.model.StoryEntity
 import com.example.domain.engine.MemoryEngine
@@ -31,9 +31,11 @@ typealias TurnProgress = com.example.domain.model.TurnProgress
  * state extraction, and branching logic.
  */
 class StoryRepository(
-  private val storyDao: StoryDao,
+  private val database: StoryDatabase,
   context: Context
 ) {
+  private val storyDao = database.storyDao()
+
   val preferences = StoryPreferences(context)
 
   val geminiClient = GeminiClient(
@@ -67,7 +69,8 @@ class StoryRepository(
   )
 
   private val branchingService = StoryBranchingService(
-    storyDao = storyDao
+    storyDao = storyDao,
+    database = database
   )
 
   // --- PREFERENCES & CREDENTIALS ---
@@ -95,8 +98,6 @@ class StoryRepository(
   suspend fun testApiKey(model: String = preferences.getAiSettings().chatModel): Pair<Boolean, String> =
     geminiClient.testConnection(getEffectiveApiKey(), model)
 
-  suspend fun fetchAvailableModels(): List<GeminiModelInfo> = geminiClient.fetchAvailableModels()
-
   suspend fun fetchModelCatalog(): com.example.data.model.GeminiModelCatalog = geminiClient.fetchModelCatalog()
 
   suspend fun transcribeAudio(
@@ -122,19 +123,35 @@ class StoryRepository(
 
   suspend fun updateStory(story: StoryEntity) = storyDao.updateStory(story)
 
+  /** Was der Prompt-Bogen ändern darf — gezielt, damit kein laufender Zug es zurückdreht. */
+  suspend fun updateStoryTitleAndPrompt(storyId: Long, title: String, systemPrompt: String) =
+    storyDao.updateStoryTitleAndPrompt(
+      id = storyId,
+      title = title.trim(),
+      systemPrompt = systemPrompt.trim(),
+      updatedAt = System.currentTimeMillis()
+    )
+
   suspend fun toggleStoryArchived(storyId: Long, isArchived: Boolean) = withContext(Dispatchers.IO) {
     val story = storyDao.getStoryById(storyId) ?: return@withContext
     storyDao.updateStory(story.copy(isArchived = isArchived, updatedAt = System.currentTimeMillis()))
   }
 
-  suspend fun deleteStory(story: StoryEntity) = deleteStoryById(story.id)
-
+  /**
+   * Löscht eine Geschichte samt allem, was an ihr hängt — in einem Stück.
+   *
+   * Es gibt keine ForeignKeys in diesem Schema: Bricht eine der fünf Löschungen ab, bleiben
+   * Nachrichten, Checkpoints oder Erinnerungen als Waisen einer Geschichte liegen, die der
+   * Nutzer für gelöscht hält. Die Transaktion macht daraus ein Alles-oder-nichts.
+   */
   suspend fun deleteStoryById(storyId: Long) = withContext(Dispatchers.IO) {
-    storyDao.deleteAllMessagesForStory(storyId)
-    storyDao.deleteAllCheckpointsForStory(storyId)
-    storyDao.deleteAllMemoriesForStory(storyId)
-    storyDao.deleteAllNpcsForStory(storyId)
-    storyDao.deleteStoryById(storyId)
+    database.withTransaction {
+      storyDao.deleteAllMessagesForStory(storyId)
+      storyDao.deleteAllCheckpointsForStory(storyId)
+      storyDao.deleteAllMemoriesForStory(storyId)
+      storyDao.deleteAllNpcsForStory(storyId)
+      storyDao.deleteStoryById(storyId)
+    }
     memoryEngine.invalidate()
   }
 

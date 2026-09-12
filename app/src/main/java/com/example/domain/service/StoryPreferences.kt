@@ -2,9 +2,8 @@ package com.example.domain.service
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.BuildConfig
-import com.example.data.api.GeminiClient
 import com.example.data.model.AiSettings
+import com.example.domain.engine.StoryPrompts
 
 /**
  * Manages persisted user preferences and secure credentials.
@@ -38,8 +37,8 @@ class StoryPreferences(context: Context) {
   }
 
   fun getGlobalDefaultSystemPrompt(): String {
-    return prefs.getString(PREF_GLOBAL_DEFAULT_PROMPT, GeminiClient.DEFAULT_SYSTEM_PROMPT)
-      ?: GeminiClient.DEFAULT_SYSTEM_PROMPT
+    return prefs.getString(PREF_GLOBAL_DEFAULT_PROMPT, StoryPrompts.DEFAULT_SYSTEM_PROMPT)
+      ?: StoryPrompts.DEFAULT_SYSTEM_PROMPT
   }
 
   fun setGlobalDefaultSystemPrompt(prompt: String) {
@@ -66,8 +65,22 @@ class StoryPreferences(context: Context) {
     )
   }
 
+  /**
+   * Speichert die globalen KI-Einstellungen und erklärt die Übernahme aus Altbeständen für
+   * erledigt.
+   *
+   * Das Setzen des Seed-Riegels gehört hierher, nicht nur in [seedAiSettingsOnce]: Auf einer
+   * frischen Installation gibt es beim ersten Start keine Geschichte, aus der übernommen werden
+   * könnte — der Riegel blieb also offen. Legte der Nutzer danach eine Geschichte an und stellte
+   * ein anderes Einbettungsmodell ein, lief die Übernahme beim nächsten App-Start zum ersten Mal
+   * und überschrieb genau diese Wahl mit den Altbestand-Vorgaben der Story-Zeile. Das Modell
+   * sprang zurück, und weil [MemoryEngine.cosineSimilarity] bei abweichender Dimension bewusst 0
+   * liefert, war das gesamte bis dahin aufgebaute Gedächtnis unauffindbar — ohne dass irgendetwas
+   * sichtbar kaputt war.
+   */
   fun setAiSettings(settings: AiSettings) {
     prefs.edit()
+      .putBoolean(PREF_AI_SETTINGS_SEEDED, true)
       .putString(PREF_CHAT_MODEL, settings.chatModel)
       .putString(PREF_EMBEDDING_MODEL, settings.embeddingModel)
       .putString(PREF_TRANSCRIPTION_MODEL, settings.transcriptionModel)
@@ -91,20 +104,15 @@ class StoryPreferences(context: Context) {
   fun seedAiSettingsOnce(from: AiSettings): Boolean {
     if (prefs.getBoolean(PREF_AI_SETTINGS_SEEDED, false)) return false
     setAiSettings(from)
-    prefs.edit().putBoolean(PREF_AI_SETTINGS_SEEDED, true).apply()
     return true
   }
 
   /**
-   * Returns the user's custom key if provided, otherwise falls back to BuildConfig.
+   * Der Schlüssel des Nutzers — und ausschließlich der.
+   *
+   * Ein Rückfall auf `BuildConfig.GEMINI_API_KEY` stand hier früher. Er hätte einen in die
+   * `.env` eingetragenen Schlüssel als lesbare Zeichenkette ins APK gebracht und stillschweigend
+   * benutzt, obwohl in den Einstellungen nichts steht.
    */
-  fun getEffectiveApiKey(): String {
-    val custom = getCustomApiKey()
-    if (!custom.isNullOrBlank()) return custom.trim()
-    val buildKey = BuildConfig.GEMINI_API_KEY
-    if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY") {
-      return buildKey
-    }
-    return ""
-  }
+  fun getEffectiveApiKey(): String = getCustomApiKey()?.trim().orEmpty()
 }

@@ -66,6 +66,10 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  // Kein BuildConfig-Feld für den Gemini-Schlüssel. Trüge jemand für einen lokalen Build einen
+  // echten Schlüssel in die .env ein, stünde er als `public static final String` im APK — mit
+  // `strings classes.dex` lesbar, auch ohne Minify. Der Schlüssel gehört in die Einstellungen.
+  ignoreList.add("GEMINI_API_KEY")
 }
 
 dependencies {
@@ -91,7 +95,7 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   // implementation(libs.coil.compose)
-  implementation(libs.converter.moshi)
+  // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)
@@ -106,11 +110,17 @@ dependencies {
   // implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
+  // logging-interceptor bewusst draußen: Bei Level.BODY schreibt genau dieses Werkzeug den
+  // x-goog-api-key-Header ins Logcat (CLAUDE.md §6). Keine Quelldatei benutzt es; verfügbar
+  // wäre es beim nächsten unerklärlichen 400er ein Zweizeiler.
+  // implementation(libs.logging.interceptor)
+  // Retrofit und Moshi sind ungenutzt: GeminiClient baut seine Requests von Hand mit OkHttp und
+  // parst mit org.json. Der KSP-Prozessor lief bisher bei jedem Build ohne eine einzige
+  // @JsonClass. Bleiben als Katalogeinträge in gradle/libs.versions.toml bestehen.
+  // implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
-  implementation(libs.retrofit)
+  // implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
@@ -128,5 +138,5 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
+  // "ksp"(libs.moshi.kotlin.codegen)
 }
