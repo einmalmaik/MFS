@@ -20,12 +20,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -94,6 +96,8 @@ fun SettingsSheet(
   installedVersion: String,
   onSetUpdateCheck: (Boolean) -> Unit,
   onCheckForUpdate: () -> Unit,
+  onExportCurrentStory: (() -> Unit)? = null,
+  onImportStory: (() -> Unit)? = null,
   onOpenPrivacy: () -> Unit,
   onClose: () -> Unit,
   modifier: Modifier = Modifier
@@ -766,6 +770,69 @@ fun SettingsSheet(
           fullWidth = true,
           testTag = "check_update_button"
         )
+      }
+    }
+
+    if (onExportCurrentStory != null || onImportStory != null) {
+      Spacer(modifier = Modifier.height(24.dp))
+
+      Text(
+        text = "GESCHICHTEN-SICHERUNG",
+        style = MaterialTheme.typography.labelSmall,
+        fontFamily = DnaTypography.InterFamily,
+        color = DnaColors.Primary,
+        fontWeight = FontWeight.Bold
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+
+      Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = DnaColors.SurfaceContainer,
+        border = BorderStroke(1.dp, DnaColors.Border),
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+          Text(
+            text = "Backup & Wiederherstellung",
+            style = MaterialTheme.typography.labelLarge,
+            fontFamily = DnaTypography.ManropeFamily,
+            fontWeight = FontWeight.Bold,
+            color = DnaColors.OnSurface
+          )
+          Spacer(modifier = Modifier.height(4.dp))
+          Text(
+            text = "Sichere deine Geschichten inklusive Chatverlauf, Checkpoints, Charakteren und Notizen als Datei oder stelle frühere Spielstände wieder her.",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = DnaTypography.InterFamily,
+            color = DnaColors.OnSurfaceVariant
+          )
+          Spacer(modifier = Modifier.height(12.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            if (onExportCurrentStory != null) {
+              DnaButton(
+                text = "Story sichern",
+                onClick = onExportCurrentStory,
+                icon = Icons.Default.Share,
+                variant = DnaButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f),
+                testTag = "export_current_story_button"
+              )
+            }
+            if (onImportStory != null) {
+              DnaButton(
+                text = "Importieren",
+                onClick = onImportStory,
+                icon = Icons.Default.FileUpload,
+                variant = DnaButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f),
+                testTag = "import_story_settings_button"
+              )
+            }
+          }
+        }
       }
     }
 

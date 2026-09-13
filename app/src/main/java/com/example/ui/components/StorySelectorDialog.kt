@@ -23,7 +23,9 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
 import com.example.ui.dna.DnaStat
@@ -66,6 +68,8 @@ fun StorySelectorDialog(
   onDeleteStory: (Long) -> Unit,
   onBranchStory: (sourceStoryId: Long, branchTitle: String) -> Unit,
   onCreateNewStory: (systemPrompt: String) -> Unit,
+  onExportStory: (Long, String) -> Unit = { _, _ -> },
+  onImportStory: () -> Unit = {},
   initialCreateMode: Boolean = false,
   onDismiss: () -> Unit
 ) {
@@ -288,6 +292,12 @@ fun StorySelectorDialog(
 
                 Row {
                   IconButton(
+                    onClick = { onExportStory(story.id, story.displayTitle) }
+                  ) {
+                    Icon(imageVector = Icons.Default.Share, contentDescription = "Geschichte exportieren", tint = DnaColors.Primary)
+                  }
+
+                  IconButton(
                     onClick = {
                       branchTitleInput = "${story.displayTitle} (Zweig)"
                       storyToBranch = story
@@ -317,6 +327,17 @@ fun StorySelectorDialog(
             variant = DnaButtonVariant.PRIMARY,
             fullWidth = true,
             testTag = "create_new_story_button"
+          )
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          DnaButton(
+            text = "Geschichte importieren",
+            onClick = onImportStory,
+            icon = Icons.Default.FileUpload,
+            variant = DnaButtonVariant.SECONDARY,
+            fullWidth = true,
+            testTag = "import_story_button"
           )
         } else {
           // --- NEUE GESCHICHTE: nur der Prompt ---

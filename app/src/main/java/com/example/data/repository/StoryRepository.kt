@@ -73,6 +73,10 @@ class StoryRepository(
     database = database
   )
 
+  private val backupService = com.example.domain.service.StoryBackupService(
+    storyDao = storyDao
+  )
+
   // --- PREFERENCES & CREDENTIALS ---
 
   fun getCustomApiKey(): String? = preferences.getCustomApiKey()
@@ -345,4 +349,10 @@ class StoryRepository(
   suspend fun updatePlayTime(storyId: Long, incrementSeconds: Long) = withContext(Dispatchers.IO) {
     storyDao.addPlayTime(storyId, incrementSeconds)
   }
+
+  suspend fun exportStoryToJson(storyId: Long): String =
+    backupService.exportStoryToJson(storyId)
+
+  suspend fun importStoryFromJson(jsonString: String): Long =
+    backupService.importStoryFromJson(jsonString)
 }

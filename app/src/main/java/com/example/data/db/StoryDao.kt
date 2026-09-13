@@ -112,6 +112,9 @@ interface StoryDao {
   @Query("SELECT * FROM checkpoints WHERE storyId = :storyId ORDER BY turnNumber DESC, id DESC")
   fun getAllCheckpoints(storyId: Long): Flow<List<CheckpointEntity>>
 
+  @Query("SELECT * FROM checkpoints WHERE storyId = :storyId ORDER BY turnNumber ASC, id ASC")
+  suspend fun getCheckpointsSnapshot(storyId: Long): List<CheckpointEntity>
+
   @Query("SELECT * FROM checkpoints WHERE id = :checkpointId LIMIT 1")
   suspend fun getCheckpointById(checkpointId: Long): CheckpointEntity?
 

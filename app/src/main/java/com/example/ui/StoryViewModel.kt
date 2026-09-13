@@ -593,6 +593,36 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     _errorMessage.value = null
   }
 
+  // --- GESCHICHTEN-BACKUP & EXPORT/IMPORT ---
+
+  fun exportStory(storyId: Long, onResult: (String?) -> Unit) {
+    viewModelScope.launch {
+      try {
+        val json = repository.exportStoryToJson(storyId)
+        onResult(json)
+      } catch (e: Exception) {
+        Log.e("StoryViewModel", "Export failed: ${e.message}", e)
+        _errorMessage.value = "Export fehlgeschlagen: ${e.message}"
+        onResult(null)
+      }
+    }
+  }
+
+  fun importStory(jsonString: String, onResult: (Boolean, String?) -> Unit) {
+    viewModelScope.launch {
+      try {
+        val newStoryId = repository.importStoryFromJson(jsonString)
+        switchStory(newStoryId)
+        onResult(true, null)
+      } catch (e: Exception) {
+        Log.e("StoryViewModel", "Import failed: ${e.message}", e)
+        val msg = "Import fehlgeschlagen: ${e.message}"
+        _errorMessage.value = msg
+        onResult(false, msg)
+      }
+    }
+  }
+
   // --- AKTUALISIERUNG ---
   //
   // Nicht im init-Block: Der ist für Datenbank und Modellkatalog da, und die Prüfung darf den

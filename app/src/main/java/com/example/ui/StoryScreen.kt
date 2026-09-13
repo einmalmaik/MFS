@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -106,6 +109,62 @@ fun StoryScreen(
   var showStorySelector by remember { mutableStateOf(false) }
   var storySelectorCreateMode by remember { mutableStateOf(false) }
   var showManualEditDialog by remember { mutableStateOf(false) }
+
+  // --- Story Backup & Export/Import ---
+  var pendingExportJson by remember { mutableStateOf<String?>(null) }
+  var pendingExportFileName by remember { mutableStateOf("story_backup.json") }
+
+  val exportLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.CreateDocument("application/json")
+  ) { uri ->
+    if (uri != null && pendingExportJson != null) {
+      scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+          context.contentResolver.openOutputStream(uri)?.use { stream ->
+            stream.write(pendingExportJson!!.toByteArray(Charsets.UTF_8))
+          }
+          pendingExportJson = null
+        } catch (e: Exception) {
+          android.util.Log.e("StoryScreen", "Export write error", e)
+        }
+      }
+    }
+  }
+
+  val importLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenDocument()
+  ) { uri ->
+    if (uri != null) {
+      scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+          val json = context.contentResolver.openInputStream(uri)?.use { stream ->
+            stream.bufferedReader(Charsets.UTF_8).readText()
+          }
+          if (!json.isNullOrBlank()) {
+            viewModel.importStory(json) { success, _ ->
+              if (success) {
+                showStorySelector = false
+                showSettingsSheet = false
+              }
+            }
+          }
+        } catch (e: Exception) {
+          android.util.Log.e("StoryScreen", "Import read error", e)
+        }
+      }
+    }
+  }
+
+  val triggerExport: (Long, String) -> Unit = { storyId, storyTitle ->
+    val safeTitle = storyTitle.replace(Regex("[^a-zA-Z0-9_-]"), "_").take(30)
+    pendingExportFileName = "${safeTitle}_backup.json"
+    viewModel.exportStory(storyId) { json ->
+      if (json != null) {
+        pendingExportJson = json
+        exportLauncher.launch(pendingExportFileName)
+      }
+    }
+  }
 
   // Inline Message Editing (Design DNA & MSM pattern)
   var editingMessage by remember { mutableStateOf<MessageEntity?>(null) }
@@ -515,6 +574,10 @@ fun StoryScreen(
           updateBannerDismissed = false
           viewModel.pruefeAufUpdate(manuell = true)
         },
+        onExportCurrentStory = story?.let { s -> { triggerExport(s.id, s.displayTitle) } },
+        onImportStory = {
+          importLauncher.launch(arrayOf("application/json", "*/*"))
+        },
         onOpenPrivacy = { showPrivacySheet = true },
         onClose = {
           scope.launch {
@@ -636,6 +699,10 @@ fun StoryScreen(
       onCreateNewStory = { prompt ->
         viewModel.createNewStory(prompt)
         showStorySelector = false
+      },
+      onExportStory = { id, title -> triggerExport(id, title) },
+      onImportStory = {
+        importLauncher.launch(arrayOf("application/json", "*/*"))
       },
       initialCreateMode = storySelectorCreateMode,
       onDismiss = {
