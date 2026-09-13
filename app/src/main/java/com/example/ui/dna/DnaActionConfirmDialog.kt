@@ -2,6 +2,7 @@ package com.example.ui.dna
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,7 +82,7 @@ fun DnaActionConfirmDialog(
   Dialog(onDismissRequest = onDismiss) {
     Surface(
       shape = RoundedCornerShape(16.dp),
-      color = DnaColors.SurfaceContainerHigh,
+      color = DnaColors.SurfaceContainer,
       border = BorderStroke(1.dp, DnaColors.Border),
       modifier = Modifier
         .fillMaxWidth()
@@ -91,45 +93,60 @@ fun DnaActionConfirmDialog(
         modifier = Modifier.padding(20.dp)
       ) {
         Row(
-          verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.padding(bottom = 12.dp)
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.Top
         ) {
           Surface(
             shape = RoundedCornerShape(10.dp),
-            color = accentColor.copy(alpha = 0.15f),
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
-            modifier = Modifier.size(40.dp)
+            color = accentColor.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)),
+            modifier = Modifier.size(42.dp)
           ) {
-            Icon(
-              imageVector = dialogIcon,
-              contentDescription = null,
-              tint = accentColor,
-              modifier = Modifier
-                .padding(10.dp)
-                .size(20.dp)
-            )
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                imageVector = dialogIcon,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(22.dp)
+              )
+            }
           }
 
-          Spacer(modifier = Modifier.width(12.dp))
+          Spacer(modifier = Modifier.width(14.dp))
 
-          Text(
-            text = title,
-            fontFamily = DnaTypography.ManropeFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            color = DnaColors.OnSurface
-          )
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = title,
+              fontFamily = DnaTypography.ManropeFamily,
+              fontWeight = FontWeight.SemiBold,
+              fontSize = 18.sp,
+              color = DnaColors.OnSurface
+            )
+
+            if (resolvedMessage.isNotBlank()) {
+              Spacer(modifier = Modifier.height(8.dp))
+              Text(
+                text = resolvedMessage,
+                fontFamily = DnaTypography.InterFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = DnaColors.OnSurfaceVariant
+              )
+            }
+          }
         }
 
-        Text(
-          text = resolvedMessage,
-          fontFamily = DnaTypography.InterFamily,
-          fontWeight = FontWeight.Normal,
-          fontSize = 14.sp,
-          lineHeight = 20.sp,
-          color = DnaColors.OnSurfaceVariant,
-          modifier = Modifier.padding(bottom = 20.dp)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Hairline divider (border-t border-border/40)
+        HorizontalDivider(
+          color = DnaColors.BorderFaint,
+          thickness = 1.dp,
+          modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
           horizontalArrangement = Arrangement.End,
@@ -139,7 +156,7 @@ fun DnaActionConfirmDialog(
           DnaButton(
             text = resolvedDismissText,
             onClick = onDismiss,
-            variant = DnaButtonVariant.SECONDARY,
+            variant = DnaButtonVariant.GHOST,
             modifier = Modifier.padding(end = 8.dp),
             testTag = "dna_confirm_dismiss"
           )
@@ -147,7 +164,7 @@ fun DnaActionConfirmDialog(
           DnaButton(
             text = confirmButtonText,
             onClick = onConfirm,
-            variant = if (variant == DnaConfirmVariant.DESTRUCTIVE) DnaButtonVariant.DESTRUCTIVE else DnaButtonVariant.PRIMARY,
+            variant = if (resolvedVariant == DnaConfirmVariant.DESTRUCTIVE) DnaButtonVariant.DESTRUCTIVE else DnaButtonVariant.PRIMARY,
             testTag = "dna_confirm_accept"
           )
         }

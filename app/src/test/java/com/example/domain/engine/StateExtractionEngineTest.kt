@@ -165,6 +165,17 @@ class StateExtractionEngineTest {
   }
 
   @Test
+  fun `der erste Zug uebernimmt die Uhrzeit aus der Eingabe wenn Extraktion leer ist`() {
+    val result = invokeTimeProgression(
+      "",
+      "", // Modell hat in_game_time leer gelassen
+      "Sonntag, zwei Uhr nachts. Ich schließe die Kneipe ab.",
+      "Der Riegel rastet ein. Die Straße liegt leer."
+    )
+    assertEquals("Tag 1, 02:00 Uhr", result)
+  }
+
+  @Test
   fun `nennt der erste Zug keine Uhrzeit, bleibt es bei Tag 1 ohne Uhrzeit`() {
     // Keine erfundene Ersatzzeit: Lieber gar keine Uhrzeit als eine, die niemand gesagt hat.
     val result = invokeTimeProgression(

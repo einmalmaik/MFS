@@ -60,12 +60,12 @@ fun DnaButton(
   fullWidth: Boolean = false,
   testTag: String = "dna_button"
 ) {
-  val shape = RoundedCornerShape(10.dp)
+  val shape = RoundedCornerShape(12.dp)
 
   val borderStroke = when {
     !enabled -> BorderStroke(1.dp, DnaColors.Border.copy(alpha = 0.3f))
     variant == DnaButtonVariant.SECONDARY -> BorderStroke(1.dp, DnaColors.Border)
-    variant == DnaButtonVariant.DESTRUCTIVE -> BorderStroke(1.dp, DnaColors.StatusDestructive.copy(alpha = 0.4f))
+    variant == DnaButtonVariant.DESTRUCTIVE -> BorderStroke(1.dp, DnaColors.StatusDestructive.copy(alpha = 0.35f))
     else -> null
   }
 
@@ -73,7 +73,7 @@ fun DnaButton(
     !enabled -> DnaColors.SurfaceContainerHighest.copy(alpha = 0.4f)
     variant == DnaButtonVariant.PRIMARY -> Color.Transparent // Nutzt Gradient
     variant == DnaButtonVariant.SECONDARY -> DnaColors.SurfaceContainerHigh
-    variant == DnaButtonVariant.DESTRUCTIVE -> DnaColors.StatusDestructive.copy(alpha = 0.15f)
+    variant == DnaButtonVariant.DESTRUCTIVE -> DnaColors.StatusDestructive.copy(alpha = 0.12f)
     variant == DnaButtonVariant.GHOST -> Color.Transparent
     else -> Color.Transparent
   }
@@ -82,7 +82,7 @@ fun DnaButton(
     !enabled -> DnaColors.TextDisabled
     variant == DnaButtonVariant.PRIMARY -> DnaColors.PrimaryForeground
     variant == DnaButtonVariant.SECONDARY -> DnaColors.OnSurface
-    variant == DnaButtonVariant.DESTRUCTIVE -> DnaColors.StatusDestructive
+    variant == DnaButtonVariant.DESTRUCTIVE -> Color(0xFFFECDD3)
     variant == DnaButtonVariant.GHOST -> DnaColors.OnSurfaceVariant
     else -> DnaColors.OnSurface
   }
@@ -135,7 +135,7 @@ fun DnaButton(
           Text(
             text = text,
             fontFamily = DnaTypography.InterFamily,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = if (variant == DnaButtonVariant.PRIMARY) FontWeight.Bold else FontWeight.SemiBold,
             fontSize = 14.sp,
             color = contentColor
           )

@@ -1,7 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +24,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.AlertDialog
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
 import com.example.ui.dna.DnaStat
@@ -93,17 +95,31 @@ fun StorySelectorDialog(
   // Branch dialog
   if (storyToBranch != null) {
     val target = storyToBranch!!
-    AlertDialog(
-      onDismissRequest = { storyToBranch = null },
-      title = { Text("Zweig erstellen (Branching)", color = DnaColors.OnSurface) },
-      text = {
-        Column {
+    Dialog(onDismissRequest = { storyToBranch = null }) {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = DnaColors.SurfaceContainer,
+        border = BorderStroke(1.dp, DnaColors.Border),
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(16.dp)
+      ) {
+        Column(modifier = Modifier.padding(20.dp)) {
           Text(
-            "Eine unabhängige Kopie von '${target.displayTitle}':",
+            text = "Zweig erstellen (Branching)",
+            fontFamily = DnaTypography.ManropeFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 18.sp,
+            color = DnaColors.OnSurface
+          )
+          Spacer(modifier = Modifier.height(6.dp))
+          Text(
+            text = "Eine unabhängige Kopie von '${target.displayTitle}':",
             color = DnaColors.OnSurfaceVariant,
+            fontFamily = DnaTypography.InterFamily,
             style = MaterialTheme.typography.bodySmall
           )
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(14.dp))
           OutlinedTextField(
             value = branchTitleInput,
             onValueChange = { branchTitleInput = it },
@@ -117,32 +133,47 @@ fun StorySelectorDialog(
               unfocusedTextColor = DnaColors.OnSurface,
               focusedBorderColor = DnaColors.Primary,
               unfocusedBorderColor = DnaColors.Border
-            )
+            ),
+            shape = RoundedCornerShape(12.dp)
           )
+          Spacer(modifier = Modifier.height(16.dp))
+
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(1.dp)
+              .background(DnaColors.BorderFaint)
+          )
+
+          Spacer(modifier = Modifier.height(16.dp))
+
+          Row(
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            DnaButton(
+              text = "Abbrechen",
+              onClick = { storyToBranch = null },
+              variant = DnaButtonVariant.GHOST,
+              modifier = Modifier.padding(end = 8.dp),
+              testTag = "cancel_branch_story_button"
+            )
+
+            DnaButton(
+              text = "Zweig starten",
+              onClick = {
+                onBranchStory(target.id, branchTitleInput)
+                storyToBranch = null
+                onDismiss()
+              },
+              variant = DnaButtonVariant.PRIMARY,
+              testTag = "confirm_branch_story_button"
+            )
+          }
         }
-      },
-      confirmButton = {
-        DnaButton(
-          text = "Zweig starten",
-          onClick = {
-            onBranchStory(target.id, branchTitleInput)
-            storyToBranch = null
-            onDismiss()
-          },
-          variant = DnaButtonVariant.PRIMARY,
-          testTag = "confirm_branch_story_button"
-        )
-      },
-      dismissButton = {
-        DnaButton(
-          text = "Abbrechen",
-          onClick = { storyToBranch = null },
-          variant = DnaButtonVariant.GHOST,
-          testTag = "cancel_branch_story_button"
-        )
-      },
-      containerColor = DnaColors.SurfaceContainer
-    )
+      }
+    }
   }
 
   Dialog(

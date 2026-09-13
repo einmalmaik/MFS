@@ -1,9 +1,11 @@
 package com.example.ui.dna
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -15,26 +17,30 @@ import com.example.R
  * - Body & UI: Inter (font-body-md, font-sans)
  * - Code, IDs & Zeitstempel: JetBrains Mono (font-mono)
  */
+@OptIn(ExperimentalTextApi::class)
 object DnaTypography {
 
   /**
    * Lesetext, Dialoge, Notizen — alles, was am Stück gelesen wird.
    */
   val InterFamily = FontFamily(
-    Font(R.font.inter, FontWeight.Normal),
-    Font(R.font.inter, FontWeight.Medium),
-    Font(R.font.inter, FontWeight.SemiBold),
-    Font(R.font.inter, FontWeight.Bold)
+    Font(R.font.inter, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.inter, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.inter, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.inter, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700)))
   )
 
   /**
    * Titel, Kapitel, Überschriften.
+   * Manrope ist eine variable Schriftart, deren Standard-Achsenwert bei 200 (ExtraLight) liegt.
+   * Ohne explizite FontVariation.weight-Einstellung rendert Android sie als haardünne Haarlinie.
    */
   val ManropeFamily = FontFamily(
-    Font(R.font.manrope, FontWeight.Normal),
-    Font(R.font.manrope, FontWeight.Medium),
-    Font(R.font.manrope, FontWeight.SemiBold),
-    Font(R.font.manrope, FontWeight.Bold)
+    Font(R.font.manrope, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.manrope, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.manrope, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.manrope, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    Font(R.font.manrope, FontWeight.ExtraBold, variationSettings = FontVariation.Settings(FontVariation.weight(800)))
   )
 
   /**
@@ -44,10 +50,10 @@ object DnaTypography {
    * "Tag 10, 08:00 Uhr" untereinander dürfen nicht verrutschen.
    */
   val JetBrainsMonoFamily = FontFamily(
-    Font(R.font.jetbrainsmono, FontWeight.Normal),
-    Font(R.font.jetbrainsmono, FontWeight.Medium),
-    Font(R.font.jetbrainsmono, FontWeight.SemiBold),
-    Font(R.font.jetbrainsmono, FontWeight.Bold)
+    Font(R.font.jetbrainsmono, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.jetbrainsmono, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.jetbrainsmono, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.jetbrainsmono, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700)))
   )
 
   // Bis hierher hiessen alle drei Familien UnifiedFontFamily und zeigten auf Inter. Der

@@ -12,7 +12,26 @@ package com.example.domain.model
 object TimeAnchor {
 
   private val DAY_REGEX = Regex("""Tag\s*(\d+)""", RegexOption.IGNORE_CASE)
-  private val TIME_REGEX = Regex("""(\d{1,2}:\d{2}(?:\s*Uhr)?)""", RegexOption.IGNORE_CASE)
+  private val TIME_REGEX = Regex("""\b(\d{1,2}):(\d{2})(?:\s*Uhr)?\b""", RegexOption.IGNORE_CASE)
+  private val HOUR_ONLY_REGEX = Regex("""\b(\d{1,2})\s*Uhr\b""", RegexOption.IGNORE_CASE)
+  private val WORD_HOUR_REGEX = Regex("""\b(ein|eins|eine|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)\s*Uhr\b""", RegexOption.IGNORE_CASE)
+
+  private val GERMAN_WORD_HOURS = mapOf(
+    "ein" to 1,
+    "eins" to 1,
+    "eine" to 1,
+    "zwei" to 2,
+    "drei" to 3,
+    "vier" to 4,
+    "fünf" to 5,
+    "sechs" to 6,
+    "sieben" to 7,
+    "acht" to 8,
+    "neun" to 9,
+    "zehn" to 10,
+    "elf" to 11,
+    "zwölf" to 12
+  )
 
   /** Liest die Tagesnummer aus einem Zeitstempel. Fällt auf Tag 1 zurück. */
   fun parseDayNumber(timeStr: String?): Int {
@@ -23,8 +42,27 @@ object TimeAnchor {
   /** Liest die Uhrzeit aus einem Zeitstempel und normalisiert sie auf "HH:MM Uhr". */
   fun parseTimeOfDay(timeStr: String?): String {
     if (timeStr.isNullOrBlank()) return ""
-    val found = TIME_REGEX.find(timeStr)?.groupValues?.get(1) ?: return ""
-    return if (found.endsWith("Uhr", ignoreCase = true)) found else "$found Uhr"
+    if (timeStr.contains("mitternacht", ignoreCase = true)) {
+      return "00:00 Uhr"
+    }
+    val colonMatch = TIME_REGEX.find(timeStr)
+    if (colonMatch != null) {
+      val h = colonMatch.groupValues[1].toIntOrNull() ?: 0
+      val m = colonMatch.groupValues[2].toIntOrNull() ?: 0
+      return "%02d:%02d Uhr".format(h, m)
+    }
+    val hourMatch = HOUR_ONLY_REGEX.find(timeStr)?.groupValues?.get(1)?.toIntOrNull()
+    if (hourMatch != null && hourMatch in 0..23) {
+      return "%02d:00 Uhr".format(hourMatch)
+    }
+    val wordMatch = WORD_HOUR_REGEX.find(timeStr)?.groupValues?.get(1)?.lowercase()
+    if (wordMatch != null) {
+      val h = GERMAN_WORD_HOURS[wordMatch]
+      if (h != null) {
+        return "%02d:00 Uhr".format(h)
+      }
+    }
+    return ""
   }
 
   /**

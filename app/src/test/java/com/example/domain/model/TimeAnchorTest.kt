@@ -28,6 +28,9 @@ class TimeAnchorTest {
   fun `normalisiert Uhrzeit auf HH MM Uhr`() {
     assertEquals("09:30 Uhr", TimeAnchor.parseTimeOfDay("Tag 3, 09:30"))
     assertEquals("14:00 Uhr", TimeAnchor.parseTimeOfDay("Tag 3, 14:00 Uhr"))
+    assertEquals("02:00 Uhr", TimeAnchor.parseTimeOfDay("Sonntag, 2 Uhr nachts"))
+    assertEquals("02:00 Uhr", TimeAnchor.parseTimeOfDay("Sonntag, zwei Uhr nachts. Ich schließe die Kneipe ab."))
+    assertEquals("00:00 Uhr", TimeAnchor.parseTimeOfDay("Es ist Mitternacht."))
     assertEquals("", TimeAnchor.parseTimeOfDay("Tag 3"))
   }
 

@@ -114,7 +114,8 @@ fun ManualStateEditDialog(
               text = "Zustand anpassen",
               style = MaterialTheme.typography.titleMedium,
               color = DnaColors.OnSurface,
-              fontFamily = FontFamily.Serif
+              fontFamily = DnaTypography.ManropeFamily,
+              fontWeight = FontWeight.Bold
             )
           }
 

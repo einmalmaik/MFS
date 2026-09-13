@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -110,6 +111,7 @@ fun StoryScreen(
   var editingMessage by remember { mutableStateOf<MessageEntity?>(null) }
   var showConfirmEditDialog by remember { mutableStateOf(false) }
   var pendingEditContent by remember { mutableStateOf("") }
+  var rewindTargetMessage by remember { mutableStateOf<MessageEntity?>(null) }
 
   // Audio Recording & Gemini Transcription
   val audioRecorder = remember { AudioRecorder(context) }
@@ -313,7 +315,7 @@ fun StoryScreen(
             listState = listState,
             onOpenSettings = { showSettingsSheet = true },
             onDismissError = { viewModel.dismissError() },
-            onRewindToMessage = { targetMsg -> viewModel.rewindTo(targetMsg) },
+            onRewindToMessage = { targetMsg -> rewindTargetMessage = targetMsg },
             onEditMessage = { targetMsg ->
               editingMessage = targetMsg
               inputText = targetMsg.content
@@ -575,6 +577,27 @@ fun StoryScreen(
         showConfirmEditDialog = false
       },
       testTag = "confirm_edit_message_dialog"
+    )
+  }
+
+  // 3b. Confirm Rewind Dialog (Design DNA & MSM Standard)
+  rewindTargetMessage?.let { targetMsg ->
+    DnaActionConfirmDialog(
+      title = "Zu diesem Zug zurückkehren?",
+      description = "Alle späteren Nachrichten und Entscheidungen nach diesem Zeitpunkt werden verworfen. Die Handlung wird ab diesem Punkt fortgeführt.",
+      confirmButtonText = "Ja, zurückkehren",
+      cancelButtonText = "Abbrechen",
+      isDestructive = true,
+      icon = androidx.compose.material.icons.Icons.Default.History,
+      onConfirm = {
+        val msg = targetMsg
+        rewindTargetMessage = null
+        viewModel.rewindTo(msg)
+      },
+      onDismiss = {
+        rewindTargetMessage = null
+      },
+      testTag = "confirm_rewind_dialog"
     )
   }
 

@@ -569,7 +569,7 @@ class GeminiClient(
         if (jsonData == "[DONE]" || jsonData.isBlank()) continue
         try {
           val json = JSONObject(jsonData)
-          val textChunk = extractTextFromCandidates(json)
+          val textChunk = extractTextFromCandidates(json, includeThoughts = false)
           if (textChunk.isNotBlank()) {
             emit(textChunk)
           }
@@ -657,16 +657,23 @@ class GeminiClient(
 
     // Über alle Teile hinweg zusammensetzen, nicht nur parts[0]: Denkende Modelle liefern
     // die Antwort gern in mehreren Stücken, und das erste allein ist dann kein gültiges JSON.
-    val text = extractTextFromCandidates(JSONObject(response.body?.string() ?: ""))
-    val cleanJsonText = text.trim()
-      .removePrefix("```json")
-      .removePrefix("```")
-      .removeSuffix("```")
-      .trim()
-
-    if (cleanJsonText.isBlank()) {
-      throw IllegalStateException("Gemini lieferte zur Zustands-Extraktion eine leere Antwort.")
+    // Gedanken-Fragmente (thought: true) werden dabei standardmäßig herausgefiltert.
+    val responseBodyString = response.body?.string().orEmpty()
+    val jsonObj = JSONObject(responseBodyString)
+    val rawText = extractTextFromCandidates(jsonObj, includeThoughts = false)
+    val text = if (rawText.contains('{')) {
+      rawText.trim()
+    } else {
+      // Fallback: Falls das Modell fälschlicherweise das JSON im Gedanken-Part lieferte
+      extractTextFromCandidates(jsonObj, includeThoughts = true).trim()
     }
+
+    val firstBrace = text.indexOf('{')
+    val lastBrace = text.lastIndexOf('}')
+    if (firstBrace == -1 || lastBrace == -1 || firstBrace > lastBrace) {
+      throw IllegalStateException("Gemini lieferte zur Zustands-Extraktion kein valides JSON-Objekt: $text")
+    }
+    val cleanJsonText = text.substring(firstBrace, lastBrace + 1)
 
     JSONObject(cleanJsonText)
   }
@@ -840,7 +847,7 @@ class GeminiClient(
     return@withContext null
   }
 
-  private fun extractTextFromCandidates(json: JSONObject): String {
+  private fun extractTextFromCandidates(json: JSONObject, includeThoughts: Boolean = false): String {
     val candidates = json.optJSONArray("candidates") ?: return ""
     if (candidates.length() == 0) return ""
     val candidate = candidates.getJSONObject(0)
@@ -849,6 +856,9 @@ class GeminiClient(
     val sb = StringBuilder()
     for (i in 0 until parts.length()) {
       val p = parts.getJSONObject(i)
+      if (!includeThoughts && p.optBoolean("thought", false)) {
+        continue
+      }
       val t = p.optString("text", "")
       sb.append(t)
     }

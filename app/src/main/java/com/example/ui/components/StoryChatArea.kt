@@ -23,14 +23,11 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
@@ -65,8 +62,8 @@ fun StoryChatArea(
     // API Key Warning Banner if missing
     if (!uiState.effectiveApiKeyPresent) {
       item(key = "api_key_banner") {
-        Card(
-          colors = CardDefaults.cardColors(containerColor = DnaColors.PrimaryContainer),
+        Surface(
+          color = DnaColors.PrimaryContainer,
           border = BorderStroke(1.dp, DnaColors.Primary),
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier
@@ -111,8 +108,8 @@ fun StoryChatArea(
     // Error message banner if any
     uiState.errorMessage?.let { error ->
       item(key = "error_banner") {
-        Card(
-          colors = CardDefaults.cardColors(containerColor = DnaColors.StatusDestructive.copy(alpha = 0.15f)),
+        Surface(
+          color = DnaColors.StatusDestructive.copy(alpha = 0.15f),
           border = BorderStroke(1.dp, DnaColors.StatusDestructive),
           shape = RoundedCornerShape(10.dp),
           modifier = Modifier
@@ -193,8 +190,8 @@ fun StoryChatArea(
     // Real-time streaming or generation indicator
     if (uiState.isGenerating) {
       item(key = "streaming_response") {
-        Card(
-          colors = CardDefaults.cardColors(containerColor = DnaColors.SurfaceContainer.copy(alpha = 0.85f)),
+        Surface(
+          color = DnaColors.SurfaceContainer.copy(alpha = 0.85f),
           border = BorderStroke(1.dp, DnaColors.Primary.copy(alpha = 0.4f)),
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier

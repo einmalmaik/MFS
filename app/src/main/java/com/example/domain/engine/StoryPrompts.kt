@@ -69,7 +69,8 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
     existingMilestones: List<String>,
     knownNpcs: List<String>,
     userAction: String,
-    storyResponse: String
+    storyResponse: String,
+    storyPrompt: String = ""
   ): String {
     val milestonesBlock = if (existingMilestones.isNotEmpty()) {
       "Bisherige bedeutsame Meilensteine:\n" + existingMilestones.joinToString("\n") { "- $it" }
@@ -83,11 +84,21 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
       "Diese Figuren sind bereits etabliert. Verwende exakt diese Namen und beschreibe ihr " +
         "Aussehen NICHT erneut:\n" + knownNpcs.joinToString("\n") { "- $it" }
     } else {
-      "Bisher sind keine Figuren etabliert."
+      "Bisher keine Figuren etabliert."
+    }
+
+    val storyPromptBlock = if (storyPrompt.isNotBlank()) {
+      """
+      |
+      |[RAHMENBEDINGUNGEN & PROMPT DIESER GESCHICHTE]:
+      |$storyPrompt
+      """.trimMargin()
+    } else {
+      ""
     }
 
     return """
-Du bist die State-Tracking-Engine des interaktiven Spiels. Analysiere den bisherigen Zustand, die Spieler-Aktion und die Game-Master-Erzählung dieser Runde.
+Du bist die State-Tracking-Engine des interaktiven Spiels. Analysiere den bisherigen Zustand, die Spieler-Aktion und die Game-Master-Erzählung dieser Runde.$storyPromptBlock
 Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema erfüllt:
 
 {

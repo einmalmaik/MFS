@@ -46,7 +46,11 @@ class StateExtractionEngine(
       // TimeAnchor jeder Erinnerung mitgibt, rechnen ab dieser Zahl. Der Prompt sagt dem Modell
       // dasselbe (Regel 0); hier steht die Zusicherung, die auch dann gilt, wenn es nicht hoert.
       if (previousTime.isBlank()) {
-        val timePart = TimeAnchor.parseTimeOfDay(extractedTime)
+        val timePart = TimeAnchor.parseTimeOfDay(extractedTime).ifBlank {
+          TimeAnchor.parseTimeOfDay(userAction).ifBlank {
+            TimeAnchor.parseTimeOfDay(modelResponse)
+          }
+        }
         return if (timePart.isBlank()) "Tag 1" else "Tag 1, $timePart"
       }
 
@@ -303,7 +307,8 @@ class StateExtractionEngine(
           existingMilestones = milestones,
           knownNpcs = knownNpcs,
           userAction = userAction,
-          storyResponse = modelResponse
+          storyResponse = modelResponse,
+          storyPrompt = story.systemPrompt
         )
       )
 
@@ -469,17 +474,37 @@ class StateExtractionEngine(
         newInGameTime = newInGameTime,
         previousInGameTime = latestCheckpoint?.inGameTime,
         turnNumber = turnNumber,
-        newMilestones = cumulativeMilestones - milestones.toSet()
+        newMilestones = cumulativeMilestones - milestones.toSet(),
+        modelResponse = modelResponse
       )
 
       CheckpointResult(checkpointId, carriedOver = false)
     } catch (e: Exception) {
       Log.w(TAG, "State extraction fallback triggered", e)
       val carriedId = if (latestCheckpoint != null) {
+        val fallbackTime = if (latestCheckpoint.inGameTime.isBlank()) {
+          val tod = TimeAnchor.parseTimeOfDay(userAction).ifBlank { TimeAnchor.parseTimeOfDay(modelResponse) }
+          if (tod.isNotBlank()) "Tag 1, $tod" else "Tag 1"
+        } else latestCheckpoint.inGameTime
+
+        val fallbackSummary = if (latestCheckpoint.previousEventsSummary.isBlank() && modelResponse.isNotBlank()) {
+          modelResponse.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() && !it.startsWith("#") }?.take(200) ?: "Das Abenteuer beginnt."
+        } else latestCheckpoint.previousEventsSummary
+
+        if (story.title.isBlank()) {
+          val derivedTitle = story.systemPrompt.lineSequence()
+            .map { it.trim().removePrefix("#").trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?.take(35) ?: "Unbenannte Geschichte"
+          storyDao.updateStoryTitleAndGenre(story.id, derivedTitle, story.genre.ifBlank { "Abenteuer" }, System.currentTimeMillis())
+        }
+
         storyDao.insertCheckpoint(
           latestCheckpoint.copy(
             id = 0,
             turnNumber = turnNumber,
+            inGameTime = fallbackTime,
+            previousEventsSummary = fallbackSummary,
             timestamp = System.currentTimeMillis()
           )
         )
@@ -527,13 +552,20 @@ class StateExtractionEngine(
     newInGameTime: String,
     previousInGameTime: String?,
     turnNumber: Int,
-    newMilestones: List<String>
+    newMilestones: List<String>,
+    modelResponse: String
   ) {
     val day = TimeAnchor.parseDayNumber(newInGameTime)
 
     try {
       // 1. Was in dieser Runde geschah - ein Sachverhalt, nicht die ganze Erzählung.
-      val turnMemory = updatedState.optString("turn_memory").trim()
+      var turnMemory = updatedState.optString("turn_memory").trim()
+      if (turnMemory.isBlank() && modelResponse.isNotBlank()) {
+        turnMemory = modelResponse.lineSequence()
+          .map { it.trim() }
+          .firstOrNull { it.isNotBlank() && !it.startsWith("#") }
+          ?.take(200) ?: ""
+      }
       if (turnMemory.isNotBlank()) {
         memoryEngine.recordMemory(
           storyId = story.id,
