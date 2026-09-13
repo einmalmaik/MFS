@@ -5,6 +5,13 @@ on:
     types: [published]
   workflow_dispatch: # Erlaubt das manuelle Starten des Workflows aus dem GitHub-UI
 
+# Ohne diesen Block scheitert der letzte Schritt mit 403. GitHub gibt dem GITHUB_TOKEN seit 2023
+# standardmaessig nur Lesezugriff; action-gh-release muss aber eine Datei an den Release haengen.
+# Der Build liefe durch, die APK waere gebaut -- und der Release bliebe leer. Ausdruecklich nur
+# contents, nicht write-all: mehr braucht dieser Workflow nicht.
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build APK and Upload
