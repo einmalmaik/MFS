@@ -88,7 +88,8 @@ data class GeminiModelInfo(
   val defaultTemperature: Float = 0.85f,
   val isThinkingModel: Boolean = true,
   val usesThinkingLevel: Boolean = true, // true für Gemini 3+, false für 2.5
-  val supportedThinkingLevels: List<String> = listOf("LOW", "MEDIUM", "HIGH")
+  val supportedThinkingLevels: List<String> = listOf("LOW", "MEDIUM", "HIGH"),
+  val maxOutputTokens: Int = 65536
 )
 
 data class GeminiModelCatalog(

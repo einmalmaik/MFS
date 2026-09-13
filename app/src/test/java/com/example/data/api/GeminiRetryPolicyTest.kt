@@ -51,4 +51,19 @@ class GeminiRetryPolicyTest {
   fun `negative Versuchszahl fuehrt nicht in den Index`() {
     assertNull(GeminiClient.retryDelayMs(503, -1))
   }
+
+  @Test
+  fun `maximale Token-Limits sind modellabhaengig korrekt skaliert`() {
+    // Flaggschiffe und 2.5 / 3.x Modelle nutzen das volle 65k Maximum
+    assertEquals(65536, GeminiClient.getMaxOutputTokensForModel("gemini-3.8-flash"))
+    assertEquals(65536, GeminiClient.getMaxOutputTokensForModel("gemini-3.1-pro-preview"))
+    assertEquals(65536, GeminiClient.getMaxOutputTokensForModel("gemini-2.5-flash"))
+    assertEquals(65536, GeminiClient.getMaxOutputTokensForModel("gemini-2.5-pro"))
+    assertEquals(65536, GeminiClient.getMaxOutputTokensForModel("gemini-flash-latest"))
+
+    // Ältere Modelle oder Audio werden geschützt, um 400 Bad Request zu verhindern
+    assertEquals(8192, GeminiClient.getMaxOutputTokensForModel("gemini-1.5-flash"))
+    assertEquals(8192, GeminiClient.getMaxOutputTokensForModel("gemini-2.5-flash-native-audio-latest"))
+    assertEquals(16384, GeminiClient.getMaxOutputTokensForModel("gemini-2.5-flash-preview-tts"))
+  }
 }

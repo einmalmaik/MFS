@@ -85,6 +85,21 @@ class GeminiClient(
       return RETRY_DELAYS_MS[attempt]
     }
 
+    /**
+     * Ermittelt das maximal zulässige Ausgabetoken-Limit für ein Modell.
+     * Moderne Gemini 2.5 und 3.x Modelle unterstützen das Maximum von 65.536 Tokens.
+     * Ältere Modelle (z. B. Gemini 1.5) werden auf 8.192 begrenzt, um HTTP 400 Fehler zu verhindern.
+     */
+    fun getMaxOutputTokensForModel(modelId: String): Int {
+      val clean = modelId.lowercase().trim()
+      return when {
+        clean.contains("gemini-1.5") || clean.contains("native-audio") -> 8192
+        clean.contains("-tts") -> 16384
+        clean.contains("-image") -> 32768
+        else -> 65536
+      }
+    }
+
     val THINKING_LEVEL_PRESETS = listOf(
       "LOW" to "Niedrig (Schnelle Reflexion, geringe Latenz)",
       "MEDIUM" to "Mittel (Ausgewogene Tiefe & psychologische Konsistenz)",
@@ -563,8 +578,8 @@ class GeminiClient(
       genConfig.put("temperature", temperature.coerceIn(0.0f, 2.0f))
     }
     genConfig.put("topP", 0.95)
-    // 8192 Tokens stellen sicher, dass Thinking-Tokens plus vollwertige Erzählantworten nicht abgeschnitten werden
-    genConfig.put("maxOutputTokens", 8192)
+    // Maximales Token-Limit für das gewählte Modell (bis zu 65.536 Tokens bei Gemini 2.5 / 3.x)
+    genConfig.put("maxOutputTokens", getMaxOutputTokensForModel(cleanModel))
 
     // Dynamic Thinking Config:
     // Gemini 3.x+ models use thinkingLevel ("LOW", "MEDIUM", "HIGH")
@@ -674,7 +689,7 @@ class GeminiClient(
     val genConfig = JSONObject()
     genConfig.put("responseMimeType", "application/json")
     genConfig.put("temperature", 0.2)
-    genConfig.put("maxOutputTokens", 8192)
+    genConfig.put("maxOutputTokens", getMaxOutputTokensForModel(cleanModel))
 
     val isGemini3Plus = cleanModel.contains("gemini-3") || cleanModel.contains("-3.")
     val isThinkingModel = isGemini3Plus || cleanModel.contains("2.5") || cleanModel.contains("thinking")
