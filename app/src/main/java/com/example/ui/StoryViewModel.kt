@@ -405,6 +405,18 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     editMessageAndRewind(message.id, newContent)
   }
 
+  fun resendUserMessage(message: MessageEntity) {
+    if (message.sender != "user") return
+    editMessageAndRewind(message.id, message.content)
+  }
+
+  fun retryLastTurn() {
+    val lastUserMsg = _messages.value.lastOrNull { it.sender == "user" }
+    if (lastUserMsg != null) {
+      resendUserMessage(lastUserMsg)
+    }
+  }
+
   /**
    * @param upToMessageId der Verzweigungspunkt; `null` kopiert die ganze Geschichte. Aus der
    *   Nachrichtenliste heraus ("Zweig ab hier") ist er gesetzt — sonst hieße der Befehl das

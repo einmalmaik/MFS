@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import com.example.ui.dna.DnaButton
 import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -51,9 +52,20 @@ fun StoryChatArea(
   onDismissError: () -> Unit,
   onRewindToMessage: (MessageEntity) -> Unit,
   onEditMessage: (MessageEntity) -> Unit,
+  onResendMessage: (MessageEntity) -> Unit = {},
   onBranchFromMessage: (MessageEntity) -> Unit,
+  onRetryTurn: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
+  LaunchedEffect(uiState.errorMessage, uiState.messages.size, uiState.isGenerating) {
+    if (uiState.errorMessage != null || uiState.isGenerating) {
+      val count = listState.layoutInfo.totalItemsCount
+      if (count > 0) {
+        listState.animateScrollToItem(count - 1)
+      }
+    }
+  }
+
   LazyColumn(
     state = listState,
     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -100,37 +112,6 @@ fun StoryChatArea(
               variant = DnaButtonVariant.PRIMARY,
               testTag = "enter_api_key_button"
             )
-          }
-        }
-      }
-    }
-
-    // Error message banner if any
-    uiState.errorMessage?.let { error ->
-      item(key = "error_banner") {
-        Surface(
-          color = DnaColors.StatusDestructive.copy(alpha = 0.15f),
-          border = BorderStroke(1.dp, DnaColors.StatusDestructive),
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-        ) {
-          Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = DnaColors.StatusDestructive)
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-              text = error,
-              style = MaterialTheme.typography.bodySmall,
-              color = DnaColors.OnSurface,
-              modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = onDismissError) {
-              Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = DnaColors.OnSurfaceVariant)
-            }
           }
         }
       }
@@ -183,6 +164,7 @@ fun StoryChatArea(
         message = message,
         onRewind = onRewindToMessage,
         onEditUserMessage = onEditMessage,
+        onResendUserMessage = onResendMessage,
         onBranchFromHere = onBranchFromMessage
       )
     }
@@ -240,6 +222,66 @@ fun StoryChatArea(
                   color = DnaColors.OnSurface
                 )
               )
+            }
+          }
+        }
+      }
+    }
+
+    // Error message banner at the bottom where user is looking & reading
+    uiState.errorMessage?.let { error ->
+      item(key = "error_banner") {
+        Surface(
+          color = DnaColors.StatusDestructive.copy(alpha = 0.12f),
+          border = BorderStroke(1.dp, DnaColors.StatusDestructive.copy(alpha = 0.35f)),
+          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+        ) {
+          Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = DnaColors.StatusDestructive,
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(10.dp))
+              Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall.copy(
+                  fontFamily = DnaTypography.InterFamily,
+                  lineHeight = 18.sp
+                ),
+                color = DnaColors.OnSurface,
+                modifier = Modifier.weight(1f)
+              )
+              IconButton(onClick = onDismissError) {
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = "Schließen",
+                  tint = DnaColors.OnSurfaceVariant,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+            }
+            if (onRetryTurn != null) {
+              Spacer(modifier = Modifier.height(10.dp))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+              ) {
+                DnaButton(
+                  text = "Erneut versuchen",
+                  onClick = onRetryTurn,
+                  variant = DnaButtonVariant.SECONDARY,
+                  testTag = "retry_turn_button"
+                )
+              }
             }
           }
         }

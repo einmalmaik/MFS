@@ -204,6 +204,33 @@ class GeminiClient(
       return catalog.firstOrNull { !isUnusable(it.id) }?.id ?: fallback
     }
 
+    /**
+     * Prüft, ob Google die Anfrage oder Antwort über Inhalts- und Sicherheitsrichtlinien abgewiesen hat.
+     */
+    internal fun checkContentSafetyBlock(json: JSONObject) {
+      val promptFeedback = json.optJSONObject("promptFeedback")
+      val blockReason = promptFeedback?.optString("blockReason", "").orEmpty()
+      if (blockReason.isNotBlank()) {
+        val reasonMsg = when (blockReason.uppercase()) {
+          "PROHIBITED_CONTENT", "SAFETY" ->
+            "Google hat diese Eingabe aufgrund von Inhaltsrichtlinien blockiert (Sicherheitsfilter: $blockReason). Bitte formuliere deine Aktion etwas um."
+          "BLOCKLIST" ->
+            "Die Eingabe enthält einen von Google gesperrten Begriff ($blockReason)."
+          else ->
+            "Die Anfrage wurde von Google blockiert ($blockReason). Bitte passe die Eingabe an."
+        }
+        throw IllegalStateException(reasonMsg)
+      }
+
+      val candidates = json.optJSONArray("candidates")
+      if (candidates != null && candidates.length() > 0) {
+        val candidate = candidates.getJSONObject(0)
+        val finishReason = candidate.optString("finishReason", "").uppercase()
+        if (finishReason in listOf("SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT")) {
+          throw IllegalStateException("Die KI-Antwort wurde durch Googles Sicherheitsfilter blockiert ($finishReason). Bitte versuche eine andere Formulierung.")
+        }
+      }
+    }
   }
 
   /**
@@ -569,11 +596,13 @@ class GeminiClient(
         if (jsonData == "[DONE]" || jsonData.isBlank()) continue
         try {
           val json = JSONObject(jsonData)
+          checkContentSafetyBlock(json)
           val textChunk = extractTextFromCandidates(json, includeThoughts = false)
           if (textChunk.isNotBlank()) {
             emit(textChunk)
           }
         } catch (e: Exception) {
+          if (e is IllegalStateException) throw e
           Log.w(TAG, "SSE chunk parse error: ${e.message}")
         }
       }
@@ -660,6 +689,7 @@ class GeminiClient(
     // Gedanken-Fragmente (thought: true) werden dabei standardmäßig herausgefiltert.
     val responseBodyString = response.body?.string().orEmpty()
     val jsonObj = JSONObject(responseBodyString)
+    checkContentSafetyBlock(jsonObj)
     val rawText = extractTextFromCandidates(jsonObj, includeThoughts = false)
     val text = if (rawText.contains('{')) {
       rawText.trim()
@@ -792,6 +822,7 @@ class GeminiClient(
 
     val body = response.body?.string() ?: throw Exception("Leere Antwort erhalten.")
     val json = JSONObject(body)
+    checkContentSafetyBlock(json)
     val text = extractTextFromCandidates(json).trim()
     if (text.isBlank()) {
       throw Exception("Es konnte keine Sprache erkannt werden.")

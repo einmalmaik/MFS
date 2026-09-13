@@ -320,6 +320,9 @@ fun StoryScreen(
               editingMessage = targetMsg
               inputText = targetMsg.content
             },
+            onResendMessage = { targetMsg ->
+              viewModel.resendUserMessage(targetMsg)
+            },
             onBranchFromMessage = { targetMsg ->
               if (story != null) {
                 viewModel.branchStory(
@@ -328,7 +331,8 @@ fun StoryScreen(
                   upToMessageId = targetMsg.id
                 )
               }
-            }
+            },
+            onRetryTurn = { viewModel.retryLastTurn() }
           )
         }
 
@@ -422,6 +426,12 @@ fun StoryScreen(
   // Meldung und Fehler stammen immer aus einer vom Nutzer ausgelösten Prüfung — die
   // automatische schweigt. Deshalb dürfen sie hier sichtbar werden.
   LaunchedEffect(updateState) {
+    if (updateState is UpdateState.Verfuegbar) {
+      showUpdateDialog = true
+      if (showSettingsSheet) {
+        showSettingsSheet = false
+      }
+    }
     val text = when (val s = updateState) {
       is UpdateState.Meldung -> s.text
       is UpdateState.Fehler -> s.text

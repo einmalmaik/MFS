@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -128,6 +129,7 @@ fun StoryMessageItem(
   message: MessageEntity,
   onRewind: (MessageEntity) -> Unit,
   onEditUserMessage: (MessageEntity) -> Unit = {},
+  onResendUserMessage: (MessageEntity) -> Unit = {},
   onBranchFromHere: (MessageEntity) -> Unit = {},
   modifier: Modifier = Modifier
 ) {
@@ -189,6 +191,21 @@ fun StoryMessageItem(
                   style = DnaTypography.MonoSmall,
                   color = DnaColors.MutedForeground,
                   modifier = Modifier.padding(end = 4.dp)
+                )
+              }
+
+              // Resend user action button
+              IconButton(
+                onClick = { onResendUserMessage(message) },
+                modifier = Modifier
+                  .size(28.dp)
+                  .testTag("resend_user_message_button_${message.id}")
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Refresh,
+                  contentDescription = "Neu senden",
+                  tint = DnaColors.Primary,
+                  modifier = Modifier.size(15.dp)
                 )
               }
 
