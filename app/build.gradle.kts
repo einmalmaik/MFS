@@ -11,11 +11,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.storyforge.krwqtz"
+    applicationId = "com.maunting.mfs"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.1.4"
+    versionCode = 8
+    versionName = "1.2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
