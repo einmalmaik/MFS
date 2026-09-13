@@ -46,6 +46,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.CheckpointEntity
 
+/**
+ * @param onSave meldet mit `false` zurück, dass der Zustand nicht geschrieben wurde. Der Dialog
+ *   bleibt dann offen. Ohne diese Rückmeldung würde er sich schließen, während der Zug-Wächter
+ *   die Änderung abweist — acht von Hand gefüllte Felder wären still verloren, und der einzige
+ *   Hinweis wäre eine Fehlermeldung hinter dem gerade geschlossenen Dialog.
+ */
 @Composable
 fun ManualStateEditDialog(
   checkpoint: CheckpointEntity?,
@@ -59,7 +65,7 @@ fun ManualStateEditDialog(
     inventory: List<String>,
     npcsJson: String,
     summary: String
-  ) -> Unit
+  ) -> Boolean
 ) {
   var inGameTime by remember { mutableStateOf(checkpoint?.inGameTime ?: "Tag 1, 21:30 Uhr") }
   var location by remember { mutableStateOf(checkpoint?.location ?: "") }
@@ -182,7 +188,7 @@ fun ManualStateEditDialog(
               val invList = inventoryText.split(",")
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
-              onSave(
+              val gespeichert = onSave(
                 inGameTime,
                 location,
                 weather,
@@ -192,7 +198,7 @@ fun ManualStateEditDialog(
                 npcsJson,
                 summary
               )
-              onDismiss()
+              if (gespeichert) onDismiss()
             },
             variant = DnaButtonVariant.PRIMARY,
             testTag = "save_manual_edit_button"

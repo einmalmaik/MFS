@@ -63,6 +63,7 @@ import com.example.ui.dna.DnaConfirmVariant
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.util.AudioRecorder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -215,11 +216,17 @@ fun StoryScreen(
   val storyPromptSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   var isAppInitializing by remember { mutableStateOf(false) }
 
-  // Playtime Tracking
-  LaunchedEffect(uiState.currentStory?.id) {
-    uiState.currentStory?.id?.let { storyId ->
+  // Spielzeit mitzählen -- nur solange die App wirklich vorn ist.
+  //
+  // Vorher lief die Schleife unabhängig vom Lebenszyklus weiter: Wer die App über Nacht offen
+  // liegen ließ, bekam acht Stunden "Spielzeit" gutgeschrieben und eine Datenbankschreibung pro
+  // Minute, jede davon mit aufgewecktem Flash. repeatOnLifecycle hält sie bei ON_PAUSE an und
+  // nimmt sie bei ON_RESUME wieder auf.
+  LaunchedEffect(uiState.currentStory?.id, lifecycleOwner) {
+    val storyId = uiState.currentStory?.id ?: return@LaunchedEffect
+    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
       while (true) {
-        delay(60000L) // Track every minute
+        delay(60_000L)
         viewModel.updatePlayTime(storyId, 60L)
       }
     }
@@ -311,9 +318,13 @@ fun StoryScreen(
               editingMessage = targetMsg
               inputText = targetMsg.content
             },
-            onBranchFromMessage = { _ ->
+            onBranchFromMessage = { targetMsg ->
               if (story != null) {
-                viewModel.branchStory(story.id, "${story.displayTitle} (Zweig)")
+                viewModel.branchStory(
+                  sourceStoryId = story.id,
+                  branchTitle = "${story.displayTitle} (Zweig)",
+                  upToMessageId = targetMsg.id
+                )
               }
             }
           )
@@ -443,6 +454,10 @@ fun StoryScreen(
       onFreigabeOeffnen = { ApkInstaller.oeffneFreigabeEinstellung(context) },
       onUeberspringen = {
         viewModel.ueberspringeUpdate(verfuegbaresRelease)
+        showUpdateDialog = false
+      },
+      onAbbrechen = {
+        viewModel.brichUpdateDownloadAb(verfuegbaresRelease)
         showUpdateDialog = false
       },
       onSpaeter = { showUpdateDialog = false }

@@ -18,6 +18,7 @@ import com.example.data.repository.StoryRepository
 import com.example.domain.model.TurnProgress
 import com.example.domain.service.UpdateService
 import com.example.util.ApkInstaller
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -411,13 +412,20 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     editMessageAndRewind(message.id, newContent)
   }
 
-  fun branchStory(sourceStoryId: Long, branchTitle: String) {
+  /**
+   * @param upToMessageId der Verzweigungspunkt; `null` kopiert die ganze Geschichte. Aus der
+   *   Nachrichtenliste heraus ("Zweig ab hier") ist er gesetzt — sonst hieße der Befehl das
+   *   Gegenteil dessen, was er tut, und der Zweig begänne mit dem Zustand von jetzt statt dem
+   *   von damals (CLAUDE.md §0.7). Aus der Geschichtenliste heraus gibt es keinen Punkt, und
+   *   `null` ist dort richtig.
+   */
+  fun branchStory(sourceStoryId: Long, branchTitle: String, upToMessageId: Long? = null) {
     if (blockedByRunningTurn("Einen Handlungszweig anzulegen")) return
     viewModelScope.launch {
       val newId = repository.branchStory(
         sourceStoryId = sourceStoryId,
         branchTitle = branchTitle,
-        upToMessageId = null
+        upToMessageId = upToMessageId
       )
       switchStory(newId)
     }
@@ -445,6 +453,12 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     repository.setGlobalDefaultSystemPrompt(prompt)
   }
 
+  /**
+   * @return false, wenn die Änderung abgewiesen wurde. Der Dialog bleibt dann offen und behält
+   *   die Eingaben — beides Gründe, warum hier nicht einfach `Unit` zurückkommt. Ein `true`
+   *   heißt "angenommen und in Auftrag gegeben"; beide Ablehnungsgründe entscheiden sich
+   *   synchron, bevor die Coroutine startet.
+   */
   fun updateManualState(
     inGameTime: String,
     location: String,
@@ -454,9 +468,12 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     inventory: List<String>,
     npcsJson: String,
     summary: String
-  ) {
-    val storyId = _activeStoryId.value ?: return
-    if (blockedByRunningTurn("Den Zustand von Hand zu ändern")) return
+  ): Boolean {
+    val storyId = _activeStoryId.value ?: run {
+      _errorMessage.value = "Es ist gerade keine Geschichte geöffnet."
+      return false
+    }
+    if (blockedByRunningTurn("Den Zustand von Hand zu ändern")) return false
     viewModelScope.launch {
       repository.updateCurrentState(
         storyId = storyId,
@@ -470,6 +487,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         summary = summary
       )
     }
+    return true
   }
 
   /**
@@ -601,8 +619,31 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  /**
+   * Der laufende Download. Wird festgehalten, damit "Abbrechen" ihn auch abbrechen kann und
+   * nicht nur das Fenster schließt.
+   */
+  private var updateLadeJob: Job? = null
+
   fun ladeUpdate(release: UpdateRelease) {
-    viewModelScope.launch { updateService.lade(release) }
+    updateLadeJob?.cancel()
+    updateLadeJob = viewModelScope.launch { updateService.lade(release) }
+  }
+
+  /**
+   * Bricht den Download wirklich ab: Übertragung stoppen, halbe Datei entfernen, Zustand zurück.
+   *
+   * Vorher schloss die Schaltfläche nur den Dialog. Der Download lief weiter -- über
+   * Mobilfunkvolumen und ohne dass der Spieler ihn noch sehen oder ein zweites Mal abbrechen
+   * konnte. Abschnitt 8 der Datenschutzerklärung sagt ausdrücklich das Gegenteil zu.
+   */
+  fun brichUpdateDownloadAb(release: UpdateRelease) {
+    updateLadeJob?.cancel()
+    updateLadeJob = null
+    updateService.verwerfeZustand()
+    viewModelScope.launch(Dispatchers.IO) {
+      runCatching { updateService.apkDatei(release).delete() }
+    }
   }
 
   fun installiereUpdate(release: UpdateRelease): Boolean =

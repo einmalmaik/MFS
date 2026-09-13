@@ -183,8 +183,10 @@ fun StoryMessageItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
               if (!message.inGameTimeTag.isNullOrBlank()) {
                 Text(
+                  // Zeitstempel sind eine technische Angabe (CLAUDE.md §0.5). Dicktengleich
+                  // bleiben "Tag 9" und "Tag 10" untereinander an derselben Stelle stehen.
                   text = message.inGameTimeTag,
-                  style = MaterialTheme.typography.labelSmall,
+                  style = DnaTypography.MonoSmall,
                   color = DnaColors.MutedForeground,
                   modifier = Modifier.padding(end = 4.dp)
                 )
@@ -272,7 +274,7 @@ fun StoryMessageItem(
               ) {
                 Text(
                   text = message.inGameTimeTag,
-                  style = MaterialTheme.typography.labelSmall,
+                  style = DnaTypography.MonoSmall,
                   color = DnaColors.OnSurfaceVariant,
                   modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )

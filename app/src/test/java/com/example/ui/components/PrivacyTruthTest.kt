@@ -112,6 +112,48 @@ class PrivacyTruthTest {
     )
   }
 
+  /**
+   * Die Erklärung hat sich in derselben Datei selbst widersprochen: Abschnitt 1 und 3 sagten
+   * "genau eine Gegenstelle" und "keine zweite Adresse im Programm", während Abschnitt 8 GitHub
+   * beschrieb. Beides stand da, seit die Aktualisierung eingebaut wurde -- ein Nutzer, der von
+   * oben nach unten liest, hätte die Erklärung danach zu Recht insgesamt nicht mehr geglaubt.
+   */
+  @Test
+  fun `die Erklaerung widerspricht sich nicht bei der Zahl der Gegenstellen`() {
+    val alles = PRIVACY_SECTIONS.joinToString(" ") { it.body + " " + it.punkte.joinToString(" ") }
+
+    val behauptetAlleinstellung = listOf(
+      "Genau eine Gegenstelle",
+      "keine zweite Adresse",
+      "Es gibt keine zweite"
+    ).filter { alles.contains(it) }
+
+    val nenntGitHub = alles.contains("GitHub")
+
+    assertTrue(
+      "Die Erklärung nennt GitHub und behauptet zugleich, es gebe nur eine Gegenstelle: " +
+        "$behauptetAlleinstellung",
+      !(nenntGitHub && behauptetAlleinstellung.isNotEmpty())
+    )
+  }
+
+  @Test
+  fun `die Erklaerung behauptet nicht, ein Zug sei zwei Anfragen`() {
+    // Ein Zug erzeugt eine Erzählung, eine Extraktion, einen Suchvektor und eine Einbettung je
+    // neuer Erinnerung. "Zwei Anfragen" war schon falsch, als es geschrieben wurde -- und es ist
+    // die Art von Zahl, der ein Leser glaubt, weil sie so konkret klingt.
+    val alles = PRIVACY_SECTIONS.joinToString(" ") { it.body + " " + it.punkte.joinToString(" ") }
+
+    assertTrue(
+      "Abschnitt 3 nennt weiterhin zwei Anfragen pro Zug.",
+      !alles.contains("also zwei Anfragen")
+    )
+    assertTrue(
+      "Die Einbettung der Erinnerungen fehlt in Abschnitt 3.",
+      alles.contains("Vektor")
+    )
+  }
+
   @Test
   fun `Fassung und Stand sind gesetzt`() {
     assertTrue(PRIVACY_VERSION.isNotBlank())

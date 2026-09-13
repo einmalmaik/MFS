@@ -43,8 +43,8 @@ internal data class PrivacySection(
 )
 
 /** Stand und Fassung. Wird eine Zusage geändert, gehören beide Werte mit geändert. */
-internal const val PRIVACY_VERSION = "1.0"
-internal const val PRIVACY_DATE = "2026-09-12"
+internal const val PRIVACY_VERSION = "1.1"
+internal const val PRIVACY_DATE = "2026-09-13"
 
 /**
  * Die Sätze dieser Liste sind gegen den Quelltext geprüft, nicht gegen die Absicht.
@@ -58,9 +58,11 @@ internal val PRIVACY_SECTIONS = listOf(
     heading = "1. Worum es geht",
     body = "Maunting Story Fable ist ein Erzählspiel, das auf deinem Gerät läuft. Es gibt " +
       "keinen Server von uns, kein Konto und keine Anmeldung. Wir betreiben nichts, was deine " +
-      "Geschichten sehen könnte. Genau eine Gegenstelle ist beteiligt, und die hast du selbst " +
-      "eingerichtet: Googles Gemini-API, erreichbar nur mit dem Schlüssel, den du einträgst. " +
-      "Ohne diesen Schlüssel geht kein einziges Byte hinaus."
+      "Geschichten sehen könnte. Beteiligt sind höchstens zwei fremde Gegenstellen, und beide " +
+      "schaltest du selbst frei: Googles Gemini-API, erreichbar nur mit dem Schlüssel, den du " +
+      "einträgst, und — falls du der Aktualisierung zustimmst — GitHub. Deine Geschichten gehen " +
+      "ausschließlich an Google; GitHub erfährt nur, dass jemand nach einer neuen Fassung fragt " +
+      "(Abschnitt 8). Ohne Schlüssel und ohne diese Zustimmung geht kein einziges Byte hinaus."
   ),
   PrivacySection(
     heading = "2. Was auf dem Gerät bleibt",
@@ -78,18 +80,27 @@ internal val PRIVACY_SECTIONS = listOf(
   ),
   PrivacySection(
     heading = "3. Was das Gerät verlässt",
-    body = "Ausschließlich an generativelanguage.googleapis.com (Google LLC). Es gibt keine " +
-      "zweite Adresse im Programm. Übertragen wird:",
+    body = "Alles, was mit deinen Geschichten zu tun hat, geht ausschließlich an " +
+      "generativelanguage.googleapis.com (Google LLC). Die einzige weitere Adresse im Programm " +
+      "ist GitHub für die Aktualisierung — dorthin geht nichts aus deinen Geschichten, und sie " +
+      "ist ab Werk abgeschaltet (Abschnitt 8). An Google übertragen wird:",
     punkte = listOf(
-      "Bei jedem Zug: die Standard-Regie, der Prompt dieser Geschichte, der vollständige " +
+      "Vor dem Zug, sobald es Erinnerungen gibt: deine Eingabe zusammen mit Ort und anwesenden " +
+        "Figuren, umgerechnet in einen Suchvektor, um die passenden Erinnerungen zu finden.",
+      "Der Zug selbst: die Standard-Regie, der Prompt dieser Geschichte, der vollständige " +
         "Weltzustand als JSON samt Verletzungen, die Meilensteine, die letzten Tagesüberblicke, " +
         "die Profile der anwesenden Figuren, die passenden Erinnerungen, die letzten acht " +
         "Nachrichten und deine aktuelle Eingabe.",
-      "Direkt danach ein zweiter Aufruf zur Zustands-Extraktion: derselbe Zustand, deine " +
-        "Aktion und die eben erzählte Antwort. Ein Zug sind also zwei Anfragen.",
-      "Beim Anlegen einer Erinnerung: ihr Text einzeln, zur Umrechnung in einen Vektor.",
+      "Direkt danach ein Aufruf zur Zustands-Extraktion: derselbe Zustand, deine Aktion und " +
+        "die eben erzählte Antwort.",
+      "Danach jede neue Erinnerung einzeln, zur Umrechnung in einen Vektor: was in diesem Zug " +
+        "geschah, jeder neue Meilenstein, ein abgeschlossener Tagesüberblick und was jede " +
+        "anwesende Figur erlebt hat.",
+      "Ein Zug sind damit nicht zwei Anfragen, sondern in der Regel fünf bis zehn — wie viele " +
+        "genau, hängt davon ab, wie viel in diesem Zug geschehen ist.",
       "Bei der Spracheingabe: die vollständige Aufnahme.",
-      "Beim Öffnen der Einstellungen: nur der Schlüssel, um die Modellliste abzurufen."
+      "Bei jedem Start der App und nach jeder Änderung des Schlüssels: nur der Schlüssel, um " +
+        "die Modellliste abzurufen."
     )
   ),
   PrivacySection(
@@ -295,9 +306,9 @@ fun PrivacySheet(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-          text = "Deine Geschichten gehören dir und liegen auf deinem Gerät. Was hinausgeht, " +
-            "geht an eine einzige Stelle, die du selbst eingerichtet hast. Diese Erklärung " +
-            "nennt auch, was daran unbequem ist.",
+          text = "Deine Geschichten gehören dir und liegen auf deinem Gerät. Was von ihnen " +
+            "hinausgeht, geht an eine einzige Stelle, die du selbst eingerichtet hast. Diese " +
+            "Erklärung nennt auch, was daran unbequem ist.",
           style = MaterialTheme.typography.bodySmall,
           fontFamily = DnaTypography.InterFamily,
           color = DnaColors.OnPrimaryContainer

@@ -259,6 +259,19 @@ fun CharacterVisualizer(
 
       Spacer(modifier = Modifier.height(6.dp))
 
+      // getCharacterInjuries parst jedes Mal den kompletten Weltzustand. Direkt in der
+      // Chip-Reihe aufgerufen hieß das: einmal je Figur, und das bei jeder Neuzeichnung --
+      // also auch beim bloßen Antippen einer anderen Figur oder Umschalten des Geschlechts.
+      // Neu gerechnet wird jetzt nur, wenn sich Zustand oder Figurenliste ändern.
+      val verletzungsZahlen = remember(checkpoint, npcs) {
+        buildMap {
+          put("Du", checkpoint?.getCharacterInjuries("Du")?.size ?: 0)
+          npcs.forEach { npc ->
+            put(npc.name, checkpoint?.getCharacterInjuries(npc.name)?.size ?: 0)
+          }
+        }
+      }
+
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -269,7 +282,7 @@ fun CharacterVisualizer(
         CharacterSelectorChip(
           title = "Du (Spieler)",
           isSelected = selectedCharacterIndex == 0,
-          injuryCount = checkpoint?.getCharacterInjuries("Du")?.size ?: 0,
+          injuryCount = verletzungsZahlen["Du"] ?: 0,
           onClick = {
             selectedCharacterIndex = 0
             selectedBodyPart = null
@@ -278,11 +291,10 @@ fun CharacterVisualizer(
 
         // Alle NPCs der Story
         npcs.forEachIndexed { index, npc ->
-          val npcInjuries = checkpoint?.getCharacterInjuries(npc.name)?.size ?: 0
           CharacterSelectorChip(
             title = npc.name,
             isSelected = selectedCharacterIndex == index + 1,
-            injuryCount = npcInjuries,
+            injuryCount = verletzungsZahlen[npc.name] ?: 0,
             onClick = {
               selectedCharacterIndex = index + 1
               selectedBodyPart = null

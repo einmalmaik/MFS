@@ -202,7 +202,14 @@ class UpdateService(
     release: UpdateRelease,
     hash: String
   ): String? = withContext(Dispatchers.IO) {
-    if (release.sha256.isNotBlank() && !hash.equals(release.sha256, ignoreCase = true)) {
+    // Alle drei Kontrollen scheitern geschlossen. Eine Prüfung, die bei fehlender Angabe
+    // durchwinkt, prüft genau den Fall nicht, für den es sie gibt: Was hier durchkommt, wird
+    // als App auf dem Gerät installiert.
+    if (release.sha256.isBlank()) {
+      return@withContext "Zu dieser Veröffentlichung fehlt die Prüfsumme. Ohne sie lässt sich " +
+        "nicht feststellen, ob die geladene Datei unterwegs verändert wurde."
+    }
+    if (!hash.equals(release.sha256, ignoreCase = true)) {
       return@withContext "Die geladene Datei stimmt nicht mit der Veröffentlichung überein " +
         "und wurde verworfen."
     }
@@ -221,7 +228,15 @@ class UpdateService(
 
     val eigene = zertifikatsFingerabdruecke(context.packageName, null)
     val neue = zertifikatsFingerabdruecke(null, datei.absolutePath)
-    if (eigene.isNotEmpty() && neue.isNotEmpty() && eigene.intersect(neue).isEmpty()) {
+
+    // Bisher stand hier `eigene.isNotEmpty() && neue.isNotEmpty() && ...`: Ließ sich eine der
+    // beiden Signaturen nicht lesen, galt die Prüfung als bestanden. Eine APK, deren Signatur
+    // nicht lesbar ist, ist aber genau der Fall, in dem man nicht installieren will.
+    if (eigene.isEmpty() || neue.isEmpty()) {
+      return@withContext "Die Signatur der geladenen Datei ließ sich nicht prüfen. Sie wurde " +
+        "verworfen — ungeprüft wird nichts installiert."
+    }
+    if (eigene.intersect(neue).isEmpty()) {
       return@withContext "Diese Aktualisierung wurde mit einem anderen Schlüssel signiert und " +
         "kann nicht über die installierte App gelegt werden. Deine Geschichten sind sicher — " +
         "deinstalliere die App nicht, sonst gehen sie verloren."

@@ -17,21 +17,46 @@ import com.example.R
  */
 object DnaTypography {
 
-  val UnifiedFontFamily = FontFamily(
+  /**
+   * Lesetext, Dialoge, Notizen — alles, was am Stück gelesen wird.
+   */
+  val InterFamily = FontFamily(
     Font(R.font.inter, FontWeight.Normal),
     Font(R.font.inter, FontWeight.Medium),
     Font(R.font.inter, FontWeight.SemiBold),
     Font(R.font.inter, FontWeight.Bold)
   )
 
-  // Keep these aliases so existing code doesn't break, but point them all to UnifiedFontFamily
-  val ManropeFamily = UnifiedFontFamily
-  val InterFamily = UnifiedFontFamily
-  val JetBrainsMonoFamily = UnifiedFontFamily
+  /**
+   * Titel, Kapitel, Überschriften.
+   */
+  val ManropeFamily = FontFamily(
+    Font(R.font.manrope, FontWeight.Normal),
+    Font(R.font.manrope, FontWeight.Medium),
+    Font(R.font.manrope, FontWeight.SemiBold),
+    Font(R.font.manrope, FontWeight.Bold)
+  )
+
+  /**
+   * Technische Angaben: Würfelwürfe, Zeitstempel, Versionen, IDs.
+   *
+   * Die Dicktengleichheit ist hier kein Geschmack, sondern der Zweck: "Tag 9, 08:00 Uhr" und
+   * "Tag 10, 08:00 Uhr" untereinander dürfen nicht verrutschen.
+   */
+  val JetBrainsMonoFamily = FontFamily(
+    Font(R.font.jetbrainsmono, FontWeight.Normal),
+    Font(R.font.jetbrainsmono, FontWeight.Medium),
+    Font(R.font.jetbrainsmono, FontWeight.SemiBold),
+    Font(R.font.jetbrainsmono, FontWeight.Bold)
+  )
+
+  // Bis hierher hiessen alle drei Familien UnifiedFontFamily und zeigten auf Inter. Der
+  // Dreiklang aus CLAUDE.md §0.5 stand damit zwar im ganzen Code, war aber nirgends zu sehen --
+  // und manrope.ttf und jetbrainsmono.ttf lagen ungenutzt in jeder ausgelieferten APK.
 
   val MaterialTypography = Typography(
     displayLarge = TextStyle(
-      fontFamily = UnifiedFontFamily,
+      fontFamily = ManropeFamily,
       fontWeight = FontWeight.Bold,
       fontSize = 32.sp,
       lineHeight = 38.sp,

@@ -59,6 +59,69 @@ class StateExtractionEngineTest {
     assertEquals("Tag 5, 12:00 Uhr", result)
   }
 
+  // Bis hierhin prüft jeder Test dieselbe Richtung: Die Uhr geht zu langsam vor. Die Gegenrichtung
+  // war ungeprüft -- und ungeprüft ging sie ungebremst in den Spielstand.
+
+  @Test
+  fun `ein Rueckschritt am Tag wird nicht uebernommen`() {
+    val result = invokeTimeProgression(
+      "Tag 5, 14:00 Uhr",
+      "Tag 3, 09:00 Uhr", // Rückblende, verlesene Zahl -- so oder so: die Uhr lief rückwärts
+      "Ich erinnere mich an den Überfall.",
+      "In deiner Erinnerung stehst du wieder am Hafen."
+    )
+    assertEquals("Tag 5, 09:00 Uhr", result)
+  }
+
+  @Test
+  fun `der Tag bleibt stehen, die Tageszeit laeuft weiter`() {
+    // Ein reiner Rückfall auf previousTime würde die Uhr anhalten, sobald das Modell einmal irrt.
+    val result = invokeTimeProgression(
+      "Tag 4, 08:00 Uhr",
+      "Tag 1, 21:30 Uhr",
+      "Ich gehe weiter.",
+      "Der Abend bricht herein."
+    )
+    assertEquals("Tag 4, 21:30 Uhr", result)
+  }
+
+  @Test
+  fun `ohne erkennbare Tageszeit gilt die vorherige`() {
+    val result = invokeTimeProgression(
+      "Tag 6, 17:45 Uhr",
+      "Tag 2",
+      "Ich sehe mich um.",
+      "Der Platz liegt still."
+    )
+    assertEquals("Tag 6, 17:45 Uhr", result)
+  }
+
+  @Test
+  fun `ein angeforderter Sprung schlaegt den Rueckwaerts-Schutz`() {
+    // Reihenfolge zählt: Erst die Sprung-Korrektur, dann der Schutz. Sonst bliebe der Spieler
+    // auf Tag 2 stehen, obwohl er ausdrücklich zwei Tage verstreichen lassen wollte.
+    val result = invokeTimeProgression(
+      "Tag 2, 10:00 Uhr",
+      "Tag 1, 10:00 Uhr",
+      "Es vergehen zwei Tage.",
+      "Zwei Tage ziehen ins Land."
+    )
+    assertEquals("Tag 4, 10:00 Uhr", result)
+  }
+
+  @Test
+  fun `innerhalb eines Tages bleibt die Tageszeit unangetastet`() {
+    // Bewusste Grenze: Innerhalb desselben Tages kann eine frühere Uhrzeit eine gleichzeitig
+    // erzählte Szene sein. Geschützt wird der Tag, nicht die Minute.
+    val result = invokeTimeProgression(
+      "Tag 3, 18:00 Uhr",
+      "Tag 3, 16:00 Uhr",
+      "Was geschah währenddessen bei Lena?",
+      "Zur selben Stunde, zwei Straßen weiter..."
+    )
+    assertEquals("Tag 3, 16:00 Uhr", result)
+  }
+
   private fun invokeTimeProgression(
     previousTime: String,
     extractedTime: String,

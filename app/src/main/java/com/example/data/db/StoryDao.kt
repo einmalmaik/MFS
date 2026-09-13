@@ -44,6 +44,17 @@ interface StoryDao {
   @Query("UPDATE stories SET title = :title, systemPrompt = :systemPrompt, updatedAt = :updatedAt WHERE id = :id")
   suspend fun updateStoryTitleAndPrompt(id: Long, title: String, systemPrompt: String, updatedAt: Long)
 
+  /**
+   * Die mitlaufende Spielzeit, jede Minute einmal.
+   *
+   * Rechnet in SQL statt in Kotlin: Lesen, Kopieren und Zurückschreiben der ganzen Zeile hätte
+   * zwischen Lesen und Schreiben ein Fenster, in dem eine gleichzeitige Titeländerung wieder
+   * verloren geht. `updatedAt` bleibt bewusst unberührt — Spielzeit ist kein inhaltliches
+   * Bearbeiten und soll die Sortierung der Geschichtenliste nicht jede Minute umwerfen.
+   */
+  @Query("UPDATE stories SET playTimeSeconds = playTimeSeconds + :seconds WHERE id = :storyId")
+  suspend fun addPlayTime(storyId: Long, seconds: Long)
+
   @Query("DELETE FROM stories WHERE id = :storyId")
   suspend fun deleteStoryById(storyId: Long)
 
@@ -151,6 +162,14 @@ interface StoryDao {
 
   @Query("SELECT COUNT(*) FROM memories WHERE storyId = :storyId")
   suspend fun countMemories(storyId: Long): Int
+
+  /**
+   * Trägt einen Vektor nach. Eine Erinnerung ohne Vektor ist gespeichert, aber unauffindbar --
+   * die Suche überspringt sie. Ohne diesen Weg zurück bliebe alles, was während eines Ausfalls
+   * der Einbettung entstand, für immer unsichtbar.
+   */
+  @Query("UPDATE memories SET embedding = :embedding WHERE id = :memoryId")
+  suspend fun updateMemoryEmbedding(memoryId: Long, embedding: ByteArray)
 
   @Query("DELETE FROM memories WHERE storyId = :storyId AND turnNumber > :turnNumber")
   suspend fun deleteMemoriesAfterTurn(storyId: Long, turnNumber: Int)

@@ -270,7 +270,19 @@ class StoryRepository(
     val invArray = JSONArray()
     playerInventory.forEach { invArray.put(it) }
 
-    val rawObj = JSONObject().apply {
+    // Auf dem bestehenden Zustand aufsetzen statt bei {} anzufangen. Der Dialog kennt acht
+    // Felder; in rawStateJson stehen mehr. Ein frisches JSONObject hat deshalb bei jedem
+    // "Zustand anpassen" die strukturierten Verletzungen samt injuries/days_elapsed gelöscht --
+    // und die sind die einzige Quelle fuer Mannequin und Heilung. Wer nur die Uhrzeit korrigiert,
+    // hat danach keine Wunden mehr. Unbekannte Schluessel bleiben jetzt unberuehrt.
+    val rawObj = try {
+      if (latest != null && latest.rawStateJson.isNotBlank()) JSONObject(latest.rawStateJson)
+      else JSONObject()
+    } catch (_: Exception) {
+      JSONObject()
+    }
+
+    rawObj.apply {
       put("in_game_time", inGameTime)
       put("location", location)
       put("weather", weather)
@@ -325,8 +337,15 @@ class StoryRepository(
     storyDao.updateCheckpoint(checkpoint)
   }
 
+  /**
+   * Zählt die Spielzeit hoch -- gezielt auf der einen Spalte.
+   *
+   * Vorher wurde die Zeile gelesen, kopiert und vollständig zurückgeschrieben. Das überschreibt
+   * jede Minute auch Titel, Prompt und Einstellungen mit dem Stand von vor dem Lesen: Wer in der
+   * Sekunde dazwischen den Titel ändert, verliert ihn wieder. Ein UPDATE auf die eine Spalte
+   * kennt dieses Fenster nicht.
+   */
   suspend fun updatePlayTime(storyId: Long, incrementSeconds: Long) = withContext(Dispatchers.IO) {
-    val story = storyDao.getStoryById(storyId) ?: return@withContext
-    storyDao.updateStory(story.copy(playTimeSeconds = story.playTimeSeconds + incrementSeconds))
+    storyDao.addPlayTime(storyId, incrementSeconds)
   }
 }

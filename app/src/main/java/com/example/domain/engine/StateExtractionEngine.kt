@@ -68,6 +68,22 @@ class StateExtractionEngine(
         }
       }
 
+      // Die Uhr lief bisher nur in eine Richtung zu langsam -- zu schnell rückwärts war nie
+      // geprüft. Nennt das Modell einen früheren Tag (ein Rückblick, eine verlesene Zahl), stand
+      // dieser Tag danach im Spielstand. Was daran hängt, rechnet mit negativem dayDelta: Wunden
+      // altern zurück, "Tag 3" folgt auf "Tag 5", und Tages-Zusammenfassungen greifen nie wieder,
+      // weil sie einen größeren Tag verlangen.
+      //
+      // Der Tag bleibt deshalb stehen, die Tageszeit nicht: Ein reiner Rückfall auf previousTime
+      // würde die Uhr in dem Moment anhalten, in dem das Modell einmal irrt, und die Geschichte
+      // bliebe in derselben Minute stecken.
+      if (extractedDay < previousDay) {
+        val timePart = TimeAnchor.parseTimeOfDay(extractedTime)
+          .ifBlank { TimeAnchor.parseTimeOfDay(previousTime) }
+          .ifBlank { "20:00 Uhr" }
+        return "Tag $previousDay, $timePart"
+      }
+
       return extractedTime
     }
 
@@ -141,6 +157,51 @@ class StateExtractionEngine(
      * lässt. Behandelte Wunden heilen doppelt so schnell; CRITICAL bleibt bis zur Behandlung.
      * Gibt die verbliebenen Verletzungen und die dabei entstandenen Narben zurück.
      */
+    /**
+     * Überträgt das Alter bereits bekannter Wunden auf die frisch extrahierten.
+     *
+     * Die KI wird nie nach `days_elapsed` gefragt -- das Feld gehört der Heilungsrechnung, nicht
+     * der Erzählung. Nennt das Modell eine bestehende Wunde erneut (und das tut es, solange sie
+     * offen ist), kommt sie ohne Alter zurück. Ohne diese Übertragung beginnt ihre Frist damit
+     * in jedem Zug von vorn: Eine leichte Schnittwunde, die nach zwei Tagen verheilt sein müsste,
+     * bleibt ewig offen, solange die Erzählung sie erwähnt.
+     *
+     * Zugeordnet wird über die id, sonst über Figur + Körperteil + Beschreibung. Weicht die
+     * Beschreibung ab, greift Figur + Körperteil -- aber nur, wenn dort genau eine Wunde lag.
+     * Bei zwei Wunden am selben Arm ist das falsche Alter schlechter als ein neuer Anfang.
+     */
+    fun carryOverInjuryAges(extracted: JSONArray, previous: JSONArray): JSONArray {
+      val exact = mutableMapOf<String, Int>()
+      val coarse = mutableMapOf<String, MutableList<Int>>()
+      for (i in 0 until previous.length()) {
+        val obj = previous.optJSONObject(i) ?: continue
+        val age = obj.optInt("days_elapsed", 0)
+        exact[injuryExactKey(obj)] = age
+        obj.optString("id").takeIf { it.isNotBlank() }?.let { exact["id:$it"] = age }
+        coarse.getOrPut(injuryCoarseKey(obj)) { mutableListOf() }.add(age)
+      }
+
+      val result = JSONArray()
+      for (i in 0 until extracted.length()) {
+        val obj = extracted.optJSONObject(i) ?: continue
+        if (!obj.has("days_elapsed")) {
+          val age = obj.optString("id").takeIf { it.isNotBlank() }?.let { exact["id:$it"] }
+            ?: exact[injuryExactKey(obj)]
+            ?: coarse[injuryCoarseKey(obj)]?.singleOrNull()
+          if (age != null) obj.put("days_elapsed", age)
+        }
+        result.put(obj)
+      }
+      return result
+    }
+
+    private fun injuryCoarseKey(obj: JSONObject): String =
+      obj.optString("character", "Du").trim().lowercase() + "|" +
+        obj.optString("body_part").trim().uppercase()
+
+    private fun injuryExactKey(obj: JSONObject): String =
+      injuryCoarseKey(obj) + "|" + obj.optString("description").trim().lowercase()
+
     fun applyHealing(injuries: JSONArray, dayDelta: Int): HealingResult {
       if (dayDelta <= 0) return HealingResult(injuries, emptyList())
 
@@ -246,6 +307,11 @@ class StateExtractionEngine(
         modelResponse = modelResponse
       )
 
+      // Die Korrektur zurückschreiben. rawStateJson entsteht weiter unten aus genau diesem
+      // Objekt; ohne diese Zeile trägt derselbe Checkpoint zwei verschiedene Uhrzeiten -- in der
+      // Spalte die geprüfte, im JSON die ungeprüfte. Der nächste Zug liest das JSON.
+      updatedStateJsonObj.put("in_game_time", newInGameTime)
+
       val newLocation = updatedStateJsonObj.optString("location")
         .ifBlank { latestCheckpoint?.location ?: "Aktueller Ort" }
 
@@ -319,15 +385,29 @@ class StateExtractionEngine(
       val newSummary = updatedStateJsonObj.optString("previous_events_summary", summary)
         .ifBlank { summary }
 
-      // Preserve existing injuries if the extraction did not return an updated array
-      if (!updatedStateJsonObj.has("injuries") && latestCheckpoint != null && latestCheckpoint.rawStateJson.isNotBlank()) {
+      // Die Wunden des letzten Zustands werden in beiden Fällen gebraucht: Nennt die Extraktion
+      // keine, gelten die alten weiter. Nennt sie welche, fehlt ihnen das Alter -- und nur das
+      // Alter entscheidet, wann eine Wunde verheilt.
+      val prevInjuries = if (latestCheckpoint != null && latestCheckpoint.rawStateJson.isNotBlank()) {
         try {
-          val prevRoot = JSONObject(latestCheckpoint.rawStateJson)
-          val prevInjuries = prevRoot.optJSONArray("injuries")
-          if (prevInjuries != null) {
-            updatedStateJsonObj.put("injuries", prevInjuries)
-          }
-        } catch (_: Exception) { }
+          JSONObject(latestCheckpoint.rawStateJson).optJSONArray("injuries")
+        } catch (_: Exception) {
+          null
+        }
+      } else {
+        null
+      }
+
+      if (!updatedStateJsonObj.has("injuries")) {
+        if (prevInjuries != null) updatedStateJsonObj.put("injuries", prevInjuries)
+      } else if (prevInjuries != null) {
+        updatedStateJsonObj.put(
+          "injuries",
+          carryOverInjuryAges(
+            extracted = updatedStateJsonObj.optJSONArray("injuries") ?: JSONArray(),
+            previous = prevInjuries
+          )
+        )
       }
 
       // Wunden über die vergangene Zeit abklingen lassen, statt sie ewig mitzuschleppen.

@@ -72,8 +72,15 @@ jobs:
 
       # Stabiler Name statt app-debug.apk. Erst damit entsteht die dauerhafte Adresse
       # https://github.com/einmalmaik/MFS/releases/latest/download/MauntingStoryFable.apk
+      # RELEASE_NOTES kommt bewusst ueber env und nicht als ${{ }} direkt in die Zeile.
+      # Interpoliert GitHub den Freitext direkt ins Skript, ist der Text kein Argument mehr,
+      # sondern Shell-Code: Ein Release mit "$(cat debug.keystore | base64)" im Beschreibungsfeld
+      # laesst den Signaturschluessel im Log landen. Ueber env ist der Text nur noch eine
+      # Variable, die die Shell nie erneut auswertet.
       - name: APK benennen und latest.json erzeugen
         id: paket
+        env:
+          RELEASE_NOTES: ${{ github.event.release.body }}
         run: |
           mkdir -p release
           cp app/build/outputs/apk/debug/app-debug.apk release/MauntingStoryFable.apk
@@ -92,7 +99,7 @@ jobs:
             --arg apk "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/MauntingStoryFable.apk" \
             --arg sha256 "$SHA" \
             --argjson sizeBytes "$SIZE" \
-            --arg notes "${{ github.event.release.body }}" \
+            --arg notes "$RELEASE_NOTES" \
             '{versionName: $versionName, versionCode: $versionCode, apk: $apk, sha256: $sha256, sizeBytes: $sizeBytes, notes: $notes}' \
             > release/latest.json
 

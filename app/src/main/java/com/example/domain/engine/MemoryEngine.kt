@@ -38,6 +38,14 @@ class MemoryEngine(
     const val OLD_MEMORY_DAY_THRESHOLD = 7
 
     /**
+     * Wie viele fehlende Einbettungen ein einzelner Zug nachträgt. Drei, weil das kostenlose
+     * Kontingent bei wenigen Anfragen pro Modell und Tag liegt und ein Zug ohnehin schon
+     * mehrere davon verbraucht. Der Rückstand wird so über die nächsten Züge abgetragen,
+     * statt einen einzigen Zug lahmzulegen.
+     */
+    const val MAX_BACKFILL_PER_RETRIEVE = 3
+
+    /**
      * Fest reservierte Plätze für alte Erinnerungen.
      *
      * Der eigentliche Grund für diese Klasse: Ohne Reservierung verdrängen die Ereignisse der
@@ -263,6 +271,47 @@ class MemoryEngine(
   }
 
   /**
+   * Holt Einbettungen nach, die beim Anlegen fehlgeschlagen sind.
+   *
+   * `recordMemory` speichert eine Erinnerung auch dann, wenn die Einbettung scheitert -- richtig
+   * so, der Text ist wertvoller als der Vektor. Nur bleibt sie damit dauerhaft unauffindbar: Die
+   * Suche überspringt jede Erinnerung ohne Vektor, und bisher hat sie nie wieder jemand
+   * angefasst. Ein Tag ohne Netz löschte das Gedächtnis dieses Tages faktisch aus.
+   *
+   * Bewusst gedeckelt: Das kostenlose Kontingent liegt bei wenigen Anfragen pro Modell und Tag.
+   * Ein Rückstand von hundert Erinnerungen darf nicht das Kontingent des Spielzugs aufbrauchen,
+   * der ihn gerade abarbeitet -- er verteilt sich stattdessen über die nächsten Züge.
+   */
+  private suspend fun backfillMissingEmbeddings(embeddingModel: String) {
+    val storyId = cachedStoryId ?: return
+    var nachgetragen = 0
+
+    for (memory in cachedMemories) {
+      if (nachgetragen >= MAX_BACKFILL_PER_RETRIEVE) return
+      if (vectorCache.containsKey(memory.id)) continue
+
+      val vector = try {
+        geminiClient.generateEmbedding(memory.text, embeddingModel, taskType = "RETRIEVAL_DOCUMENT")
+          ?.let { parseEmbeddingJson(it) }
+      } catch (e: Exception) {
+        Log.w(TAG, "Nachträgliche Einbettung fehlgeschlagen: ${e.message}")
+        return
+      }
+
+      // Scheitert eine, scheitern die nächsten mit hoher Wahrscheinlichkeit auch (Kontingent
+      // erschöpft, Modell abgekündigt). Weiterzuprobieren verbrennt nur den Rest.
+      if (vector == null || vector.isEmpty()) return
+
+      val bytes = floatsToBytes(vector)
+      storyDao.updateMemoryEmbedding(memory.id, bytes)
+      // Nur der Cache dieser Geschichte darf befüllt werden -- wechselt der Spieler mitten im
+      // Nachtragen, gehört der Vektor nicht mehr hierher.
+      if (cachedStoryId == storyId) vectorCache[memory.id] = vector
+      nachgetragen++
+    }
+  }
+
+  /**
    * Sucht die relevantesten Erinnerungen und rendert sie mit Tagesnummer und Abstand zu heute.
    *
    * [queryText] sollte nicht nur die Spieler-Aktion enthalten, sondern auch Ort und anwesende
@@ -289,6 +338,10 @@ class MemoryEngine(
 
     val queryVector = parseEmbeddingJson(queryJson)
     if (queryVector.isEmpty()) return emptyList()
+
+    // Die Query-Einbettung hat gerade funktioniert -- also liegt ein Schlüssel vor und das Gerät
+    // ist online. Genau jetzt, und nur jetzt, lohnt der Versuch, Liegengebliebenes nachzuholen.
+    backfillMissingEmbeddings(embeddingModel)
 
     val currentDay = TimeAnchor.parseDayNumber(currentInGameTime)
     val presentNamesLower = presentNpcNames.map { it.lowercase().trim() }.filter { it.length >= 3 }

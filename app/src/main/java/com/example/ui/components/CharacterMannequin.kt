@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -101,6 +102,12 @@ fun CharacterMannequin(
     label = "injury_pulse_alpha"
   )
 
+  // Der Umriss haengt nur von Geschlecht und Groesse ab -- beides aendert sich waehrend einer
+  // Animation nicht. Ohne diesen Zwischenspeicher entstanden die rund fuenfzig Path-Objekte in
+  // jedem einzelnen Frame neu, und der Scan-Sweep und der Verletzungs-Puls laufen endlos: etwa
+  // 3000 weggeworfene Pfade pro Sekunde, solange das Mannequin sichtbar ist.
+  val pathCache = remember { BodyPathCache() }
+
   Box(
     modifier = modifier
       .clip(RoundedCornerShape(14.dp))
@@ -124,13 +131,13 @@ fun CharacterMannequin(
                 return@detectTapGestures
               }
             }
-            BodyPaths.build(gender, w, h).hitTest(tapOffset)?.let(onBodyPartSelected)
+            pathCache.hole(gender, w, h).hitTest(tapOffset)?.let(onBodyPartSelected)
           }
         }
     ) {
       val w = size.width
       val h = size.height
-      val paths = BodyPaths.build(gender, w, h)
+      val paths = pathCache.hole(gender, w, h)
 
       drawTechnicalGrid(w, h)
 
@@ -151,6 +158,34 @@ fun CharacterMannequin(
         height = h
       )
     }
+  }
+}
+
+/**
+ * Hält den zuletzt gebauten Umriss fest und baut ihn nur neu, wenn Geschlecht oder Größe sich
+ * ändern. Bewusst eine Klasse und kein `remember(gender, size)`: Die Größe steht erst im
+ * DrawScope fest, und dort gibt es kein remember.
+ *
+ * Nicht threadsicher, muss es aber auch nicht sein -- Zeichnen und Antippen laufen beide auf
+ * dem Hauptthread.
+ */
+private class BodyPathCache {
+  private var gender: CharacterGender? = null
+  private var width = 0f
+  private var height = 0f
+  private var paths: BodyPaths? = null
+
+  fun hole(gender: CharacterGender, width: Float, height: Float): BodyPaths {
+    val vorhanden = paths
+    if (vorhanden != null && this.gender == gender && this.width == width && this.height == height) {
+      return vorhanden
+    }
+    val neu = BodyPaths.build(gender, width, height)
+    this.gender = gender
+    this.width = width
+    this.height = height
+    this.paths = neu
+    return neu
   }
 }
 

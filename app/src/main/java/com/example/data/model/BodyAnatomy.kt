@@ -200,7 +200,16 @@ data class CharacterInjury(
   val severity: InjurySeverity = InjurySeverity.MEDIUM,
   val isTreated: Boolean = false,
   /** Betroffenes inneres Organ, sofern die Verletzung eines trifft. */
-  val organ: BodyOrgan? = null
+  val organ: BodyOrgan? = null,
+  /**
+   * Wie viele Spieltage diese Wunde schon alt ist. Die Heilung in der StateExtractionEngine
+   * rechnet damit, und nur sie zählt hoch -- die KI wird nie danach gefragt.
+   *
+   * Das Feld gehört zum Modell und nicht nur ins JSON, weil jede Runde über `fromJson`/`toJson`
+   * läuft. Fehlt es hier, ist die Wunde nach jedem Durchlauf wieder null Tage alt und heilt nie,
+   * egal wie viele Tage der Spieler verstreichen lässt.
+   */
+  val daysElapsed: Int = 0
 ) {
   /**
    * Konvertiert die Verletzung in ein JSON-Objekt.
@@ -213,6 +222,7 @@ data class CharacterInjury(
     obj.put("description", description)
     obj.put("severity", severity.name)
     obj.put("is_treated", isTreated)
+    obj.put("days_elapsed", daysElapsed)
     if (organ != null) obj.put("organ", organ.id)
     return obj
   }
@@ -233,7 +243,8 @@ data class CharacterInjury(
         // Nennt die Extraktion kein Organ, wird es aus der Wundbeschreibung abgeleitet -
         // "Stichwunde in die Leber" landet so trotzdem an der richtigen Stelle.
         organ = BodyOrgan.fromString(obj.optString("organ"))
-          ?: BodyOrgan.fromString(description)
+          ?: BodyOrgan.fromString(description),
+        daysElapsed = obj.optInt("days_elapsed", 0)
       )
     }
 

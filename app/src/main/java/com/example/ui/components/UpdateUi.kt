@@ -105,6 +105,7 @@ fun UpdateDialog(
   onInstallieren: () -> Unit,
   onFreigabeOeffnen: () -> Unit,
   onUeberspringen: () -> Unit,
+  onAbbrechen: () -> Unit,
   onSpaeter: () -> Unit
 ) {
   Dialog(onDismissRequest = onSpaeter) {
@@ -190,9 +191,12 @@ fun UpdateDialog(
             enabled = darfInstallieren,
             testTag = "update_install_button"
           )
+          // Bisher lag hier onSpaeter -- das schloss nur das Fenster, waehrend der Download
+          // weiterlief und weiter Mobilfunkvolumen verbrauchte. Abschnitt 8 der Erklaerung sagt
+          // zu, dass nichts im Hintergrund laeuft; diese Schaltflaeche muss das auch einloesen.
           fortschritt != null -> DnaButton(
             text = "Abbrechen",
-            onClick = onSpaeter,
+            onClick = onAbbrechen,
             variant = DnaButtonVariant.GHOST,
             fullWidth = true,
             testTag = "update_cancel_button"
