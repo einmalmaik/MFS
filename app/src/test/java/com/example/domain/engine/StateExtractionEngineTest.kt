@@ -201,6 +201,63 @@ class StateExtractionEngineTest {
     assertEquals("Tag 3, 02:00 Uhr", result)
   }
 
+  @Test
+  fun `Vorgeschichte oder Rueckblick mitten im Spiel loest keinen Zeitsprung aus`() {
+    // Wenn der Spieler im Dialog oder in Gedanken die Vergangenheit erwähnt ("vor einer Woche"),
+    // darf die deterministische Zeitanpassung nicht auf Tag 9 springen!
+    val result = invokeTimeProgression(
+      "Tag 2, 14:00 Uhr",
+      "Tag 2, 14:05 Uhr",
+      "Ich sage zu ihm: 'Ich bin vor einer Woche hierher gezogen.'",
+      "Er mustert mich nachdenklich."
+    )
+    assertEquals("Tag 2, 14:05 Uhr", result)
+  }
+
+  @Test
+  fun `vor zwei Tagen im Dialog verschiebt die Zeit nicht`() {
+    val result = invokeTimeProgression(
+      "Tag 1, 10:00 Uhr",
+      "Tag 1, 10:02 Uhr",
+      "Vor zwei Tagen habe ich das schon einmal beobachtet.",
+      "Er nickt ernst."
+    )
+    assertEquals("Tag 1, 10:02 Uhr", result)
+  }
+
+  @Test
+  fun `echte Zeitspruenge ueber eine Woche oder Tage funktionieren zuverlaessig`() {
+    val resultWeek = invokeTimeProgression(
+      "Tag 1, 10:00 Uhr",
+      "Tag 1, 10:00 Uhr",
+      "Nach einer Woche Marsch erreichen wir die Festung.",
+      "Die Mauern ragen vor euch auf."
+    )
+    assertEquals("Tag 8, 10:00 Uhr", resultWeek)
+
+    val resultDays = invokeTimeProgression(
+      "Tag 3, 12:00 Uhr",
+      "Tag 3, 12:00 Uhr",
+      "Zwei Tage später wache ich auf.",
+      "Die Sonne blendet dich."
+    )
+    assertEquals("Tag 5, 12:00 Uhr", resultDays)
+  }
+
+  @Test
+  fun `parseRequestedDayJump unterscheidet Rueckblicke von echten Zeitspruengen`() {
+    assertEquals(0, StateExtractionEngine.parseRequestedDayJump("Ich bin vor einer Woche hierher gezogen."))
+    assertEquals(0, StateExtractionEngine.parseRequestedDayJump("Vor 2 Tagen habe ich das bemerkt."))
+    assertEquals(0, StateExtractionEngine.parseRequestedDayJump("Seit einer Woche esse ich kaum."))
+    assertEquals(0, StateExtractionEngine.parseRequestedDayJump("Vor drei Tagen war noch alles friedlich."))
+
+    assertEquals(7, StateExtractionEngine.parseRequestedDayJump("Nach einer Woche brechen wir auf."))
+    assertEquals(7, StateExtractionEngine.parseRequestedDayJump("Eine Woche später sind wir am Ziel."))
+    assertEquals(2, StateExtractionEngine.parseRequestedDayJump("Zwei Tage später erwache ich."))
+    assertEquals(2, StateExtractionEngine.parseRequestedDayJump("Es vergehen zwei Tage."))
+    assertEquals(1, StateExtractionEngine.parseRequestedDayJump("Wir übernachten in der Taverne."))
+  }
+
   private fun invokeTimeProgression(
     previousTime: String,
     extractedTime: String,

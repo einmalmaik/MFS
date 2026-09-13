@@ -212,7 +212,9 @@ fun StoryChatArea(
               )
             }
 
-            if (uiState.streamChunk.isNotBlank()) {
+            val isExtracting = uiState.turnStatus is TurnProgress.ExtractingState
+            val lastMessageMatches = uiState.messages.lastOrNull()?.content == uiState.streamChunk
+            if (!isExtracting && !lastMessageMatches && uiState.streamChunk.isNotBlank()) {
               Spacer(modifier = Modifier.height(10.dp))
               Text(
                 text = uiState.streamChunk,

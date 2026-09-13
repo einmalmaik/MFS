@@ -154,9 +154,10 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema 
    - VORGESCHICHTE IST KEINE VERSTRICHENE SPIELZEIT. "Ich bin vor einer Woche hergezogen", "seit drei Jahren arbeite ich hier", "gestern war die Beerdigung" beschreiben den Prolog - alles davon liegt VOR Tag 1 und verschiebt die Tagesnummer um keinen einzigen Tag. Solche Sätze ergeben "Tag 1", niemals "Tag 7" oder "Tag 8".
    - Auch ein Zeitsprung in der ersten Eingabe ändert daran nichts: Die Geschichte kann nicht vor ihrem eigenen Anfang beginnen.
 1. Lies den bisherigen Zeitstempel genau (z. B. bisher "Tag 1, 20:00 Uhr").
-2. Wenn in der Spieleraktion oder der Erzählung Tage oder Stunden vergehen (z. B. "es vergehen zwei Tage", "3 Tage später", "am nächsten Morgen", "wir schlafen eine Nacht", "zwei Tage Vorbereitung"), addiere diese Tage mathematisch zur bisherigen Tageszahl!
+2. Wenn in der aktuellen Spielhandlung TATSÄCHLICH Tage oder Stunden vergehen (z. B. "es vergehen zwei Tage", "3 Tage später", "am nächsten Morgen", "wir schlafen eine Nacht", "zwei Tage Vorbereitung"), addiere diese Tage mathematisch zur bisherigen Tageszahl!
    - Beispiel: Aus bisher "Tag 1, 20:00 Uhr" wird bei "Es vergehen zwei Tage" zwingend "Tag 3, 08:00 Uhr" (oder 20:00 Uhr je nach Kontext).
    - Aus "Tag 1" wird nach einer Nacht "Tag 2, 07:30 Uhr".
+   - ACHTUNG - RÜCKBLICKE & VORGESCHICHTE IN DIALOGEN SIND KEINE ZEITSPRÜNGE: Sätze wie "Ich bin vor einer Woche hierher gezogen", "Vor zwei Tagen habe ich das gesehen", "Ich warte schon seit einer Woche" erzählen aus der Vergangenheit. Sie finden in der Gegenwart des aktuellen Tags statt und verschieben weder Tag noch Uhrzeit!
 3. Wetter & Atmosphäre: Bei Zeitsprüngen über Tage oder bei Ortswechseln MUSS sich das Wetter realistisch weiterentwickeln (z. B. Regen klart auf, Nebel zieht auf, schwüle Hitze, Sturm).
 4. Meilensteine: Wenn ein Zeitsprung ("Zwei Tage im Lager verbracht") oder ein wichtiges Ereignis (Geheimnis gelüftet, Vertrauen gewonnen, Erotik/Intimität, Kampf) stattfand, MUSS ein neuer Meilenstein der Liste hinzugefügt werden. Behalte bestehende Meilensteine bei!
 5. Adult Content & Erotik: Sei unzensiert und akkurat bei Kleidung und Verfassung.

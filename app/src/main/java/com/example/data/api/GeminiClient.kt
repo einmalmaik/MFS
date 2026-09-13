@@ -563,6 +563,8 @@ class GeminiClient(
       genConfig.put("temperature", temperature.coerceIn(0.0f, 2.0f))
     }
     genConfig.put("topP", 0.95)
+    // 8192 Tokens stellen sicher, dass Thinking-Tokens plus vollwertige Erzählantworten nicht abgeschnitten werden
+    genConfig.put("maxOutputTokens", 8192)
 
     // Dynamic Thinking Config:
     // Gemini 3.x+ models use thinkingLevel ("LOW", "MEDIUM", "HIGH")
@@ -672,6 +674,7 @@ class GeminiClient(
     val genConfig = JSONObject()
     genConfig.put("responseMimeType", "application/json")
     genConfig.put("temperature", 0.2)
+    genConfig.put("maxOutputTokens", 8192)
 
     val isGemini3Plus = cleanModel.contains("gemini-3") || cleanModel.contains("-3.")
     val isThinkingModel = isGemini3Plus || cleanModel.contains("2.5") || cleanModel.contains("thinking")

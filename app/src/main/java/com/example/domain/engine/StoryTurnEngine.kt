@@ -10,6 +10,7 @@ import com.example.domain.model.TurnProgress
 import com.example.domain.service.StoryPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 
@@ -272,7 +273,7 @@ class StoryTurnEngine(
   }
 
   /** @return true, wenn der Spielstand nur fortgeschrieben statt aktualisiert werden konnte. */
-  private suspend fun finalizeTurn(
+  private suspend fun FlowCollector<TurnProgress>.finalizeTurn(
     story: StoryEntity,
     latestCheckpoint: CheckpointEntity?,
     userAction: String,
@@ -288,6 +289,9 @@ class StoryTurnEngine(
         inGameTimeTag = latestCheckpoint?.inGameTime
       )
     )
+
+    // Streaming abgeschlossen, Nachricht in DB hinterlegt: UI soll den Stream-Puffer leeren
+    emit(TurnProgress.ExtractingState)
 
     // Die Extraktion schreibt Checkpoint, Erinnerungen und Figuren in einem Durchgang.
     val result = stateExtractionEngine.extractAndCommitCheckpoint(

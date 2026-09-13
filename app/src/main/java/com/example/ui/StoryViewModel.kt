@@ -321,6 +321,11 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
                 _isGenerating.value = false
                 _streamChunk.value = ""
               }
+              TurnProgress.ExtractingState -> {
+                // Streaming ist beendet, Nachricht liegt bereits in der DB. Puffer leeren,
+                // damit die UI nicht kurzzeitig zwei identische Nachrichten rendert.
+                _streamChunk.value = ""
+              }
               TurnProgress.StateFrozen -> {
                 _modelNotice.value = "Der Spielstand konnte diesen Zug nicht mitschreiben — " +
                   "Google war nicht erreichbar. Ort, Uhrzeit, Inventar und Erinnerungen stehen " +

@@ -57,29 +57,15 @@ class StateExtractionEngine(
       val previousDay = TimeAnchor.parseDayNumber(previousTime)
       val extractedDay = TimeAnchor.parseDayNumber(extractedTime)
 
-      // Check if user action requested a specific day jump
-      val actionLower = userAction.lowercase()
-      val daysToAdvance = when {
-        actionLower.contains("zwei tage") || actionLower.contains("2 tage") -> 2
-        actionLower.contains("drei tage") || actionLower.contains("3 tage") -> 3
-        actionLower.contains("vier tage") || actionLower.contains("4 tage") -> 4
-        actionLower.contains("fünf tage") || actionLower.contains("5 tage") -> 5
-        actionLower.contains("eine woche") || actionLower.contains("1 woche") -> 7
-        actionLower.contains("übernachten") || actionLower.contains("nächsten morgen") ||
-          actionLower.contains("nächster morgen") || actionLower.contains("schlafe bis morgen") -> 1
-        else -> {
-          val regex = Regex("""(\d+)\s+tage(?:\s+später|\s+vergehen|\s+rasten|\s+warten)?""", RegexOption.IGNORE_CASE)
-          val match = regex.find(userAction)
-          match?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        }
-      }
+      // Check if user action requested an explicit forward day jump
+      val daysToAdvance = parseRequestedDayJump(userAction)
 
       if (daysToAdvance > 0) {
         val targetDay = previousDay + daysToAdvance
         if (extractedDay < targetDay) {
           // Model didn't advance enough, correct to target day
           val timePart = TimeAnchor.parseTimeOfDay(extractedTime).ifBlank {
-            if (actionLower.contains("morgen")) "08:00 Uhr" else "20:00 Uhr"
+            if (userAction.contains("morgen", ignoreCase = true)) "08:00 Uhr" else "20:00 Uhr"
           }
           return "Tag $targetDay, $timePart"
         }
@@ -102,6 +88,77 @@ class StateExtractionEngine(
       }
 
       return extractedTime
+    }
+
+    /**
+     * Determines whether user action contains an explicit directive to advance time by days.
+     * Retrospective expressions ("vor einer Woche", "seit 2 Tagen") or casual dialogue
+     * must NEVER trigger a forward time skip.
+     */
+    internal fun parseRequestedDayJump(userAction: String): Int {
+      val text = userAction.lowercase().trim()
+
+      // 1. Overnight actions (always 1 day forward)
+      if (text.contains("übernachten") ||
+        text.contains("nächsten morgen") ||
+        text.contains("nächster morgen") ||
+        text.contains("schlafe bis morgen") ||
+        text.contains("schlafen bis zum morgen") ||
+        text.contains("eine nacht schlafen") ||
+        text.contains("die nacht verbringen") ||
+        text.contains("am nächsten tag")
+      ) {
+        return 1
+      }
+
+      // 2. Explicit week skips (must be forward progression, not retrospective)
+      // Matches "eine Woche später", "nach einer Woche", "1 Woche vergeht", "eine Woche warten", "eine Woche rasten"
+      val weekForwardRegex = Regex(
+        """(?:nach|in)\s+(?:einer|1)\s+woche|(?:eine|1)\s+woche\s+(?:später|vergeht|vergehen|warten|rasten|verstreichen|verstreicht)""",
+        RegexOption.IGNORE_CASE
+      )
+      if (weekForwardRegex.containsMatchIn(text)) {
+        return 7
+      }
+
+      // 3. Explicit day skips with forward direction:
+      // "2 Tage später", "nach zwei Tagen", "3 Tage vergehen", "zwei Tage warten", "drei Tage rasten"
+      val dayForwardRegex = Regex(
+        """(?:nach|in)\s+(\d+|zwei|drei|vier|fünf|sechs|sieben)\s+tagen?|(\d+|zwei|drei|vier|fünf|sechs|sieben)\s+tage\s+(?:später|vergehen|vergeht|warten|rasten|verstreichen|verstreicht)""",
+        RegexOption.IGNORE_CASE
+      )
+      val dayMatch = dayForwardRegex.find(text)
+      if (dayMatch != null) {
+        val countStr = (dayMatch.groupValues[1].ifBlank { dayMatch.groupValues[2] }).lowercase()
+        return when (countStr) {
+          "zwei" -> 2
+          "drei" -> 3
+          "vier" -> 4
+          "fünf" -> 5
+          "sechs" -> 6
+          "sieben" -> 7
+          else -> countStr.toIntOrNull() ?: 0
+        }
+      }
+
+      // 4. "Es vergehen X Tage", "Wir warten X Tage", "Ich raste X Tage"
+      val verbDayRegex = Regex(
+        """(?:vergehen|vergingen|warten|rasten|verstreichen)\s+(\d+|zwei|drei|vier|fünf)\s+tage""",
+        RegexOption.IGNORE_CASE
+      )
+      val verbMatch = verbDayRegex.find(text)
+      if (verbMatch != null) {
+        val countStr = verbMatch.groupValues[1].lowercase()
+        return when (countStr) {
+          "zwei" -> 2
+          "drei" -> 3
+          "vier" -> 4
+          "fünf" -> 5
+          else -> countStr.toIntOrNull() ?: 0
+        }
+      }
+
+      return 0
     }
 
     /**
