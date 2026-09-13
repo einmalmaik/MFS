@@ -34,6 +34,19 @@ class StoryPromptCompositionTest {
   }
 
   @Test
+  fun `mit Adult Content wird Freiheits-Abschnitt ergaenzt falls noch nicht vorhanden`() {
+    val composed = StoryTurnEngine.composeSystemPrompt("Standard-Regie", "Diese Geschichte", allowAdultContent = true)
+    org.junit.Assert.assertTrue(composed.contains("FREIHEIT DER ERZÄHLUNG & ERWACHSENEN-INHALTE"))
+  }
+
+  @Test
+  fun `mit vorhandenem Adult-Abschnitt wird nicht doppelt ergaenzt`() {
+    val promptMitAdult = "Standard-Regie mit ERWACHSENEN-INHALTE"
+    val composed = StoryTurnEngine.composeSystemPrompt(promptMitAdult, "", allowAdultContent = true)
+    assertEquals(promptMitAdult, composed)
+  }
+
+  @Test
   fun `Titel wird nur in ein leeres Feld uebernommen`() {
     assertEquals(
       "Die verfluchte Feste",

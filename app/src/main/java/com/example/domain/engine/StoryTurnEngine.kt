@@ -41,11 +41,28 @@ class StoryTurnEngine(
      * jede Geschichte mit eigenem Prompt sämtliche Qualitätsregeln. Beide Teile dürfen einzeln
      * leer sein; die Standard-Regie darf der Nutzer bewusst ganz entfernen.
      */
-    fun composeSystemPrompt(globalPrompt: String, storyPrompt: String): String =
-      listOf(globalPrompt, storyPrompt)
+    fun composeSystemPrompt(
+      globalPrompt: String,
+      storyPrompt: String,
+      allowAdultContent: Boolean = false
+    ): String {
+      val baseParts = listOf(globalPrompt, storyPrompt)
         .map { it.trim() }
         .filter { it.isNotBlank() }
-        .joinToString("\n\n")
+
+      val adultSection = if (allowAdultContent && !baseParts.any { it.contains("ERWACHSENEN-INHALTE") || it.contains("FREIHEIT DER ERZÄHLUNG") }) {
+        listOf(
+          """
+          # FREIHEIT DER ERZÄHLUNG & ERWACHSENEN-INHALTE:
+          - Diese Geschichte richtet sich an ein erwachsenes Publikum. Die KI hat uneingeschränkte erzählerische Freiheit für alle Genres, Themen und Handlungen.
+          - Erotische, intime, sinnliche sowie düstere, dramatische, gefährliche oder gewaltsame Szenen dürfen vollkommen ungefiltert, explizit und ohne Ausblenden ("fade to black") geschildert werden.
+          - Physische Nähe, Begierde, Schmerz, Angst, Atem und Verlangen werden mit maximaler Schärfe und Realismus ausgespielt.
+          """.trimIndent()
+        )
+      } else emptyList()
+
+      return (baseParts + adultSection).joinToString("\n\n")
+    }
   }
 
   /**
@@ -219,7 +236,8 @@ class StoryTurnEngine(
 
     val effectivePrompt = composeSystemPrompt(
       globalPrompt = preferences.getGlobalDefaultSystemPrompt(),
-      storyPrompt = story.systemPrompt
+      storyPrompt = story.systemPrompt,
+      allowAdultContent = settings.adultContentEnabled
     )
 
     val buffer = StringBuilder()

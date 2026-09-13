@@ -379,7 +379,7 @@ fun StoryScreen(
       NotebookDrawer(
         checkpoint = checkpoint,
         allCheckpoints = uiState.allCheckpoints,
-        adultContentEnabled = story?.adultContentEnabled ?: true,
+        adultContentEnabled = uiState.aiSettings.adultContentEnabled,
         onClose = {
           scope.launch {
             notebookSheetState.hide()

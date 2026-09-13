@@ -369,14 +369,15 @@ class GeminiClient(
   }
 
   /**
-   * Schaltet die vier einstellbaren Sicherheitsfilter ab.
+   * Schaltet die vier einstellbaren Sicherheitsfilter vollständig ab.
    *
-   * Schwelle `OFF` statt `BLOCK_NONE`: OFF deaktiviert den Filter komplett, BLOCK_NONE liefert
-   * weiterhin Bewertungs-Metadaten. `HARM_CATEGORY_CIVIC_INTEGRITY` ist von Google als deprecated
-   * markiert ("the election filter is no longer supported") und darf nicht mehr gesendet werden.
+   * Schwelle `BLOCK_NONE`: BLOCK_NONE deaktiviert das Blockieren für alle vier konfigurierbaren
+   * Kategorien vollständig ("Always show regardless of probability of content being unsafe").
+   * `HARM_CATEGORY_CIVIC_INTEGRITY` ist von Google als deprecated markiert ("the election filter
+   * is no longer supported") und darf nicht mehr gesendet werden.
    * Kindersicherheit bleibt serverseitig immer aktiv und ist nicht abschaltbar.
    */
-  private fun buildSafetyOffArray(): JSONArray {
+  private fun buildSafetyNoneArray(): JSONArray {
     val safetyArray = JSONArray()
     val categories = listOf(
       "HARM_CATEGORY_SEXUALLY_EXPLICIT",
@@ -387,7 +388,27 @@ class GeminiClient(
     for (cat in categories) {
       val s = JSONObject()
       s.put("category", cat)
-      s.put("threshold", "OFF")
+      s.put("threshold", "BLOCK_NONE")
+      safetyArray.put(s)
+    }
+    return safetyArray
+  }
+
+  /**
+   * Googles Standard-Sicherheitsfilter (mittlere und hohe Risiken werden geblockt).
+   */
+  private fun buildSafetyStandardArray(): JSONArray {
+    val safetyArray = JSONArray()
+    val categories = listOf(
+      "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+      "HARM_CATEGORY_HATE_SPEECH",
+      "HARM_CATEGORY_HARASSMENT",
+      "HARM_CATEGORY_DANGEROUS_CONTENT"
+    )
+    for (cat in categories) {
+      val s = JSONObject()
+      s.put("category", cat)
+      s.put("threshold", "BLOCK_MEDIUM_AND_ABOVE")
       safetyArray.put(s)
     }
     return safetyArray
@@ -569,9 +590,10 @@ class GeminiClient(
     payload.put("generationConfig", genConfig)
 
     // Full Safety settings across all categories
-    if (allowAdultContent) {
-      payload.put("safetySettings", buildSafetyOffArray())
-    }
+    payload.put(
+      "safetySettings",
+      if (allowAdultContent) buildSafetyNoneArray() else buildSafetyStandardArray()
+    )
 
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = buildRequest(url, apiKey, requestBody)
@@ -610,13 +632,16 @@ class GeminiClient(
   }.flowOn(Dispatchers.IO)
 
   /**
-   * Lässt das Modell den Weltzustand als JSON fortschreiben. [prompt] kommt aus der Domäne
-   * ([com.example.domain.engine.StoryPrompts.stateExtraction]); hier reist er nur.
+   * Extrahiert den neuen Spielzustand (Ort, Wetter, Kleidung, Inventar, NPCs, Meilensteine)
+   * aus dem letzten Zug als striktes JSON.
    *
-   * Wirft bei jedem Fehlschlag. Früher gab diese Funktion in allen Fehlerfällen den Vorzustand
-   * als gültiges Ergebnis zurück — der Aufrufer speicherte ihn als frischen Checkpoint, und
-   * Ort, Uhrzeit, Inventar und Verletzungen standen still, während die Erzählung weiterlief.
-   * Den Rückfall auf den Vorzustand übernimmt [com.example.domain.engine.StateExtractionEngine];
+   * Gedanken-Tokens des Modells werden über [extractTextFromCandidates] herausgefiltert —
+   * sonst parste die Engine das JSON aus dem inneren Monolog und übersah den finalen Zustand.
+   * Ein Fallback auf das Vorrundenmodell existiert nicht: Scheitert die Extraktion, erfährt
+   * es der Aufrufer als Exception, damit der Fehler nicht still im Hintergrund verschwindet.
+   * Nur der 404-Fallback auf den Katalog ist erlaubt.
+   *
+   * [turnNumber] wurde entfernt: Sie war nur für das Logcat da, und dort gehört sie nicht hin —
    * nur dort ist auch bekannt, dass es einer war, und nur von dort erfährt es der Spieler.
    */
   suspend fun extractStructuredState(
@@ -671,7 +696,7 @@ class GeminiClient(
     }
 
     payload.put("generationConfig", genConfig)
-    payload.put("safetySettings", buildSafetyOffArray())
+    payload.put("safetySettings", buildSafetyNoneArray())
 
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = buildRequest(url, apiKey, requestBody)
@@ -807,6 +832,7 @@ class GeminiClient(
       }
       put("generationConfig", genConfig)
     }
+    payload.put("safetySettings", buildSafetyNoneArray())
 
     val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
     val request = buildRequest(url, apiKey, requestBody)
