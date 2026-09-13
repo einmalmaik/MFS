@@ -415,7 +415,15 @@ class GeminiClient(
       }
 
       appendLine("[AKTUELLER WELTZUSTAND / CHECKPOINT]:")
-      appendLine(stateJson.ifBlank { "{\"in_game_time\": \"Tag 1, 09:00 Uhr\", \"location\": \"Startort\"}" })
+      // Kein erfundener Ersatzzustand mehr. "Tag 1, 09:00 Uhr" und "Startort" waren für das
+      // Modell nicht von einer echten Angabe zu unterscheiden -- es übernahm beides und legte
+      // damit Zeit und Ort fest, bevor der Spieler das erste Wort geschrieben hatte.
+      appendLine(
+        stateJson.ifBlank {
+          "Die Geschichte hat noch nicht begonnen. Es gibt keinen Ort, keine Uhrzeit und " +
+            "keine Figuren -- leite alles aus dem Prompt und der ersten Eingabe des Spielers her."
+        }
+      )
 
       try {
         if (stateJson.isNotBlank()) {

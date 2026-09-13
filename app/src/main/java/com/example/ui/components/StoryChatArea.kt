@@ -37,6 +37,7 @@ import com.example.ui.dna.DnaButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -134,6 +135,44 @@ fun StoryChatArea(
               Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = DnaColors.OnSurfaceVariant)
             }
           }
+        }
+      }
+    }
+
+    // Eine Geschichte ohne einzige Nachricht war früher ein Sekundenbruchteil: Die KI eröffnete
+    // sie ungefragt. Jetzt schreibt der Spieler den ersten Zug, und ohne diesen Hinweis stünde
+    // er vor einer leeren Fläche und wüsste nicht, dass er am Zug ist.
+    if (uiState.messages.isEmpty() && !uiState.isGenerating) {
+      item(key = "empty_story_hint") {
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 56.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.AutoAwesome,
+            contentDescription = null,
+            tint = DnaColors.Primary.copy(alpha = 0.6f),
+            modifier = Modifier.size(34.dp)
+          )
+          Spacer(modifier = Modifier.height(14.dp))
+          Text(
+            text = "Die Geschichte wartet auf dich",
+            style = MaterialTheme.typography.titleMedium,
+            fontFamily = DnaTypography.ManropeFamily,
+            fontWeight = FontWeight.Bold,
+            color = DnaColors.OnSurface
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = "Schreib den ersten Zug. Wo du bist, welcher Tag es ist und wie spät — " +
+              "das ergibt sich aus deinem Prompt und dem, was du jetzt schreibst.",
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = DnaTypography.InterFamily,
+            color = DnaColors.OnSurfaceVariant,
+            textAlign = TextAlign.Center
+          )
         }
       }
     }

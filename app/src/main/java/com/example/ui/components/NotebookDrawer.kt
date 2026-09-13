@@ -434,7 +434,8 @@ fun NotebookDrawer(
               InfoRow(
                 icon = Icons.Default.AccessTime,
                 label = "In-Game Zeit",
-                value = checkpoint?.inGameTime ?: "Tag 1, 20:00 Uhr"
+                value = checkpoint?.inGameTime?.takeIf { it.isNotBlank() }
+                  ?: "Noch nicht begonnen"
               )
               Spacer(modifier = Modifier.height(8.dp))
               InfoRow(

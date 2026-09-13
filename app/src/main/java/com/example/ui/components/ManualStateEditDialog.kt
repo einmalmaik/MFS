@@ -67,7 +67,9 @@ fun ManualStateEditDialog(
     summary: String
   ) -> Boolean
 ) {
-  var inGameTime by remember { mutableStateOf(checkpoint?.inGameTime ?: "Tag 1, 21:30 Uhr") }
+  // Leer statt "Tag 1, 21:30 Uhr": Wer den Zustand vor dem ersten Zug öffnet, soll ein leeres
+  // Feld sehen und nicht eine Uhrzeit bestätigen, die sich die App ausgedacht hat.
+  var inGameTime by remember { mutableStateOf(checkpoint?.inGameTime.orEmpty()) }
   var location by remember { mutableStateOf(checkpoint?.location ?: "") }
   var weather by remember { mutableStateOf(checkpoint?.weather ?: "") }
   var playerOutfit by remember { mutableStateOf(checkpoint?.playerOutfit ?: "") }

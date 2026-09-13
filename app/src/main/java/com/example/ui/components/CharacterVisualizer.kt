@@ -238,7 +238,7 @@ fun CharacterVisualizer(
           )
         } else {
           DnaBadge(
-            text = checkpoint?.inGameTime ?: "Tag 1",
+            text = checkpoint?.inGameTime?.takeIf { it.isNotBlank() } ?: "Tag 1",
             tone = DnaBadgeTone.ICE,
             showDot = false
           )

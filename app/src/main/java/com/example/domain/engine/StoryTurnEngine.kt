@@ -33,8 +33,6 @@ class StoryTurnEngine(
     private const val REGENERATE_WINDOW_SIZE = 6
 
     /** Der Auftrag für den ersten Zug — er steht bei den übrigen Prompts. */
-    private val OPENING_INSTRUCTION = StoryPrompts.OPENING_INSTRUCTION
-
     /**
      * Setzt die Systemanweisung aus beiden Ebenen zusammen.
      *
@@ -96,47 +94,6 @@ class StoryTurnEngine(
       story = story,
       latestCheckpoint = latestCheckpoint,
       userAction = userAction,
-      finalResponseText = finalResponseText
-    )
-
-    if (stateFrozen) emit(TurnProgress.StateFrozen)
-    emit(TurnProgress.Completed)
-  }.flowOn(Dispatchers.IO)
-
-  /**
-   * Erzählt den Eröffnungszug einer frisch angelegten Geschichte.
-   *
-   * Wie [executeTurn], nur ohne Spieler-Nachricht: Die Aufforderung ist ein interner Auftrag an
-   * den Game Master und hat in der Historie nichts verloren — sonst stünde am Anfang jeder
-   * Geschichte eine Zeile, die der Spieler nie geschrieben hat.
-   */
-  fun openStory(
-    storyId: Long,
-    onChunk: (String) -> Unit
-  ): Flow<TurnProgress> = flow {
-    emit(TurnProgress.Thinking)
-
-    val story = storyDao.getStoryById(storyId)
-      ?: throw IllegalStateException("Story $storyId existiert nicht.")
-    val latestCheckpoint = storyDao.getLatestCheckpoint(storyId)
-
-    emit(TurnProgress.Streaming)
-
-    val finalResponseText = streamContent(
-      story = story,
-      latestCheckpoint = latestCheckpoint,
-      slidingWindow = emptyList(),
-      userAction = OPENING_INSTRUCTION,
-      onChunk = onChunk
-    ) ?: run {
-      emit(TurnProgress.Failed("Die KI hat die Geschichte nicht eröffnet. Bitte prüfe den API-Key oder die Verbindung."))
-      return@flow
-    }
-
-    val stateFrozen = finalizeTurn(
-      story = story,
-      latestCheckpoint = latestCheckpoint,
-      userAction = OPENING_INSTRUCTION,
       finalResponseText = finalResponseText
     )
 
@@ -227,7 +184,10 @@ class StoryTurnEngine(
   ): String? {
     val stateJson = latestCheckpoint?.rawStateJson ?: ""
     val summary = latestCheckpoint?.previousEventsSummary ?: ""
-    val currentInGameTime = latestCheckpoint?.inGameTime ?: "Tag 1, 09:00 Uhr"
+    // Leer bleibt leer: Beim ersten Zug gibt es noch keine Spielzeit, und eine erfundene würde
+    // das Modell auf eine Uhrzeit festlegen, die in keinem Prompt steht. GeminiClient lässt den
+    // Zeitblock dann weg, MemoryEngine und NpcEngine finden ohnehin nichts, was älter wäre.
+    val currentInGameTime = latestCheckpoint?.inGameTime.orEmpty()
 
     val settings = preferences.getAiSettings()
 

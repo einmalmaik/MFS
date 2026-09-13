@@ -235,13 +235,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun switchStory(storyId: Long) {
-    // Dieselbe Geschichte erneut zu öffnen ist kein Wechsel — aber es ist die Gelegenheit, eine
-    // beim Anlegen gescheiterte Eröffnung nachzuholen. Ein früher Ausstieg hier hätte die
-    // Geschichte für immer leer gelassen.
-    if (storyId == _activeStoryId.value) {
-      openStoryIfUnopened(storyId)
-      return
-    }
+    if (storyId == _activeStoryId.value) return
     if (blockedByRunningTurn("Die Geschichte zu wechseln")) return
 
     _activeStoryId.value = storyId
@@ -268,7 +262,6 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     healStoredModelSelection()
-    openStoryIfUnopened(storyId)
   }
 
   /** Kein aktiver Spielstand — die App zeigt den leeren Zustand. */
@@ -564,33 +557,17 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   /**
-   * Legt eine Geschichte aus ihrem Prompt an und lässt sie sofort beginnen.
+   * Legt eine Geschichte aus ihrem Prompt an und öffnet sie -- mehr nicht.
    *
-   * Es gibt keinen Prolog mehr, den man vorher ausfüllen müsste: Der erste Zug wird hier
-   * gestartet und stellt Ort, Zeit, Ausgangslage und Figuren selbst her.
+   * Den ersten Zug schreibt der Spieler. Vorher erzählte die KI hier unaufgefordert los und
+   * setzte dabei Ort, Zeit und Ausgangslage fest, bevor der Spieler ein Wort sagen konnte.
+   * Wer eine Geschichte anlegt, hat meist schon eine Vorstellung davon, wie sie anfängt; die
+   * gehört ihm und nicht dem Modell.
    */
   fun createNewStory(systemPrompt: String) {
     if (systemPrompt.isBlank()) return
     viewModelScope.launch {
-      // switchStory stößt den Eröffnungszug selbst an — sonst liefen hier zwei Versuche parallel.
       switchStory(repository.createStory(systemPrompt))
-    }
-  }
-
-  /**
-   * Holt den Eröffnungszug nach, wenn er noch aussteht.
-   *
-   * Scheitert er beim Anlegen — Ratenlimit, kein Netz, Google überlastet —, bliebe die
-   * Geschichte sonst dauerhaft leer, ohne dass der Spieler sie starten könnte. Beim nächsten
-   * Öffnen wird der Versuch deshalb wiederholt.
-   */
-  fun openStoryIfUnopened(storyId: Long) {
-    viewModelScope.launch {
-      if (!repository.isUnopened(storyId)) return@launch
-      // Nicht still abbrechen: Eine leere Geschichte ohne Spinner und ohne Meldung sieht für
-      // den Spieler aus wie ein Defekt.
-      if (blockedByRunningTurn("Die Geschichte zu eröffnen")) return@launch
-      runTurn { onChunk -> repository.openStory(storyId, onChunk) }
     }
   }
 

@@ -146,8 +146,10 @@ fun StoryTopBar(
       // das auf RectangleShape steht — das .clip() am Modifier beschnitt nur, sodass an den
       // Ecken sichtbar ein gestrecktes Rechteck stehen blieb. DnaBadge setzt CircleShape direkt
       // am Surface und ist damit unter jedem Zoom rund.
+      // Vor dem ersten Zug gibt es noch keine Spielzeit. Ein Platzhalter statt einer erfundenen
+      // Uhrzeit -- die Pille verschwinden zu lassen würde die Leiste beim ersten Zug umbauen.
       DnaBadge(
-        text = checkpoint?.inGameTime ?: "Tag 1, 20:00",
+        text = checkpoint?.inGameTime?.takeIf { it.isNotBlank() } ?: "Noch nicht begonnen",
         tone = DnaBadgeTone.ICE,
         icon = Icons.Default.AccessTime,
         showDot = false,

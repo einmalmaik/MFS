@@ -37,6 +37,19 @@ class StateExtractionEngine(
       userAction: String,
       modelResponse: String
     ): String {
+      // Erster Zug: Ein leerer bisheriger Zeitstempel heißt, dass die Geschichte gerade erst
+      // anfängt. Dann ist der Tag zwingend 1 -- allein die Uhrzeit kommt aus der Erzählung.
+      //
+      // Das Modell rechnet hier sonst die Vorgeschichte mit: Aus "ich bin vor einer Woche in
+      // diese Stadt gezogen" wird "Tag 8", und die Geschichte beginnt in ihrer eigenen Zukunft.
+      // Alles Weitere haengt daran -- Wundalterung, Tageszusammenfassungen und der Abstand, den
+      // TimeAnchor jeder Erinnerung mitgibt, rechnen ab dieser Zahl. Der Prompt sagt dem Modell
+      // dasselbe (Regel 0); hier steht die Zusicherung, die auch dann gilt, wenn es nicht hoert.
+      if (previousTime.isBlank()) {
+        val timePart = TimeAnchor.parseTimeOfDay(extractedTime)
+        return if (timePart.isBlank()) "Tag 1" else "Tag 1, $timePart"
+      }
+
       val previousDay = TimeAnchor.parseDayNumber(previousTime)
       val extractedDay = TimeAnchor.parseDayNumber(extractedTime)
 
@@ -295,13 +308,16 @@ class StateExtractionEngine(
       )
 
       // Time calculation with deterministic time-skip protection
-      val rawExtractedTime = updatedStateJsonObj.optString(
-        "in_game_time",
-        latestCheckpoint?.inGameTime ?: "Tag 1, 20:00 Uhr"
-      ).ifBlank { latestCheckpoint?.inGameTime ?: "Tag 1, 20:00 Uhr" }
+      //
+      // Kein "Tag 1, 20:00 Uhr" mehr als Ersatzwert: Eine frisch angelegte Geschichte hat
+      // bewusst keine Uhrzeit, und dieser Ersatzwert hat sie ihr wieder untergeschoben. Bleibt
+      // hier alles leer, entscheidet computeDeterministicTimeProgression -- die kennt den Fall.
+      val previousTime = latestCheckpoint?.inGameTime.orEmpty()
+      val rawExtractedTime = updatedStateJsonObj.optString("in_game_time")
+        .ifBlank { previousTime }
 
       val newInGameTime = computeDeterministicTimeProgression(
-        previousTime = latestCheckpoint?.inGameTime ?: "Tag 1, 20:00 Uhr",
+        previousTime = previousTime,
         extractedTime = rawExtractedTime,
         userAction = userAction,
         modelResponse = modelResponse
@@ -372,9 +388,11 @@ class StateExtractionEngine(
         }
       }
 
-      // If time skip happened but model returned no milestone, record the passage of time
+      // If time skip happened but model returned no milestone, record the passage of time.
+      // previousTime ist beim ersten Zug leer; parseDayNumber liefert dafür 1, der Abstand ist
+      // also 0 -- der Anfang einer Geschichte ist kein Zeitsprung und bekommt keinen Meilenstein.
       val dayDelta = TimeAnchor.parseDayNumber(newInGameTime) -
-        TimeAnchor.parseDayNumber(latestCheckpoint?.inGameTime ?: "Tag 1")
+        TimeAnchor.parseDayNumber(previousTime)
       if (dayDelta > 0) {
         val timeSkipEntry = "Zeitsprung: $dayDelta Tag(e) sind vergangen ($newInGameTime)"
         if (!cumulativeMilestones.contains(timeSkipEntry)) {

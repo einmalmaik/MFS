@@ -158,9 +158,15 @@ class StoryRepository(
   /**
    * Legt eine Geschichte an, die nur aus ihrem Prompt besteht.
    *
-   * Titel, Genre, Ort, Wetter, Outfit, Inventar und Begleiter bleiben leer: Sie stehen im
-   * Prompt und werden von der Extraktion des ersten Zuges daraus hergeleitet. Ein
-   * vorgeschriebener Prolog entfällt — die Geschichte beginnt direkt mit dem ersten Zug.
+   * Alles bleibt leer -- Titel, Genre, Ort, Wetter, Outfit, Inventar, Begleiter und
+   * ausdrücklich auch die Uhrzeit. Der Checkpoint ist ein Platzhalter, kein Spielstand: Er
+   * behauptet nichts über eine Welt, in der noch nichts geschehen ist.
+   *
+   * Die leere [CheckpointEntity.inGameTime] ist dabei kein Versehen, sondern das Signal für den
+   * ersten Zug. Vorher stand hier "Tag 1, 20:00 Uhr", und das Modell übernahm diese Uhrzeit
+   * gehorsam -- jede Geschichte begann abends um acht, auch die, deren Prompt ausdrücklich von
+   * einem Morgen erzählte. Wann die Geschichte spielt, steht im Prompt und in der ersten
+   * Eingabe des Spielers, nirgends sonst.
    */
   suspend fun createStory(systemPrompt: String): Long = withContext(Dispatchers.IO) {
     val storyId = storyDao.insertStory(
@@ -172,7 +178,7 @@ class StoryRepository(
     )
 
     val rawStateObj = JSONObject().apply {
-      put("in_game_time", "Tag 1, 20:00 Uhr")
+      put("in_game_time", "")
       put("location", "")
       put("weather", "")
       put("player", JSONObject().apply {
@@ -181,14 +187,14 @@ class StoryRepository(
         put("inventory", JSONArray())
       })
       put("npcs_present", JSONArray())
-      put("previous_events_summary", "Das Abenteuer beginnt.")
+      put("previous_events_summary", "")
     }
 
     storyDao.insertCheckpoint(
       CheckpointEntity(
         storyId = storyId,
         turnNumber = 0,
-        inGameTime = "Tag 1, 20:00 Uhr",
+        inGameTime = "",
         location = "",
         weather = "",
         playerOutfit = "",
@@ -196,21 +202,12 @@ class StoryRepository(
         playerCondition = "Unverletzt",
         npcsJson = "[]",
         milestonesJson = "[]",
-        previousEventsSummary = "Das Abenteuer beginnt.",
+        previousEventsSummary = "",
         rawStateJson = rawStateObj.toString()
       )
     )
 
     storyId
-  }
-
-  /** Erzählt den Eröffnungszug, ohne dass der Spieler etwas eingeben muss. */
-  fun openStory(storyId: Long, onChunk: (String) -> Unit): Flow<TurnProgress> =
-    turnEngine.openStory(storyId, onChunk)
-
-  /** true, solange noch kein einziger Zug erzählt wurde. */
-  suspend fun isUnopened(storyId: Long): Boolean = withContext(Dispatchers.IO) {
-    storyDao.getRecentMessages(storyId, 1).isEmpty()
   }
 
   // --- TURN EXECUTION & STREAMING ---

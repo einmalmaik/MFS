@@ -122,6 +122,74 @@ class StateExtractionEngineTest {
     assertEquals("Tag 3, 16:00 Uhr", result)
   }
 
+  // --- ERSTER ZUG ---
+  //
+  // Eine frisch angelegte Geschichte hat keinen Zeitstempel. Früher stand dort "Tag 1, 20:00 Uhr",
+  // und jede Geschichte begann abends um acht -- auch die, deren Prompt von einem Morgen erzählte.
+
+  @Test
+  fun `der erste Zug uebernimmt die Uhrzeit aus der Erzaehlung`() {
+    val result = invokeTimeProgression(
+      "", // frisch angelegt: noch keine Spielzeit
+      "Tag 1, 02:00 Uhr",
+      "Sonntag, zwei Uhr nachts. Ich schließe die Kneipe ab.",
+      "Der Riegel rastet ein. Die Straße liegt leer."
+    )
+    assertEquals("Tag 1, 02:00 Uhr", result)
+  }
+
+  @Test
+  fun `Vorgeschichte verschiebt den ersten Tag nicht`() {
+    // Der Kern der Sache: "vor einer Woche hergezogen" ist Prolog, keine verstrichene Spielzeit.
+    // Ohne diese Klammer begann die Geschichte an Tag 8 -- in ihrer eigenen Zukunft.
+    val result = invokeTimeProgression(
+      "",
+      "Tag 8, 19:00 Uhr", // das Modell hat die Woche mitgerechnet
+      "Ich bin vor einer Woche in diese Stadt gezogen und packe die letzte Kiste aus.",
+      "Der Karton gibt nach, das Packband löst sich."
+    )
+    assertEquals("Tag 1, 19:00 Uhr", result)
+  }
+
+  @Test
+  fun `auch ein Zeitsprung im ersten Zug beginnt an Tag 1`() {
+    // Eine Geschichte kann nicht vor ihrem eigenen Anfang beginnen. Die Sprung-Korrektur darf
+    // hier deshalb nicht greifen, obwohl "zwei Tage" in der Eingabe steht.
+    val result = invokeTimeProgression(
+      "",
+      "Tag 3, 08:00 Uhr",
+      "Es vergehen zwei Tage, dann breche ich auf.",
+      "Zwei Tage später stehst du am Tor."
+    )
+    assertEquals("Tag 1, 08:00 Uhr", result)
+  }
+
+  @Test
+  fun `nennt der erste Zug keine Uhrzeit, bleibt es bei Tag 1 ohne Uhrzeit`() {
+    // Keine erfundene Ersatzzeit: Lieber gar keine Uhrzeit als eine, die niemand gesagt hat.
+    val result = invokeTimeProgression(
+      "",
+      "",
+      "Ich sehe mich um.",
+      "Staub liegt auf allem."
+    )
+    assertEquals("Tag 1", result)
+  }
+
+  @Test
+  fun `ab dem zweiten Zug gilt wieder die normale Rechnung`() {
+    // Die Klammer greift ausschließlich bei leerem previousTime -- danach zählt der Sprung.
+    // Die Tageszeit stammt dabei aus der Extraktion (02:00 Uhr) und nicht aus dem 20-Uhr-Ersatz;
+    // der gilt nur, wenn gar keine Uhrzeit erkennbar ist.
+    val result = invokeTimeProgression(
+      "Tag 1, 02:00 Uhr",
+      "Tag 1, 02:00 Uhr",
+      "Es vergehen zwei Tage.",
+      "Zwei Tage ziehen vorbei."
+    )
+    assertEquals("Tag 3, 02:00 Uhr", result)
+  }
+
   private fun invokeTimeProgression(
     previousTime: String,
     extractedTime: String,

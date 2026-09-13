@@ -59,15 +59,6 @@ Der Spieler steuert einzig und allein seinen eigenen Charakter.
 """.trimIndent()
 
   /**
-   * Der Auftrag für den ersten Zug. Er gilt genau einmal — in jedem weiteren Zug wäre er eine
-   * Aufforderung, von vorn anzufangen.
-   */
-  const val OPENING_INSTRUCTION =
-    "Eröffne die Geschichte. Etabliere Ort, Zeit, Atmosphäre, die Ausgangslage des Spielers " +
-      "und die Figuren, die jetzt wirklich anwesend sind — alles aus dem Prompt dieser " +
-      "Geschichte hergeleitet. Setze mitten in der Szene ein, nicht mit einer Vorrede."
-
-  /**
    * Baut den Auftrag an die Zustands-Extraktion.
    *
    * Jeder Schlüssel des hier beschriebenen Schemas wird in [StateExtractionEngine] wieder
@@ -144,6 +135,11 @@ Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück, das exakt folgendes Schema 
 }
 
 [REGELN ZUR ZEIT- & TAGEBERECHNUNG - EXTREM WICHTIG]:
+0. ERSTER ZUG - ist der bisherige Zeitstempel LEER, beginnt die Geschichte genau jetzt:
+   - Der Tag ist IMMER "Tag 1". Ausnahmslos. Tag 1 ist definiert als der Tag, an dem der Spieler seine erste Eingabe macht.
+   - Die UHRZEIT leitest du aus dem Prompt und der ersten Eingabe des Spielers ab: "Sonntag, zwei Uhr nachts" wird zu "Tag 1, 02:00 Uhr". Sagt nichts etwas über die Uhrzeit, wähle eine, die zur geschilderten Szene passt - erfinde keine Standardzeit wie 20:00 Uhr.
+   - VORGESCHICHTE IST KEINE VERSTRICHENE SPIELZEIT. "Ich bin vor einer Woche hergezogen", "seit drei Jahren arbeite ich hier", "gestern war die Beerdigung" beschreiben den Prolog - alles davon liegt VOR Tag 1 und verschiebt die Tagesnummer um keinen einzigen Tag. Solche Sätze ergeben "Tag 1", niemals "Tag 7" oder "Tag 8".
+   - Auch ein Zeitsprung in der ersten Eingabe ändert daran nichts: Die Geschichte kann nicht vor ihrem eigenen Anfang beginnen.
 1. Lies den bisherigen Zeitstempel genau (z. B. bisher "Tag 1, 20:00 Uhr").
 2. Wenn in der Spieleraktion oder der Erzählung Tage oder Stunden vergehen (z. B. "es vergehen zwei Tage", "3 Tage später", "am nächsten Morgen", "wir schlafen eine Nacht", "zwei Tage Vorbereitung"), addiere diese Tage mathematisch zur bisherigen Tageszahl!
    - Beispiel: Aus bisher "Tag 1, 20:00 Uhr" wird bei "Es vergehen zwei Tage" zwingend "Tag 3, 08:00 Uhr" (oder 20:00 Uhr je nach Kontext).
